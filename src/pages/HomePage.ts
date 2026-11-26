@@ -1,5 +1,5 @@
 import type { Html } from '@effect/ui/html'
-import { Array as Arr } from 'effect'
+import { Array as Arr, String as Str } from 'effect'
 
 import { ELSEWHERE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
 
@@ -36,8 +36,22 @@ export const HomePage = <M>(
 const pressed = <M>(message: M) => ({ key }: { readonly key: string }) =>
   key === 'Enter' || key === ' ' ? message : undefined
 
+const SECTIONS = 3
+
+// NOTE: a section heading drawn like a drawing callout: a split detail
+// bubble (this section over the sheet count), the title, and a leader line
+// out to the sheet edge.
 const Label = <M>(h: Html.H<M>, n: number, text: string) =>
-  h.div.class('label').children(h.i(String(n)), text)
+  h.h2
+    .class('label')
+    .children(
+      h.span
+        .class('bubble')
+        .attr('aria-hidden', 'true')
+        .children(h.b(Str.padStart(2, '0')(String(n))), h.small(`${n}/${SECTIONS}`)),
+      h.span.class('name').children(text),
+      h.span.class('rule').attr('aria-hidden', 'true'),
+    )
 
 const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   h.div
