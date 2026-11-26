@@ -1,5 +1,5 @@
 import { Router } from '@effect/ui'
-import { Context, Effect, Layer, Option, Stream } from 'effect'
+import { Context, Effect, Layer } from 'effect'
 import { Event, Machine, State } from 'effect-machine'
 
 import { RoomId } from '#domain/Room'
@@ -9,7 +9,9 @@ import { type Actor, started } from '../../lib/actor.ts'
 import { SiteRoute, homeRoute, restRoute } from '../../routes.ts'
 
 // NOTE: the page being shown. The Router owns the URL: every page comes from
-// a route it reports, and leaving a page is a push to the Router.
+// a route it reports, and leaving a page is a push to the Router. The Site
+// root hears each route (see `Router.subscription` in Site.ts) and hands it
+// here as `Navigated`, so the browser Router can scroll and announce.
 export const PageState = State({
   Home: {},
   Manor: { room: RoomId },
@@ -60,17 +62,6 @@ export const pageMachine = Machine.make({
   // it doesn't find it again.
   .spawn(PageState.Manor, () => findEgg('manor'), { name: 'findManorEgg' })
   .spawn(PageState.Rest, () => findEgg('worlds'), { name: 'findWorldsEgg' })
-  .background(function followRouter({ self }) {
-    return Effect.gen(function* () {
-      const router = yield* Router.Router
-      yield* Stream.runForEach(router.changes, location =>
-        Option.match(SiteRoute.parse(location.url), {
-          onNone: () => Effect.void,
-          onSome: route => self.send(PageEvent.Navigated({ route })),
-        }),
-      )
-    })
-  })
 
 export class Page extends Context.Service<
   Page,

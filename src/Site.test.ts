@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { Router } from '@effect/ui'
+import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 import { HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
 import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
@@ -124,3 +125,30 @@ it.layer(playLayer('/blueprints/old'), { buildPerTest: true })(
     )
   },
 )
+
+// The browser Router scrolls to the top once the root has the new route, so
+// this mounts on the real host and Router rather than the test ones.
+describe('Site in the browser', () => {
+  it.live('a new page starts at the top', () =>
+    Effect.gen(function* () {
+      history.replaceState(null, '', '/')
+      const container = document.body.appendChild(document.createElement('div'))
+      yield* Layer.build(
+        BrowserHost.mount(Site, siteProps, container).pipe(
+          Layer.provide([BrowserRouter.layer({ routes: SiteRoute }), Viewport.test(1000)]),
+        ),
+      )
+      yield* Effect.sleep('50 millis')
+      window.scrollTo(0, 800)
+      assert.strictEqual(window.scrollY, 800)
+
+      for (const key of ['r', 'e', 's', 't']) {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key }))
+      }
+      yield* Effect.sleep('50 millis')
+      assert.strictEqual(location.pathname, '/rest')
+      assert.include(container.textContent, 'GG, BACK TO WORK')
+      assert.strictEqual(window.scrollY, 0)
+    }).pipe(Effect.scoped),
+  )
+})

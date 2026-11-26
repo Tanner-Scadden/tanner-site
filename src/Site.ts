@@ -1,4 +1,4 @@
-import { Command, Component, Head, Subscription, UiSchema } from '@effect/ui'
+import { Command, Component, Head, Router, Subscription, UiSchema } from '@effect/ui'
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
 import { Effect, Layer, Schema, Stream, String as Str } from 'effect'
 
@@ -19,7 +19,7 @@ import { RestPage } from './pages/rest/RestPage.ts'
 import { SiteRoute } from './routes.ts'
 import { SiteSnapshot, initialSnapshot, siteActors, siteSnapshots } from './site/actors.ts'
 import { Keys, KeysEvent } from './site/machines/Keys.ts'
-import { PageState } from './site/machines/Page.ts'
+import { Page, PageEvent, PageState } from './site/machines/Page.ts'
 import { Thesis, ThesisEvent, thesisText } from './thesis/machines/Thesis.ts'
 import { Dock, Toast } from './toast/components/Toast.ts'
 
@@ -33,6 +33,7 @@ const siteInputs = {
   PressedKey: { key: Schema.String },
   CalledHello: {},
   StartedPrint: {},
+  Navigated: { route: SiteRoute },
 }
 const SiteInput = UiSchema.TaggedEnum(siteInputs)
 type SiteInput = typeof SiteInput.Type
@@ -54,6 +55,7 @@ export class Dispatch extends Command.Service<Dispatch>()('site/Dispatch', {
       const gpu = yield* Gpu
       const horde = yield* Horde
       const keys = yield* Keys
+      const page = yield* Page
       return ({ input }: { readonly input: SiteInput }) =>
         SiteInput.match(input, {
           ClickedThesis: () => thesis.send(ThesisEvent.Clicked),
@@ -64,6 +66,7 @@ export class Dispatch extends Command.Service<Dispatch>()('site/Dispatch', {
           PressedKey: ({ key }) => keys.send(KeysEvent.Pressed({ key })),
           CalledHello: () => eggs.send(EggsEvent.Found({ egg: 'console' })),
           StartedPrint: () => eggs.send(EggsEvent.Found({ egg: 'print' })),
+          Navigated: ({ route }) => page.send(PageEvent.Navigated({ route })),
         }).pipe(Effect.as(Component.noop))
     }),
   )
@@ -137,7 +140,13 @@ export const SiteNoDeps = SiteDef.make({
     message._tag === 'ChangedActors'
       ? message.snapshot
       : $.run(Dispatch.make({ input: message })),
-  subscriptions: () => [
+  subscriptions: $ => [
+    // NOTE: the route comes through the root, not the Page actor reading the
+    // Router itself: the browser Router scrolls to the top (or back to the
+    // saved spot), announces the page and moves focus once the root has it.
+    Router.subscription(SiteRoute, $.props.route, route =>
+      SiteMessage.Navigated({ route }),
+    ),
     Subscription.make(
       'actors',
       Stream.map(siteSnapshots, snapshot => SiteMessage.ChangedActors({ snapshot })),
