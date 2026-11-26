@@ -1,5 +1,11 @@
 # Agents
 
+## Code
+
+- Always use Effect for everything: state, async work, resources, errors,
+  streams and services. Reach for the Effect module (`Array`, `Option`,
+  `Stream`, `Schema` and so on) before a native or third-party alternative.
+
 ## Finishing work
 
 - When a change is done, always commit it on a branch and open a PR against
