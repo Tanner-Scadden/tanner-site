@@ -4,11 +4,9 @@
 //
 // A job draws once, the first time it scrolls into view: its three boxes
 // are drafted one after another, then a spark runs along the arrows from
-// PROBLEM to RESULT. Pointing at a job later sends the spark again. With
-// motion reduced the boxes are simply there, and nothing travels.
-//
-// A tap anywhere on the list sends a ripple out from under the finger, and
-// the box outlines catch the light as it passes them.
+// PROBLEM to RESULT. Pointing at or tapping a job later sends the spark
+// again. With motion reduced the boxes are simply there, and nothing
+// travels.
 
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
@@ -24,9 +22,6 @@ export const TRAVEL_MS = 360
 export const TRAIL_TAIL = 0.4
 export const PING_MS = 520
 const SPARK_MS = (STEPS - 2) * GAP_MS + TRAVEL_MS + PING_MS
-export const RIPPLE_MS = 1100
-// The most ripples on screen at once; a new tap replaces the oldest.
-export const MAX_RIPPLES = 4
 const HOVER_PER_S = 12
 const LONGEST_STEP_S = 0.05
 const SNAP = 0.002
@@ -40,16 +35,8 @@ export interface JobState {
   readonly hover: ReadonlyArray<number>
 }
 
-// A tap, in CSS px from the canvas's corner.
-export interface Ripple {
-  readonly x: number
-  readonly y: number
-  readonly at: number
-}
-
 export interface WorkState {
   readonly jobs: ReadonlyArray<JobState>
-  readonly ripples: ReadonlyArray<Ripple>
   // The previous frame's time, or null at the start of a burst.
   readonly last: number | null
 }
@@ -85,7 +72,6 @@ export const initialWork = (jobs: number): WorkState => ({
     sparkAt: null,
     hover: Arr.makeBy(STEPS, () => 0),
   })),
-  ripples: [],
   last: null,
 })
 
@@ -122,9 +108,9 @@ export const seen: {
   ),
 )
 
-// The pointer came onto a job: a drawn job sparks again, unless one's
-// already on its way.
-export const entered: {
+// The pointer came onto a job, or a finger tapped it: a drawn job sparks
+// again, unless one's already on its way.
+export const replayed: {
   (event: JobEvent): (state: WorkState) => WorkState
   (state: WorkState, event: JobEvent): WorkState
 } = dual(2, (state: WorkState, { job, now }: JobEvent): WorkState =>
@@ -136,39 +122,6 @@ export const entered: {
       : { ...current, sparkAt: now },
   ),
 )
-
-const rippling = (ripple: Ripple, now: number): boolean =>
-  now - ripple.at < RIPPLE_MS
-
-// A tap on the list: a ripple starts there. With motion reduced it doesn't.
-export const tapped: {
-  (tap: Ripple & { readonly still: boolean }): (state: WorkState) => WorkState
-  (state: WorkState, tap: Ripple & { readonly still: boolean }): WorkState
-} = dual(
-  2,
-  (state: WorkState, { x, y, at, still }: Ripple & { readonly still: boolean }): WorkState =>
-    still
-      ? state
-      : {
-          ...state,
-          ripples: Arr.takeRight(
-            Arr.append(
-              Arr.filter(state.ripples, ripple => rippling(ripple, at)),
-              { x, y, at },
-            ),
-            MAX_RIPPLES,
-          ),
-        },
-)
-
-// 0 to 1: how far a ripple has spread, or null once it's gone.
-export const rippleOf: {
-  (now: number): (ripple: Ripple) => number | null
-  (ripple: Ripple, now: number): number | null
-} = dual(2, (ripple: Ripple, now: number): number | null => {
-  const t = (now - ripple.at) / RIPPLE_MS
-  return t >= 0 && t < 1 ? t : null
-})
 
 const hoverTarget = (hovered: Hovered | null, job: number, box: number): number =>
   hovered !== null && hovered.job === job && hovered.step === box ? 1 : 0
@@ -186,7 +139,6 @@ export const step: {
     state.last === null ? 0 : Math.min((now - state.last) / 1000, LONGEST_STEP_S)
   return {
     last: now,
-    ripples: Arr.filter(state.ripples, ripple => rippling(ripple, now)),
     jobs: Arr.map(state.jobs, (job, j) => ({
       ...job,
       hover: Arr.map(job.hover, (h, b) => {
@@ -236,7 +188,6 @@ export const settled: {
   (tick: Tick): (state: WorkState) => boolean
   (state: WorkState, tick: Tick): boolean
 } = dual(2, (state: WorkState, { now, hovered, still }: Tick): boolean =>
-  !Arr.some(state.ripples, ripple => rippling(ripple, now)) &&
   Arr.every(
     state.jobs,
     (job, j) =>
