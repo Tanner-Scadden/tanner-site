@@ -399,7 +399,11 @@ const work = SiteDef.fragment(h =>
             .children(
               h.div
                 .class('meta')
-                .children(h.small(job.when), h.strong(job.name), h.small(job.role)),
+                .children(h.small(job.when), h.strong(
+                  h.a
+                    .attrs({ href: job.href, target: '_blank', rel: 'noopener noreferrer' })
+                    .children(job.name),
+                ), h.small(job.role)),
               h.div
                 .class('flow')
                 .children(

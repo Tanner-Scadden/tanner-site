@@ -55,7 +55,7 @@ describe('Site', () => {
       assert.strictEqual(s.pending.length, 0)
       s.send(SiteMessage.ClickedThesis()).expectExact(SaveEggs)
       s.resolve(SaveEggs, Component.noop)
-      assert.strictEqual(THESES[s.model.thesis], 'Boring.')
+      assert.strictEqual(THESES[s.model.thesis], 'Solved.')
       assert.deepStrictEqual(s.model.found, ['thesis'])
     }),
   )

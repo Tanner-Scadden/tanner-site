@@ -4,6 +4,7 @@
 export interface Job {
   readonly when: string
   readonly name: string
+  readonly href: string
   readonly role: string
   readonly problem: string
   readonly approach: string
@@ -14,6 +15,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2024 → NOW',
     name: 'Vitalize',
+    href: 'https://www.vitalize.care',
     role: 'FOUNDING ENGINEER',
     problem:
       'Hospital staffing depends on forecasts, skills, costs, union rules and many day\u2011of variables.',
@@ -24,6 +26,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2022 → 2024',
     name: 'Demiplane',
+    href: 'https://www.demiplane.com',
     role: 'SENIOR FULL STACK',
     problem:
       'Every tabletop RPG has its own rules, and each character tool was hand\u2011built.',
@@ -34,6 +37,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2021 → 2022',
     name: 'Webaholics',
+    href: 'https://www.oneapp.today',
     role: 'TEAM LEAD',
     problem:
       'An ATV parts business sold on Amazon, Walmart, eBay and WooCommerce, and kept listings, stock and orders in sync by hand.',
@@ -44,6 +48,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2019 → 2020',
     name: 'Solo',
+    href: 'https://gosolo.io',
     role: 'SOLAR PROPOSALS',
     problem:
       'Getting a solar proposal took days, and each permitting packet took hours to put together.',
@@ -54,7 +59,8 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: 'SIDE PROJECT',
     name: 'Munch Manor',
-    role: 'MUNCHMANOR.COM',
+    href: 'https://munchmanor.com',
+    role: 'ZOMBIE GAME',
     problem:
       'I wanted real-time 4-player co-op in a browser tab, with no install, that still holds up on a phone with bad signal.',
     approach:
@@ -106,7 +112,7 @@ export const THESES = [
   'I take messy problems and make them boring.',
   'Messy problems, made boring.',
   'Messy → boring.',
-  'Boring.',
+  'Solved.',
 ] as const
 
 export const ROOMS = ['parlour', 'trophy', 'workshop'] as const
