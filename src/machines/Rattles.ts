@@ -1,0 +1,139 @@
+import { Context, Effect, Layer, Schema, Stream, String as Str } from 'effect'
+import { Event, Machine, State } from 'effect-machine'
+
+import { RATTLES_SAYS, RATTLES_UPSET, ROOMS, type RoomId } from '../content'
+import type { SiteRoute } from '../routes'
+import { type Actor, started } from './actor'
+import { Page, pageOf } from './Page'
+
+const TYPE_MS = 18
+const CHARS_PER_TICK = 2
+// Switching rooms this many times in a row while he's still talking breaks
+// the Manor for a moment.
+export const CUT_OFF_LIMIT = 3
+export const UPSET_MS = 3200
+
+const Room = Schema.Literals(ROOMS)
+
+// NOTE: Rattles, the Manor's host. He types each room's line once per visit.
+// Leaving a room before he's done cuts him off; finishing a line lets him
+// cool down. Cut him off too many times in a row and he loses it.
+export const RattlesState = State({
+  Away: {},
+  Typing: { room: Room, shown: Schema.Finite, cutOffs: Schema.Finite },
+  Said: { room: Room },
+  Upset: { room: Room },
+})
+export type RattlesState = typeof RattlesState.Type
+
+export const RattlesEvent = Event({
+  Entered: { room: Room },
+  Left: {},
+  Ticked: {},
+  Calmed: {},
+})
+export type RattlesEvent = typeof RattlesEvent.Type
+
+const startLine = (room: RoomId, cutOffs: number, reducedMotion: boolean) =>
+  reducedMotion
+    ? RattlesState.Said({ room })
+    : RattlesState.Typing({ room, shown: 0, cutOffs })
+
+// The state for the first page, so the first render matches the actor.
+export const rattlesOf = ({
+  reducedMotion,
+  route,
+}: {
+  readonly reducedMotion: boolean
+  readonly route: SiteRoute
+}): RattlesState => {
+  const page = pageOf(route)
+  return page._tag === 'Manor'
+    ? startLine(page.room, 0, reducedMotion)
+    : RattlesState.Away
+}
+
+export const rattlesMachine = (reducedMotion: boolean) =>
+  Machine.make({
+    state: RattlesState,
+    event: RattlesEvent,
+    initial: (input: { readonly route: SiteRoute }) =>
+      rattlesOf({ reducedMotion, route: input.route }),
+  })
+    .onAny(RattlesEvent.Entered, ({ state, event }) => {
+      switch (state._tag) {
+        case 'Away':
+          return startLine(event.room, 0, reducedMotion)
+        case 'Said':
+          return state.room === event.room
+            ? state
+            : startLine(event.room, 0, reducedMotion)
+        case 'Typing':
+          if (state.room === event.room) return state
+          return state.cutOffs + 1 >= CUT_OFF_LIMIT
+            ? RattlesState.Upset({ room: event.room })
+            : startLine(event.room, state.cutOffs + 1, reducedMotion)
+        case 'Upset':
+          // He's still fuming: the room changes under him, but his timer
+          // doesn't start over.
+          return RattlesState.Upset({ room: event.room })
+      }
+    })
+    .onAny(RattlesEvent.Left, () => RattlesState.Away)
+    .on(RattlesState.Typing, RattlesEvent.Ticked, ({ state }) =>
+      state.shown + CHARS_PER_TICK >= RATTLES_SAYS[state.room].length
+        ? RattlesState.Said({ room: state.room })
+        : RattlesState.Typing({ ...state, shown: state.shown + CHARS_PER_TICK }),
+    )
+    .spawn(
+      RattlesState.Typing,
+      ({ self }) =>
+        Effect.forever(
+          Effect.andThen(Effect.sleep(TYPE_MS), self.send(RattlesEvent.Ticked)),
+        ),
+      { name: 'typeLine' },
+    )
+    .timeout(RattlesState.Upset, {
+      duration: () => UPSET_MS,
+      event: RattlesEvent.Calmed,
+    })
+    .on(RattlesState.Upset, RattlesEvent.Calmed, ({ state }) =>
+      startLine(state.room, 0, reducedMotion),
+    )
+    .background(function followPage({ self }) {
+      return Effect.gen(function* () {
+        const page = yield* Page
+        yield* Stream.runForEach(page.changes, state =>
+          self.send(
+            state._tag === 'Manor'
+              ? RattlesEvent.Entered({ room: state.room })
+              : RattlesEvent.Left,
+          ),
+        )
+      })
+    })
+
+export const rattlesSays = (state: RattlesState): string =>
+  RattlesState.$match(state, {
+    Away: () => '',
+    Typing: ({ room, shown }) => `${Str.slice(0, shown)(RATTLES_SAYS[room])}▌`,
+    Said: ({ room }) => RATTLES_SAYS[room],
+    Upset: () => RATTLES_UPSET,
+  })
+
+export class Rattles extends Context.Service<
+  Rattles,
+  Actor<RattlesState, RattlesEvent>
+>()('tanner-site/machines/Rattles') {
+  static readonly layer = ({
+    reducedMotion,
+    route,
+  }: {
+    readonly reducedMotion: boolean
+    readonly route: SiteRoute
+  }) =>
+    Layer.effect(
+      this,
+      started(Machine.spawn(rattlesMachine(reducedMotion), { input: { route } })),
+    )
+}

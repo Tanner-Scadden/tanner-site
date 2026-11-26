@@ -139,6 +139,8 @@ export const RATTLES_SAYS: Record<RoomId, string> = {
     "This is where Munch Manor gets built. I run the shop. Try the machine: same seed, same run, every time. Same zombies too, sorry.",
 }
 
+export const RATTLES_UPSET = 'STOP CUTTING ME OFF!'
+
 export const PARLOUR_SAYS: ReadonlyArray<string> = [
   'Munch Manor is a goofy, gory pixel zombie shooter that runs in a browser tab. You and up to three friends hold a haunted manor through 8 waves of the dead, then face Uncle Chunk. Try not to get eaten.',
   "There's nothing to install. Send a link and you're playing together in a minute, on a laptop or on your phone.",

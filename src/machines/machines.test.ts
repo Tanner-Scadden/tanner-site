@@ -4,17 +4,17 @@ import { Effect, Layer } from 'effect'
 import { TestClock } from 'effect/testing'
 import { Machine } from 'effect-machine'
 
-import { RATTLES_SAYS, THESES } from '../content'
+import { RATTLES_SAYS, RATTLES_UPSET, THESES } from '../content'
 import type { EggId } from '../eggs'
 import { FIRST_SEED, TURNS, nextSeed } from '../replay'
-import { SiteRoute, homeRoute } from '../routes'
-import { DialogueEvent, DialogueState, dialogueMachine } from './Dialogue'
+import { SiteRoute, homeRoute, roomRoute } from '../routes'
 import { started } from './actor'
 import { Eggs, EggsEvent } from './Eggs'
 import { Gpu, GpuEvent } from './Gpu'
 import { Horde, HordeEvent, zombiesOf } from './Horde'
 import { Keys, KeysEvent } from './Keys'
 import { Page } from './Page'
+import { CUT_OFF_LIMIT, Rattles, RattlesState, UPSET_MS, rattlesSays } from './Rattles'
 import { siteActors } from './Site'
 import { Thesis, ThesisEvent, thesisText } from './Thesis'
 import { ToastState, Toasts } from './Toast'
@@ -24,8 +24,8 @@ import { WorkshopEvent, WorkshopState, workshopMachine } from './Workshop'
 // The site's actors as the app runs them, on an in-memory Router and a
 // 1000px window with no frames: a test sends the frames it wants.
 const site = (found: ReadonlyArray<EggId> = [], url = '/') =>
-  siteActors({ found, route: homeRoute }).pipe(
-    Layer.provide([
+  siteActors({ found, reducedMotion: false, route: homeRoute }).pipe(
+    Layer.provideMerge([
       Router.memory({ routes: SiteRoute, url }),
       Viewport.test(1000),
     ]),
@@ -249,32 +249,58 @@ describe('Workshop', () => {
   })
 })
 
-describe('Dialogue', () => {
-  const line = RATTLES_SAYS.parlour
+const enter = (room: 'parlour' | 'trophy' | 'workshop') =>
+  Effect.gen(function* () {
+    const router = yield* Router.Router
+    yield* router.push(roomRoute(room))
+    const rattles = yield* Rattles
+    return yield* rattles.waitFor(
+      state => state._tag !== 'Away' && state.room === room,
+    )
+  })
 
-  it.effect('Rattles types the line out and stops', () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const actor = yield* started(
-          Machine.spawn(dialogueMachine({ line, reducedMotion: false })),
-        )
-        yield* TestClock.adjust('36 millis')
-        const typing = yield* actor.snapshot
-        assert.deepStrictEqual(typing, DialogueState.Typing({ shown: 4 }))
-        yield* TestClock.adjust('10 seconds')
-        const said = yield* actor.snapshot
-        assert.strictEqual(said._tag, 'Said')
-      }),
-    ),
+it.layer(site(), { buildPerTest: true })('Rattles', it => {
+  it.effect('types the line out and stops', () =>
+    Effect.gen(function* () {
+      const typing = yield* enter('parlour')
+      assert.strictEqual(typing._tag, 'Typing')
+      yield* TestClock.adjust('10 seconds')
+      const rattles = yield* Rattles
+      const said = yield* rattles.waitFor(state => state._tag === 'Said')
+      assert.strictEqual(rattlesSays(said), RATTLES_SAYS.parlour)
+    }),
   )
 
-  it.effect('a tick past the end says the line', () =>
+  it.effect('cut off too many times, he gets upset, then calms down', () =>
     Effect.gen(function* () {
-      const state = yield* Machine.replay(
-        dialogueMachine({ line: 'Hi', reducedMotion: false }),
-        [DialogueEvent.Ticked],
+      const rooms = ['parlour', 'trophy', 'workshop', 'parlour'] as const
+      let state: RattlesState = yield* enter(rooms[0])
+      for (let n = 1; n <= CUT_OFF_LIMIT; n++) state = yield* enter(rooms[n]!)
+      assert.deepStrictEqual(state, RattlesState.Upset({ room: 'parlour' }))
+      assert.strictEqual(rattlesSays(state), RATTLES_UPSET)
+      yield* TestClock.adjust(UPSET_MS)
+      const rattles = yield* Rattles
+      const calm = yield* rattles.waitFor(state => state._tag === 'Typing')
+      assert.deepStrictEqual(
+        calm,
+        RattlesState.Typing({ room: 'parlour', shown: 0, cutOffs: 0 }),
       )
-      assert.deepStrictEqual(state, DialogueState.Said)
+    }),
+  )
+
+  it.effect('letting him finish a line forgives the cut-offs', () =>
+    Effect.gen(function* () {
+      yield* enter('parlour')
+      yield* enter('trophy')
+      yield* TestClock.adjust('10 seconds')
+      const rattles = yield* Rattles
+      yield* rattles.waitFor(state => state._tag === 'Said')
+      yield* enter('workshop')
+      const state = yield* enter('parlour')
+      assert.deepStrictEqual(
+        state,
+        RattlesState.Typing({ room: 'parlour', shown: 0, cutOffs: 1 }),
+      )
     }),
   )
 })
