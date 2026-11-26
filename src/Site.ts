@@ -2,7 +2,6 @@ import { Component, Head, Mount, Subscription, UiSchema } from '@effect/ui'
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
 import { Array as Arr, Schema, Stream, String as Str } from 'effect'
 
-import { Dialogue } from './components/Dialogue'
 import { Workshop } from './components/Workshop'
 import {
   ELSEWHERE,
@@ -35,6 +34,7 @@ import type { EggsState } from './machines/Eggs'
 import type { GpuState } from './machines/Gpu'
 import { type Zombie, zombiesOf } from './machines/Horde'
 import { PageState } from './machines/Page'
+import { type RattlesState, rattlesSays } from './machines/Rattles'
 import {
   Dispatch,
   SiteSnapshot,
@@ -371,9 +371,26 @@ const trophyRoom = SiteDef.fragment(h =>
     ),
 )
 
-const manor = SiteDef.fragment((h, room: RoomId) =>
+const rattlesBox = SiteDef.fragment((h, rattles: RattlesState) =>
+  h.div
+    .class('dlg', rattles._tag === 'Upset' && 'upset')
+    .children(
+      sprite(h, 'rattles', 5.5),
+      h.div(
+        h.div.class('who').children('RATTLES'),
+        h.div
+          .class('txt')
+          .attr('aria-live', rattles._tag === 'Upset' ? 'assertive' : 'polite')
+          .children(rattlesSays(rattles)),
+      ),
+    ),
+)
+
+// NOTE: cut Rattles off enough times and the Manor breaks: the room doors
+// jam and hang crooked until he calms down.
+const manor = SiteDef.fragment((h, room: RoomId, rattles: RattlesState) =>
   h.main
-    .class('manor')
+    .class('manor', rattles._tag === 'Upset' && 'broken')
     .attr('aria-label', 'Hidden room')
     .children(
       h.div.class('mw').children(
@@ -393,6 +410,7 @@ const manor = SiteDef.fragment((h, room: RoomId) =>
                 .class('room', r === room && 'on')
                 .attr('href', href(roomRoute(r)))
                 .attr('aria-current', r === room ? 'page' : 'false')
+                .attr('aria-disabled', rattles._tag === 'Upset' ? 'true' : 'false')
                 .children(
                   h.b(ROOM_NAMES[r]),
                   h.small(ROOM_TAGS[r]),
@@ -400,10 +418,7 @@ const manor = SiteDef.fragment((h, room: RoomId) =>
                 ),
             ),
           ),
-        Dialogue(h, {
-          key: room,
-          props: { room, reducedMotion: h.props.reducedMotion },
-        }),
+        rattlesBox(h, rattles),
         room === 'parlour' && parlour(h),
         room === 'trophy' && trophyRoom(h),
         room === 'workshop' &&
@@ -545,7 +560,7 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
     case 'Home':
       return home(h, model)
     case 'Manor':
-      return manor(h, model.page.room)
+      return manor(h, model.page.room, model.rattles)
     case 'Rest':
       return worlds(h)
     case 'NotFound':
