@@ -7,7 +7,7 @@ import { THESES } from '#content/home'
 import { RATTLES_SAYS, RATTLES_UPSET } from '#content/manor'
 import type { EggId } from '#domain/Egg'
 
-import { Gpu, GpuEvent } from '../blueprint/machines/Gpu.ts'
+import { Gpu, GpuEvent, GpuState } from '../blueprint/machines/Gpu.ts'
 import { Eggs, EggsEvent } from '../eggs/machines/Eggs.ts'
 import { Horde, HordeEvent, zombiesOf } from '../horde/machines/Horde.ts'
 import { Viewport } from '../horde/services/Viewport.ts'
@@ -115,6 +115,24 @@ it.layer(site(), { buildPerTest: true })('Gpu', it => {
       yield* eggs.waitFor(state => state.found.includes('gpu'))
       const down = yield* gpu.call(GpuEvent.Escaped)
       assert.strictEqual(down.newState._tag, 'Resting')
+    }),
+  )
+
+  it.effect('an outbreak starts with patient zero, then keeps count', () =>
+    Effect.gen(function* () {
+      const gpu = yield* Gpu
+      yield* gpu.call(GpuEvent.Started({ supported: true }))
+      const on = yield* gpu.call(GpuEvent.Clicked)
+      assert.deepStrictEqual(on.newState, GpuState.Drafting({ infected: 1 }))
+      yield* gpu.call(GpuEvent.Counted({ infected: 42 }))
+      const counted = yield* gpu.snapshot
+      assert.deepStrictEqual(counted, GpuState.Drafting({ infected: 42 }))
+      yield* gpu.call(GpuEvent.Clicked)
+      // A count that lands after the pens go down changes nothing.
+      const late = yield* gpu.call(GpuEvent.Counted({ infected: 7 }))
+      assert.isFalse(late.transitioned)
+      const again = yield* gpu.call(GpuEvent.Clicked)
+      assert.deepStrictEqual(again.newState, GpuState.Drafting({ infected: 1 }))
     }),
   )
 

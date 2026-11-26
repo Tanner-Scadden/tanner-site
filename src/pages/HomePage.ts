@@ -3,6 +3,7 @@ import { Array as Arr } from 'effect'
 
 import { ELSEWHERE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
 
+import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
 import { SiteRoute, href, restRoute } from '../routes.ts'
@@ -189,7 +190,7 @@ const Footer = <M>(h: Html.H<M>, clickedWebGpu: M) =>
         'Effect UI + ',
         h.span
           .class('egg')
-          .attrs({ role: 'button', tabindex: '0' })
+          .attrs({ role: 'button', tabindex: '0', [PENS_START]: '' })
           .on('click', clickedWebGpu)
           .on('keydown', pressed(clickedWebGpu), { preventDefault: true })
           .children('WebGPU'),

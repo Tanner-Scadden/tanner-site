@@ -6,6 +6,7 @@
 
 import {
   Data,
+  Duration,
   Effect,
   Queue,
   Random,
@@ -19,6 +20,7 @@ import {
   type Frame,
   MINOR,
   NO_POINTER,
+  type Point,
   type Pointer,
   type Settings,
   extentFor,
@@ -29,8 +31,13 @@ import {
 } from './frame.ts'
 import {
   BACKGROUND,
+  FIRST_INFECTED,
+  FOREVER,
+  HEALTHY,
   PARTICLE_COUNT,
   PARTICLE_FLOATS,
+  PATIENT_ZERO,
+  PATIENT_ZERO_SPEED,
   PENS,
   SIMULATE,
   WORKGROUP,
@@ -47,7 +54,12 @@ const unavailable = (reason: typeof GpuUnavailable.fields.reason.Type) =>
   GpuUnavailable.make({ reason })
 
 const FRAME_FLOATS = 16
+// How fast a pen draws, in CSS px per second.
+const PEN_SPEED = { min: 15, max: 125 }
 const MAX_PIXEL_RATIO = 2
+const PENS_BYTES = PARTICLE_COUNT * PARTICLE_FLOATS * 4
+// How often the page counts the zombies, for the INFECTED counter.
+const COUNT_EVERY = Duration.millis(250)
 
 // ---------------------------------------------------------------------------
 // Acquiring the GPU
@@ -92,24 +104,71 @@ export const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor
     buffer => Effect.sync(() => buffer.destroy()),
   )
 
-// Each pen starts on a random grid line, heading along it at its own speed.
-const seedPens = (field: number) =>
+// The pens start somewhere on a large field, so they never need reseeding
+// when the window grows.
+const FIELD = extentFor(Math.max(screen.width, screen.height, 2400))
+
+// NOTE: the WebGPU toggle carries this attribute, so patient zero can start
+// right where the visitor just clicked.
+export const PENS_START = 'data-pens-start'
+
+// Where patient zero starts: on the grid line nearest the WebGPU toggle, in
+// the page coordinates the pens use, which wrap every extent (see the
+// shaders). The middle of the screen if the toggle isn't there.
+const startingPoint = (canvas: HTMLCanvasElement) =>
+  Effect.sync((): Point => {
+    const box = document.querySelector(`[${PENS_START}]`)?.getBoundingClientRect()
+    const x = box === undefined ? canvas.clientWidth / 2 : box.left + box.width / 2
+    const y = box === undefined ? canvas.clientHeight / 2 : box.top + box.height / 2
+    const wrap = (value: number, extent: number) => value - extent * Math.floor(value / extent)
+    const line = Math.round((y + window.scrollY - 0.5) / MINOR) * MINOR + 0.5
+    return {
+      x: wrap(x + window.scrollX, extentFor(canvas.clientWidth)),
+      y: wrap(line, extentFor(canvas.clientHeight)),
+    }
+  })
+
+// Every pen starts yellow on a random grid line, heading along it at its own
+// speed, except patient zero: the zombie that starts the outbreak at `zero`.
+const seedPens = (zero: Point) =>
   Effect.gen(function* () {
     const data = new Float32Array(PARTICLE_COUNT * PARTICLE_FLOATS)
-    const lines = Math.floor(field / MINOR)
+    const lines = Math.floor(FIELD / MINOR)
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const alongX = (yield* Random.next) < 0.5
-      const velocity =
-        ((yield* Random.next) < 0.5 ? -1 : 1) *
-        (yield* Random.nextBetween(40, 150))
-      const along = yield* Random.nextBetween(0, field)
+      const speed = yield* Random.nextBetween(PEN_SPEED.min, PEN_SPEED.max)
+      const velocity = ((yield* Random.next) < 0.5 ? -1 : 1) * speed
+      const along = yield* Random.nextBetween(0, FIELD)
       const line = (yield* Random.nextIntBetween(0, lines - 1)) * MINOR + 0.5
-      data.set(
-        alongX ? [along, line, velocity, 0] : [line, along, 0, velocity],
-        i * PARTICLE_FLOATS,
-      )
+      const [x, y, vx, vy] = alongX
+        ? [along, line, velocity, 0]
+        : [line, along, 0, velocity]
+      // NOTE: the order matches `struct Pen` in the shaders.
+      data.set([x, y, vx, vy, 0, 0, HEALTHY, 0], i * PARTICLE_FLOATS)
     }
+    const heading = (yield* Random.next) < 0.5 ? -1 : 1
+    data.set(
+      [zero.x, zero.y, heading * PATIENT_ZERO_SPEED, 0, 0, 0, FOREVER, 0],
+      PATIENT_ZERO * PARTICLE_FLOATS,
+    )
     return data
+  })
+
+// A fresh outbreak: new pens, and patient zero by the toggle.
+const startOutbreak = (gpu: Gpu, canvas: HTMLCanvasElement) =>
+  Effect.gen(function* () {
+    const zero = yield* startingPoint(canvas)
+    const pens = yield* seedPens(zero)
+    gpu.device.queue.writeBuffer(gpu.particleBuffer, 0, pens)
+  })
+
+// Every pen yellow again, patient zero too, so the pens fade out clean.
+const cureEveryone = (gpu: Gpu) =>
+  Effect.sync(() => {
+    const healthy = new Float32Array([HEALTHY, 0])
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      gpu.device.queue.writeBuffer(gpu.particleBuffer, (i * PARTICLE_FLOATS + 6) * 4, healthy)
+    }
   })
 
 const PEN_BLEND: GPUBlendState = {
@@ -129,15 +188,14 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
     const particleBuffer = yield* acquireBuffer(device, {
-      size: PARTICLE_COUNT * PARTICLE_FLOATS * 4,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      size: PENS_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     })
-    // The pens start somewhere on a large field, so they never need
-    // reseeding when the window grows.
-    const field = extentFor(Math.max(screen.width, screen.height, 2400))
-    const pens = yield* seedPens(field)
-    device.queue.writeBuffer(particleBuffer, 0, pens)
-
+    // A copy of the pens the page can read, to count the zombies.
+    const readback = yield* acquireBuffer(device, {
+      size: PENS_BYTES,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    })
     const module = (code: string) => device.createShaderModule({ code })
     const backgroundModule = module(BACKGROUND)
     const simulateModule = module(SIMULATE)
@@ -149,10 +207,13 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       fragment: { module: backgroundModule, entryPoint: 'fs', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
     })
-    const simulate = device.createComputePipeline({
-      layout: 'auto',
-      compute: { module: simulateModule, entryPoint: 'step' },
-    })
+    const compute = (entryPoint: string) =>
+      device.createComputePipeline({
+        layout: 'auto',
+        compute: { module: simulateModule, entryPoint },
+      })
+    const simulate = compute('step')
+    const infect = compute('infect')
     const draw = device.createRenderPipeline({
       layout: 'auto',
       vertex: { module: pensModule, entryPoint: 'vs' },
@@ -177,8 +238,16 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       device,
       context,
       frameBuffer,
+      particleBuffer,
+      readback,
       frameData: new Float32Array(FRAME_FLOATS),
       background: { pipeline: background, group: bind(background, [frameBuffer]) },
+      // Moving first, then biting, as two dispatches: the second sees
+      // every pen where the first left it.
+      infect: {
+        pipeline: infect,
+        group: bind(infect, [frameBuffer, particleBuffer]),
+      },
       simulate: {
         pipeline: simulate,
         group: bind(simulate, [frameBuffer, particleBuffer]),
@@ -188,6 +257,27 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
   })
 
 type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
+
+// How many pens are zombies right now. Copies the pens off the GPU and reads
+// each one's `zombie` (see `struct Pen`). Fails quietly if the copy can't be
+// read, such as when the device is lost.
+const countInfected = (gpu: Gpu) =>
+  Effect.gen(function* () {
+    const encoder = gpu.device.createCommandEncoder()
+    encoder.copyBufferToBuffer(gpu.particleBuffer, 0, gpu.readback, 0, PENS_BYTES)
+    gpu.device.queue.submit([encoder.finish()])
+    yield* Effect.tryPromise({
+      try: () => gpu.readback.mapAsync(GPUMapMode.READ),
+      catch: () => unavailable('no-device'),
+    })
+    const pens = new Float32Array(gpu.readback.getMappedRange())
+    let infected = 0
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      if (pens[i * PARTICLE_FLOATS + 6]! > 0) infected++
+    }
+    gpu.readback.unmap()
+    return infected
+  })
 
 // ---------------------------------------------------------------------------
 // Drawing a frame
@@ -232,9 +322,12 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
     const encoder = gpu.device.createCommandEncoder()
     if (frame.stepPens) {
       const compute = encoder.beginComputePass()
-      compute.setPipeline(gpu.simulate.pipeline)
-      compute.setBindGroup(0, gpu.simulate.group)
-      compute.dispatchWorkgroups(Math.ceil(PARTICLE_COUNT / WORKGROUP))
+      const groups = Math.ceil(PARTICLE_COUNT / WORKGROUP)
+      for (const stage of [gpu.simulate, gpu.infect]) {
+        compute.setPipeline(stage.pipeline)
+        compute.setBindGroup(0, stage.group)
+        compute.dispatchWorkgroups(groups)
+      }
       compute.end()
     }
     const pass = encoder.beginRenderPass({
@@ -321,14 +414,17 @@ const markCanvas = (canvas: HTMLCanvasElement) =>
 
 // Starts the blueprint on `canvas` and returns once it's drawing. It follows
 // `changes` and the page's input for as long as `Scope` stays open, and
-// fails with GpuUnavailable when this browser can't run it.
+// fails with GpuUnavailable when this browser can't run it. While the pens
+// run, it tells `infected` how many are zombies.
 export const runBlueprint = (
   canvas: HTMLCanvasElement,
   initial: Settings,
   changes: Stream.Stream<Settings>,
+  infected: (count: number) => Effect.Effect<void>,
 ): Effect.Effect<void, GpuUnavailable, Scope.Scope> =>
   Effect.gen(function* () {
     const gpu = yield* makeGpu(canvas)
+    yield* startOutbreak(gpu, canvas)
 
     const settings = yield* Ref.make(initial)
     const pointer = yield* Ref.make(NO_POINTER)
@@ -338,6 +434,8 @@ export const runBlueprint = (
     const started = performance.now()
 
     const poke = Queue.offer(wakes, undefined)
+    // The last count told, so the page only hears when it changes.
+    const told = yield* Ref.make(FIRST_INFECTED)
 
     // Draws frames until the page settles, then returns.
     const animate = Effect.gen(function* () {
@@ -368,9 +466,36 @@ export const runBlueprint = (
       ),
     )
 
+    // Turning the pens on starts a new outbreak by the toggle; turning them
+    // off cures everyone, so they fade out yellow.
     yield* Effect.forkScoped(
       Stream.runForEach(changes, next =>
-        Effect.andThen(Ref.set(settings, next), poke),
+        Effect.gen(function* () {
+          // NOTE: the new outbreak is in place before the settings say the
+          // pens run, so the counter never sees the old one.
+          const before = yield* Ref.get(settings)
+          if (next.flow && !before.flow) {
+            yield* startOutbreak(gpu, canvas)
+            yield* Ref.set(told, FIRST_INFECTED)
+          }
+          if (!next.flow && before.flow) yield* cureEveryone(gpu)
+          yield* Ref.set(settings, next)
+          yield* poke
+        }),
+      ),
+    )
+
+    // Counts the zombies a few times a second while the pens run.
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.gen(function* () {
+          yield* Effect.sleep(COUNT_EVERY)
+          const { flow } = yield* Ref.get(settings)
+          if (!flow) return
+          const count = yield* countInfected(gpu)
+          const last = yield* Ref.getAndSet(told, count)
+          if (count !== last) yield* infected(count)
+        }).pipe(Effect.ignore),
       ),
     )
 
