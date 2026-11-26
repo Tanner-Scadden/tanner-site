@@ -4,6 +4,7 @@ import { Effect, Layer } from 'effect'
 import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 
 import { readFoundEggs } from './eggs'
+import { Viewport } from './machines/Viewport'
 import { SiteRoute } from './routes'
 import { Site } from './Site'
 import './styles.css'
@@ -35,7 +36,7 @@ const main = Effect.gen(function* () {
   }))
   return yield* Layer.launch(
     BrowserHost.mount(Site, props, document.getElementById('app')!).pipe(
-      Layer.provide(BrowserRouter.layer({ routes: SiteRoute })),
+      Layer.provide([BrowserRouter.layer({ routes: SiteRoute }), Viewport.browser]),
     ),
   )
 })

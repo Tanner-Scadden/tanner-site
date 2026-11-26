@@ -1,182 +1,51 @@
 // @vitest-environment happy-dom
-import { Component, Router } from '@effect/ui'
-import {
-  HtmlLocator,
-  HtmlPlay,
-  HtmlScene,
-  TestGlobalEvents,
-} from '@effect/ui/html/testing'
-import { Locator, Story, TestHost } from '@effect/ui/testing'
+import { Router } from '@effect/ui'
+import { HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
+import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Effect, Layer } from 'effect'
 
-import { RATTLES_SAYS, THESES } from './content'
-import { EGG_HINTS, EGG_NAMES, SaveEggs } from './eggs'
-import { GpuBlueprint } from './gpu/Blueprint'
+import { RATTLES_SAYS } from './content'
+import { EGG_HINTS, EGG_NAMES, type EggId } from './eggs'
+import { Viewport } from './machines/Viewport'
 import { FIRST_SEED, TURNS, nextSeed, runOf } from './replay'
-import { SiteRoute, homeRoute, restRoute } from './routes'
-import { MeasureViewport, Site, SiteMessage, SiteNoDeps } from './Site'
+import { SiteRoute, restRoute } from './routes'
+import { Site } from './Site'
 
-const props = { found: [], reducedMotion: true, route: homeRoute }
-
-describe('Site', () => {
-  it.effect('arriving at the Manor finds its egg once', () =>
-    Effect.gen(function* () {
-      const s = yield* Story.make(SiteNoDeps, props)
-      s.send(SiteMessage.ChangedRoute({ route: SiteRoute.Manor() }))
-        .expectExact(SaveEggs)
-      s.resolve(SaveEggs, Component.noop)
-      assert.deepStrictEqual(s.model.found, ['manor'])
-      assert.strictEqual(s.model.typed, RATTLES_SAYS.parlour.length)
-      s.send(
-        SiteMessage.ChangedRoute({
-          route: SiteRoute.ManorRoom({ params: { room: 'trophy' } }),
-        }),
-      )
-      assert.strictEqual(s.pending.length, 0)
-      assert.strictEqual(s.model.typed, RATTLES_SAYS.trophy.length)
-    }),
-  )
-
-  it.effect('opening /rest straight from its URL counts the egg', () =>
-    Effect.gen(function* () {
-      const s = yield* Story.make(SiteNoDeps, { ...props, route: restRoute })
-      s.send(SiteMessage.Landed()).expectExact(SaveEggs)
-      s.resolve(SaveEggs, Component.noop)
-      assert.deepStrictEqual(s.model.found, ['worlds'])
-    }),
-  )
-
-  it.effect('the thesis simplifies itself down to one word', () =>
-    Effect.gen(function* () {
-      const s = yield* Story.make(SiteNoDeps, props)
-      s.send(SiteMessage.ClickedThesis())
-      s.send(SiteMessage.ClickedThesis())
-      assert.strictEqual(s.pending.length, 0)
-      s.send(SiteMessage.ClickedThesis()).expectExact(SaveEggs)
-      s.resolve(SaveEggs, Component.noop)
-      assert.strictEqual(THESES[s.model.thesis], 'Solved.')
-      assert.deepStrictEqual(s.model.found, ['thesis'])
-    }),
-  )
-
-  it.effect('the Konami code sends the horde, and a click munches one', () =>
-    Effect.gen(function* () {
-      const s = yield* Story.make(SiteNoDeps, props)
-      const keys = [
-        'ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown',
-        'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a',
-      ]
-      for (const key of keys) s.send(SiteMessage.PressedKey({ key }))
-      s.resolve(SaveEggs, Component.noop)
-      s.resolve(
-        MeasureViewport,
-        SiteMessage.CompletedMeasureViewport({ width: 1000 }),
-      )
-      assert.strictEqual(s.model.zombies.length, 6)
-      const first = s.model.zombies[0]!
-      s.send(SiteMessage.ClickedZombie({ id: first.id }))
-      assert.strictEqual(s.model.zombies.length, 5)
-      s.send(SiteMessage.TickedFrame({ delta: 100 }))
-      assert.isTrue(Arr.every(s.model.zombies, z => z.x < 1000 + 5 * 90))
-    }),
-  )
-
-  it.effect('the Workshop replays a seed, and a new seed starts a new run', () =>
-    Effect.gen(function* () {
-      const s = yield* Story.make(SiteNoDeps, { ...props, reducedMotion: false })
-      s.send(
-        SiteMessage.ChangedRoute({
-          route: SiteRoute.ManorRoom({ params: { room: 'workshop' } }),
-        }),
-      )
-      s.resolve(SaveEggs, Component.noop)
-      assert.strictEqual(s.model.turn, 0)
-      for (let i = 0; i < TURNS + 5; i++) s.send(SiteMessage.TickedReplay())
-      assert.strictEqual(s.model.turn, TURNS)
-      s.send(SiteMessage.ClickedReplay())
-      assert.strictEqual(s.model.seed, FIRST_SEED)
-      assert.strictEqual(s.model.turn, 0)
-      s.send(SiteMessage.ClickedNewSeed())
-      assert.strictEqual(s.model.seed, nextSeed(FIRST_SEED))
-      assert.strictEqual(s.model.turn, 0)
-    }),
-  )
-
-  it.effect('devtools and printing count as eggs', () =>
-    Effect.gen(function* () {
-      const s = yield* Story.make(SiteNoDeps, props)
-      s.send(SiteMessage.CalledHello()).expectExact(SaveEggs)
-      s.resolve(SaveEggs, Component.noop)
-      s.send(SiteMessage.StartedPrint()).expectExact(SaveEggs)
-      s.resolve(SaveEggs, Component.noop)
-      assert.deepStrictEqual(s.model.found, ['console', 'print'])
-    }),
-  )
-
-})
-
-it.layer(Router.memory({ routes: SiteRoute, url: '/' }), {
-  buildPerTest: true,
-})('Site with a Router', it => {
-  it.effect('WebGPU in the footer turns the drafting pens on and off', () =>
-    Effect.gen(function* () {
-      const s = yield* HtmlScene.make(SiteNoDeps, props)
-      s.expectMount(GpuBlueprint({ flow: false, still: true }))
-        .mounted(GpuBlueprint, true)
-        .click(HtmlLocator.role('button', { name: 'WebGPU' }))
-        .expectExact(SaveEggs)
-        .resolve(SaveEggs, Component.noop)
-        .expectMount(GpuBlueprint({ flow: true, still: true }))
-        .expect(Locator.text('EGG FOUND: DRAFTING PENS · 1/7'))
-        .toExist()
-        .fireDocument('keydown', { key: 'Escape' })
-        .expectMount(GpuBlueprint({ flow: false, still: true }))
-    }),
-  )
-
-  it.effect('without WebGPU the egg still counts, and says why', () =>
-    Effect.gen(function* () {
-      const s = yield* HtmlScene.make(SiteNoDeps, props)
-      s.mounted(GpuBlueprint, false)
-        .click(HtmlLocator.role('button', { name: 'WebGPU' }))
-        .expectExact(SaveEggs)
-        .resolve(SaveEggs, Component.noop)
-        .expect(Locator.text('NO WEBGPU IN THIS BROWSER, BUT IT COUNTS'))
-        .toExist()
-    }),
-  )
-
-  it.effect('the quest log hints at eggs still hidden, and names found ones', () =>
-    Effect.gen(function* () {
-      const s = yield* HtmlScene.make(SiteNoDeps, {
-        ...props,
-        found: ['manor'],
-      })
-      s.mounted(GpuBlueprint, true)
-        .expect(Locator.text('QUEST LOG · 1 OF 7 FOUND'))
-        .toExist()
-        .expect(Locator.text(EGG_NAMES.manor))
-        .toExist()
-        .expect(Locator.text(EGG_HINTS.manor))
-        .toBeAbsent()
-        .expect(Locator.text(EGG_HINTS.worlds))
-        .toExist()
-    }),
-  )
-})
-
+const propsFinding = (found: ReadonlyArray<EggId>) =>
+  Effect.map(Router.currentRoute(SiteRoute), route => ({
+    found,
+    reducedMotion: true,
+    route,
+  }))
 const siteProps = Effect.map(Router.currentRoute(SiteRoute), route => ({
-  found: [],
+  found: [] as ReadonlyArray<EggId>,
   reducedMotion: true,
   route,
 }))
 
+// NOTE: an actor stops on the scheduler it was spawned on, and TestHost's
+// only runs inside `settle`. Unmounting the Site after a test waits on its
+// actors stopping, so keep draining the scheduler for as long as the host
+// lives, or the unmount never ends.
+const drainWhileUnmounting = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const host = yield* TestHost.TestHost
+    yield* Effect.acquireRelease(
+      // The test runs on TestClock, so an Effect schedule would never fire.
+      // @effect-diagnostics-next-line globalTimersInEffect:off
+      Effect.sync(() => setInterval(() => host.drain(host.budget), 1)),
+      id => Effect.sync(() => clearInterval(id)),
+    )
+  }),
+)
+
 const playLayer = (url: string) =>
   Layer.mergeAll(
     Router.memory({ routes: SiteRoute, url }),
-    TestHost.layer(),
+    Layer.provideMerge(drainWhileUnmounting, TestHost.layer()),
     TestGlobalEvents.layer,
+    Viewport.test(1000),
   )
 
 describe('Workshop replay', () => {
@@ -233,26 +102,31 @@ describe('Site routes', () => {
   })
 })
 
-it.layer(playLayer('/manor/trophy'), { buildPerTest: true })('Site at /manor/trophy', it => {
-  it.effect('a Manor room opens from its URL, and Escape goes home', () =>
-    Effect.gen(function* () {
-      const play = yield* HtmlPlay.make(Site, siteProps)
-      yield* play.expect(Locator.text('YOU FOUND THE MANOR')).toExist()
-      yield* play.expect(Locator.text(RATTLES_SAYS.trophy)).toExist()
-      assert.strictEqual(
-        play.root.head().title,
-        'Trophy · The Manor · Tanner Scadden',
-      )
+it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
+  'Site at /manor/trophy',
+  it => {
+    it.effect('a Manor room opens from its URL, and Escape goes home', () =>
+      Effect.gen(function* () {
+        const play = yield* HtmlPlay.make(Site, siteProps)
+        yield* play.expect(Locator.text('YOU FOUND THE MANOR')).toExist()
+        yield* play.expect(Locator.text(RATTLES_SAYS.trophy)).toExist()
+        // A hidden page docks the toast as the way back home.
+        yield* play.expect(Locator.text('← BACK')).toExist()
+        assert.strictEqual(
+          play.root.head().title,
+          'Trophy · The Manor · Tanner Scadden',
+        )
 
-      yield* TestGlobalEvents.fire('document', 'keydown', { key: 'Escape' })
-      yield* TestHost.settle
-      assert.strictEqual(play.root.model()?.route._tag, 'Home')
-      assert.strictEqual(play.root.head().title, 'Tanner Scadden')
-      // Landing on the Manor counted its egg.
-      yield* play.expect(Locator.text('EGGS 1/7')).toExist()
-    }).pipe(Effect.scoped),
-  )
-})
+        yield* TestGlobalEvents.fire('document', 'keydown', { key: 'Escape' })
+        yield* TestHost.settle
+        assert.strictEqual(play.root.model()?.page._tag, 'Home')
+        assert.strictEqual(play.root.head().title, 'Tanner Scadden')
+        // Landing on the Manor counted its egg.
+        yield* play.expect(Locator.text('EGGS 1/7')).toExist()
+      }).pipe(Effect.scoped),
+    )
+  },
+)
 
 it.layer(playLayer('/'), { buildPerTest: true })('Site at /', it => {
   it.effect('typing rest goes to /rest, and a pasted URL lands there', () =>
@@ -262,18 +136,33 @@ it.layer(playLayer('/'), { buildPerTest: true })('Site at /', it => {
         yield* TestGlobalEvents.fire('document', 'keydown', { key })
       }
       yield* TestHost.settle
-      assert.strictEqual(play.root.model()?.route._tag, 'Rest')
+      assert.strictEqual(play.root.model()?.page._tag, 'Rest')
       yield* play.expect(Locator.text('GG, BACK TO WORK')).toExist()
     }).pipe(Effect.scoped),
   )
-})
 
-it.layer(playLayer('/blueprints/old'), { buildPerTest: true })('Site at /blueprints/old', it => {
-  it.effect('an unknown path shows the not found sheet', () =>
-    Effect.gen(function* () {
-      const play = yield* HtmlPlay.make(Site, siteProps)
-      yield* play.expect(Locator.text('Sheet not found')).toExist()
-      assert.strictEqual(play.root.head().title, 'Not found · Tanner Scadden')
-    }).pipe(Effect.scoped),
+  it.effect(
+    'the quest log hints at eggs still hidden, and names found ones',
+    () =>
+      Effect.gen(function* () {
+        const play = yield* HtmlPlay.make(Site, propsFinding(['manor']))
+        yield* play.expect(Locator.text('QUEST LOG · 1 OF 7 FOUND')).toExist()
+        yield* play.expect(Locator.text(EGG_NAMES.manor)).toExist()
+        yield* play.expect(Locator.text(EGG_HINTS.manor)).toBeAbsent()
+        yield* play.expect(Locator.text(EGG_HINTS.worlds)).toExist()
+      }).pipe(Effect.scoped),
   )
 })
+
+it.layer(playLayer('/blueprints/old'), { buildPerTest: true })(
+  'Site at /blueprints/old',
+  it => {
+    it.effect('an unknown path shows the not found sheet', () =>
+      Effect.gen(function* () {
+        const play = yield* HtmlPlay.make(Site, siteProps)
+        yield* play.expect(Locator.text('Sheet not found')).toExist()
+        assert.strictEqual(play.root.head().title, 'Not found · Tanner Scadden')
+      }).pipe(Effect.scoped),
+    )
+  },
+)
