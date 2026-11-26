@@ -391,7 +391,7 @@ const work = SiteDef.fragment(h =>
     .class('blk')
     .attr('id', 'work')
     .children(
-      label(h, 1, 'SELECTED WORK · PROBLEM → APPROACH → RESULT'),
+      label(h, 1, 'SELECTED WORK'),
       h.div.class('work').children(
         ...Arr.map(WORK, job =>
           h.div
