@@ -110,10 +110,14 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
 ]
 
 export const THESES = [
-  'I take messy problems and make them boring.',
-  'Messy problems, made boring.',
-  'Messy → boring.',
+  'I build the hard part underneath the product.',
+  'The hard part, underneath.',
+  'Underneath.',
   'Solved.',
 ] as const
+
+export const BIO =
+  "Scheduling engines, game rules engines, marketplace sync. I'm usually an early engineer at a startup, and I build the part everything else depends on, then keep it running. Mostly TypeScript and Effect. Self-taught."
+
 
 export const SITE_REPO_URL = 'https://github.com/Tanner-Scadden/tanner-site'

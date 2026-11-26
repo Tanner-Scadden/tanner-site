@@ -1,7 +1,7 @@
 import type { Html } from '@effect/ui/html'
 import { Array as Arr } from 'effect'
 
-import { ELSEWHERE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
+import { BIO, ELSEWHERE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
 
 import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
@@ -72,11 +72,7 @@ const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M) =>
         .on('click', clicked)
         .on('keydown', pressed(clicked), { preventDefault: true })
         .children(thesis),
-      h.p
-        .class('bio')
-        .children(
-          "I'm usually one of the first engineers at an early startup. I figure out what to build, build it, and keep it running. Mostly TypeScript and Effect these days. Self-taught.",
-        ),
+      h.p.class('bio').children(BIO),
     )
 
 const Step = <M>(h: Html.H<M>, title: string, text: string, out: boolean) =>
