@@ -30,7 +30,7 @@ import {
   beforePrint,
   devtools,
 } from './eggs'
-import { GpuBlueprint } from './gpu/Blueprint'
+import { GpuBlueprint, WorkDrawing } from './gpu/Blueprint'
 import type { EggsState } from './machines/Eggs'
 import type { GpuState } from './machines/Gpu'
 import { type Zombie, zombiesOf } from './machines/Horde'
@@ -204,6 +204,12 @@ const work = SiteDef.fragment(h =>
     .children(
       label(h, 1, 'SELECTED WORK'),
       h.div.class('work').children(
+        // NOTE: WebGPU drafts the boxes and runs a spark along the arrows.
+        // Without it this canvas stays empty and the CSS borders show.
+        h.canvas
+          .class('work-gpu')
+          .attr('aria-hidden', 'true')
+          .onMount(WorkDrawing({ still: h.props.reducedMotion })),
         ...Arr.map(WORK, job =>
           h.div
             .class('job')

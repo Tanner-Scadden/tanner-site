@@ -75,6 +75,23 @@ a { color: var(--hi) }
 .flow .step.out p { color: var(--hi) }
 .flow .arr { display: grid; place-items: center; color: var(--dim) }
 
+/* the work drawing: WebGPU drafts each job's boxes the first time it comes
+   into view, then a spark runs along the arrows. While it runs it owns the
+   outlines, and each box's text waits for its pens. Without it, or once the
+   device is lost, the CSS borders above are all there is. */
+.work { position: relative; isolation: isolate }
+canvas.work-gpu { position: absolute; left: -16px; top: -16px; width: calc(100% + 32px); height: calc(100% + 32px); z-index: -1; pointer-events: none; display: block }
+.work:not([data-gpu="on"]) canvas.work-gpu { display: none }
+.work[data-gpu="on"] .flow .step { border-color: transparent }
+.work[data-gpu="on"] .flow > * { transition: opacity .5s ease-out }
+.work[data-gpu="on"] .job:not([data-drawn]) .flow > * { opacity: 0 }
+.work[data-gpu="on"] .flow > :nth-child(1) { transition-delay: .15s }
+.work[data-gpu="on"] .flow > :nth-child(2) { transition-delay: .55s }
+.work[data-gpu="on"] .flow > :nth-child(3) { transition-delay: .4s }
+.work[data-gpu="on"] .flow > :nth-child(4) { transition-delay: .8s }
+.work[data-gpu="on"] .flow > :nth-child(5) { transition-delay: .65s }
+@media (prefers-reduced-motion: reduce) { .work[data-gpu="on"] .flow > * { transition: none } }
+
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px }
 ul.plain { list-style: none }
 ul.plain li { padding: 10px 0; border-top: 1px dashed var(--faint); font-size: 13px; display: flex; justify-content: space-between; gap: 16px }
@@ -261,7 +278,8 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 /* printing the page gives a plain resume */
 @media print {
   :root { --line: #111; --dim: #555; --hi: #111; --faint: #ddd }
-  .top nav, .eggs, .door-cell, .horde, .toast, canvas.blueprint { display: none !important }
+  .top nav, .eggs, .door-cell, .horde, .toast, canvas.blueprint, canvas.work-gpu { display: none !important }
+  .flow > * { opacity: 1 !important }
   body { background: #fff !important; color: #111 }
   .sheet { border: none; outline: none; margin: 0; max-width: none }
   .blk, .hero, .foot > div, .flow .step, .top { border-color: #bbb !important }

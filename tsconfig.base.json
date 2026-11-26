@@ -195,7 +195,9 @@
           {
             "include": [
               "src/gpu/renderer.ts",
-              "src/gpu/shaders.ts"
+              "src/gpu/shaders.ts",
+              "src/gpu/workRenderer.ts",
+              "src/gpu/workShaders.ts"
             ],
             "options": {
               "diagnosticSeverity": {
