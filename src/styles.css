@@ -50,15 +50,12 @@ a { color: var(--hi) }
 }
 
 .blk { padding: 44px 40px; border-bottom: 1px solid var(--line) }
-/* section headings read like drawing callouts: a split detail bubble, a
-   heavy-over-thin underlined title, and a leader line out to a tick */
-.label { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; font-weight: 400 }
-.label .bubble { flex: none; display: grid; grid-template-rows: 1fr 1fr; width: 54px; height: 54px; border: 2px solid var(--line); border-radius: 50%; overflow: hidden; text-align: center; line-height: 1 }
-.label .bubble b { display: grid; place-items: end center; padding-bottom: 3px; border-bottom: 1px solid var(--line); font-size: 15px; font-weight: 700; color: var(--hi) }
-.label .bubble small { display: grid; place-items: start center; padding-top: 4px; font-size: 9px; letter-spacing: .1em; color: var(--dim) }
-.label .name { font-family: Archivo, sans-serif; font-weight: 900; font-size: clamp(22px, 3.4vw, 32px); line-height: 1; font-stretch: 125%; text-transform: uppercase; letter-spacing: .02em; color: var(--line); padding-bottom: 12px; background: linear-gradient(var(--line), var(--line)) left bottom 4px / 100% 2px no-repeat, linear-gradient(var(--line), var(--line)) left bottom / 100% 1px no-repeat }
-.label .rule { flex: 1; min-width: 24px; position: relative; height: 1px; background: var(--dim); align-self: center }
-.label .rule::after { content: ""; position: absolute; right: 0; top: -6px; width: 1px; height: 13px; background: var(--line) }
+/* section headings read like drawing callouts: a numbered bubble, the
+   title, and a leader line out to a tick */
+.label { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; font: 400 13px/1 "Space Mono", monospace; letter-spacing: .18em; color: var(--line) }
+.label i { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 50%; font-style: normal; font-size: 12px; letter-spacing: 0; color: var(--hi); flex: none }
+.label .rule { flex: 1; min-width: 24px; position: relative; height: 1px; background: var(--dim) }
+.label .rule::after { content: ""; position: absolute; right: 0; top: -4px; width: 1px; height: 9px; background: var(--dim) }
 
 .hero { padding: 72px 40px 56px; border-bottom: 1px solid var(--line) }
 .hero h1 { font-family: Archivo, sans-serif; font-weight: 900; font-size: clamp(36px, 7vw, 84px); line-height: .95; font-stretch: 125%; text-transform: uppercase }
