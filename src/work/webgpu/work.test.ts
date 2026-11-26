@@ -4,23 +4,19 @@ import { Array as Arr } from 'effect'
 import {
   DRAW_MS,
   GAP_MS,
-  MAX_RIPPLES,
-  RIPPLE_MS,
   PING_MS,
   STAGGER_MS,
   TRAVEL_MS,
   type Hovered,
   type WorkState,
-  entered,
+  replayed,
   initialWork,
   pingOf,
-  rippleOf,
   revealOf,
   seen,
   settled,
   sparkOf,
   step,
-  tapped,
 } from './work.ts'
 
 const job = (state: WorkState) => state.jobs[0]!
@@ -79,15 +75,15 @@ describe('work drawing', () => {
 
   it('sparks again when the pointer comes back, but not mid-flight', () => {
     const state = seen(initialWork(1), { job: 0, now: 0 })
-    assert.strictEqual(entered(state, { job: 0, now: drawn }), state)
-    const later = entered(state, { job: 0, now: 10_000 })
+    assert.strictEqual(replayed(state, { job: 0, now: drawn }), state)
+    const later = replayed(state, { job: 0, now: 10_000 })
     assert.strictEqual(job(later).sparkAt, 10_000)
-    assert.strictEqual(entered(later, { job: 0, now: 10_100 }), later)
+    assert.strictEqual(replayed(later, { job: 0, now: 10_100 }), later)
   })
 
   it('never sparks a job that has not drawn yet', () => {
     const state = initialWork(1)
-    assert.strictEqual(entered(state, { job: 0, now: 100 }), state)
+    assert.strictEqual(replayed(state, { job: 0, now: 100 }), state)
   })
 
   it('eases a hovered box in, then rests', () => {
@@ -101,30 +97,5 @@ describe('work drawing', () => {
     assert.strictEqual(revealOf(job(state), { box: 2, now: 0, still: true }), 1)
     assert.isNull(sparkOf(job(state), { box: 1, now: job(state).sparkAt! + 10, still: true }))
     assert.isTrue(settled(state, { now: 0, hovered: null, still: true }))
-  })
-
-  it('ripples out from a tap, then rests', () => {
-    const state = tapped(initialWork(1), { x: 40, y: 60, at: 0, still: false })
-    assert.isFalse(settled(state, { now: 0, hovered: null, still: false }))
-    assert.closeTo(rippleOf(state.ripples[0]!, RIPPLE_MS / 2)!, 0.5, 1e-9)
-    assert.isNull(rippleOf(state.ripples[0]!, RIPPLE_MS))
-
-    const { state: rested, now } = run(state)
-    assert.isAtLeast(now, RIPPLE_MS)
-    assert.deepStrictEqual(rested.ripples, [])
-  })
-
-  it('keeps only the newest ripples when tapped fast', () => {
-    let state = initialWork(1)
-    for (let at = 0; at < MAX_RIPPLES + 2; at++) {
-      state = tapped(state, { x: at, y: 0, at, still: false })
-    }
-    assert.strictEqual(state.ripples.length, MAX_RIPPLES)
-    assert.strictEqual(state.ripples.at(-1)!.x, MAX_RIPPLES + 1)
-  })
-
-  it('never ripples with motion reduced', () => {
-    const state = initialWork(1)
-    assert.strictEqual(tapped(state, { x: 0, y: 0, at: 0, still: true }), state)
   })
 })
