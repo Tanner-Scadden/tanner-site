@@ -130,6 +130,9 @@ const SiteDef = Html.component({
     recentKeys: Schema.Array(Schema.String),
     zombies: Schema.Array(Zombie),
     toast: Schema.NullOr(Toast),
+    // NOTE: the last toast's text outlives the toast, so the dock can shrink
+    // it away smoothly instead of dropping it at once.
+    lastToast: Schema.String,
     toastSeq: Schema.Finite,
     gpu: Gpu,
     flow: Schema.Boolean,
@@ -143,6 +146,7 @@ const showToast = (text: string) =>
   SiteDef.update($ =>
     $.evolve({
       toast: { id: $.model.toastSeq, text },
+      lastToast: text,
       toastSeq: seq => seq + 1,
     }),
   )
@@ -291,6 +295,27 @@ const toastView = SiteDef.fragment((h, toast: typeof Toast.Type | null) =>
     .children(toast?.text ?? ''),
 )
 
+// NOTE: on a hidden page the toast never leaves. It floats at the bottom as
+// the way home, and shows the latest news (like EGG FOUND) while there is
+// some, then turns back into BACK.
+const dock = SiteDef.fragment((h, toast: typeof Toast.Type | null, lastToast: string) =>
+  h.a
+    .class('toast', 'on', 'dock', toast !== null && 'news')
+    .attrs({ href: href(homeRoute), 'aria-label': 'Back to the front page' })
+    .children(
+      h.span
+        .class('news-text')
+        .attrs({
+          role: 'status',
+          // NOTE: the text's length in characters, so the CSS can ease the
+          // pill's width from exactly this text down to BACK.
+          style: `--chars: ${(toast?.text ?? lastToast).length}`,
+        })
+        .children(toast?.text ?? lastToast),
+      h.span.class('back-text').attr('aria-hidden', 'true').children('← BACK'),
+    ),
+)
+
 const questLog = SiteDef.fragment((h, found: ReadonlyArray<EggId>) =>
   h.div
     .class('log')
@@ -340,7 +365,14 @@ const hero = SiteDef.fragment((h, thesis: number) =>
       h.p.class('role').children('Full stack engineer'),
       h.p
         .class('thesis')
+        .attrs({ role: 'button', tabindex: '0' })
         .on('click', SiteMessage.ClickedThesis())
+        .on(
+          'keydown',
+          ({ key }) =>
+            key === 'Enter' || key === ' ' ? SiteMessage.ClickedThesis() : undefined,
+          { preventDefault: true },
+        )
         .children(THESES[thesis] ?? THESES[0]),
       h.p
         .class('bio')
@@ -588,7 +620,6 @@ const workshop = SiteDef.fragment((h, seed: number, turn: number) => {
     .class('panel')
     .children(
       h.h2("HOW IT'S BUILT"),
-      ...paras(h, WORKSHOP_SAYS),
       h.div.class('screen').children(
         h.div
           .class('hud')
@@ -692,6 +723,7 @@ const workshop = SiteDef.fragment((h, seed: number, turn: number) => {
             .on('click', SiteMessage.ClickedNewSeed())
             .children('NEW SEED'),
         ),
+      ...paras(h, WORKSHOP_SAYS),
       h.p.class('aside').children(WORKSHOP_STACK),
     )
 })
@@ -888,7 +920,9 @@ const siteView = SiteDef.view((h, model) =>
       NotFound: () => notFound(h),
     }),
     horde(h, model.zombies),
-    toastView(h, model.toast),
+    model.route._tag === 'Home'
+      ? toastView(h, model.toast)
+      : dock(h, model.toast, model.lastToast),
   ),
 )
 
@@ -944,6 +978,7 @@ export const SiteNoDeps = SiteDef.make({
     recentKeys: [],
     zombies: [],
     toast: null,
+    lastToast: '',
     toastSeq: 0,
     gpu: 'starting' as const,
     flow: false,

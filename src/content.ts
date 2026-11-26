@@ -103,10 +103,10 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
 ]
 
 export const THESES = [
-  'I like making hard problems simple.',
-  'Hard problems, made simple.',
-  'Hard → simple.',
-  'Simple.',
+  'I take messy problems and make them boring.',
+  'Messy problems, made boring.',
+  'Messy → boring.',
+  'Boring.',
 ] as const
 
 export const ROOMS = ['parlour', 'trophy', 'workshop'] as const
@@ -171,7 +171,7 @@ export const TROPHY_REST = 'Looking for my actual trophies? They live over here.
 
 export const WORKSHOP_SAYS: ReadonlyArray<string> = [
   'Munch Manor is a deterministic simulation. The server runs the same game as every player, step for step, so everyone agrees on what happened, even on a phone with a bad connection. Any run can be replayed from its seed.',
-  "Below is a tiny version of the idea, using the game's own crew and zombies: four survivors, four waves and a seed. Replay it as many times as you like. Every shot lands the same way and the run hash never changes. Pick a new seed and you get a whole new run.",
+  "The machine up top is a tiny version of the idea, using the game's own crew and zombies: four survivors, four waves and a seed. Replay it as many times as you like. Every shot lands the same way and the run hash never changes. Pick a new seed and you get a whole new run.",
 ]
 
 export const WORKSHOP_STACK = 'TypeScript and Effect, on Cloudflare.'
@@ -249,8 +249,8 @@ export const HELLO_LINKS: ReadonlyArray<Link> = [
 ]
 
 export const HELLO_NOTE: ReadonlyArray<string> = [
-  "Thanks for poking around. I'm Tanner, and I like making",
-  'hard problems simple. Say hi anytime:',
+  "Thanks for poking around. I'm Tanner, and I take messy",
+  'problems and make them boring. Say hi anytime:',
 ]
 
 // The value `tanner.hello()` returns, shown last in the console.
