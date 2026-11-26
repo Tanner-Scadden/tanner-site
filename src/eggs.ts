@@ -1,4 +1,4 @@
-import { Command, Component, Subscription } from '@effect/ui'
+import { Subscription } from '@effect/ui'
 import {
   Array as Arr,
   Effect,
@@ -92,26 +92,20 @@ export const readFoundEggs: Effect.Effect<ReadonlyArray<EggId>> = pipe(
   Effect.orElseSucceed(() => []),
 )
 
-export class SaveEggs extends Command.Service<SaveEggs>()('site/SaveEggs', {
-  args: { found: Schema.Array(EggId) },
-  success: Component.Noop,
-}) {
-  static readonly layer = this.toLayer(
-    Effect.succeed(({ found }: { readonly found: ReadonlyArray<EggId> }) =>
-      pipe(
-        encodeFoundEggs(found),
-        Effect.flatMap(json =>
-          Effect.try({
-            try: () => localStorage.setItem(STORAGE_KEY, json),
-            catch: toStorageError,
-          }),
-        ),
-        Effect.ignore,
-        Effect.as(Component.noop),
-      ),
+// NOTE: a failed write is ignored: the eggs still count for this visit.
+export const saveFoundEggs = (
+  found: ReadonlyArray<EggId>,
+): Effect.Effect<void> =>
+  pipe(
+    encodeFoundEggs(found),
+    Effect.flatMap(json =>
+      Effect.try({
+        try: () => localStorage.setItem(STORAGE_KEY, json),
+        catch: toStorageError,
+      }),
     ),
+    Effect.ignore,
   )
-}
 
 const CARD = 'background:#0f3b78;font-family:monospace'
 const ART = `${CARD};color:#ffd166;font-weight:700;line-height:1.15`

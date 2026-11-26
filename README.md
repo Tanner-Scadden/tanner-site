@@ -38,6 +38,18 @@ Seven of them, counted in the top bar and saved in localStorage:
 
 Gallery photos go in `public/worlds/`; set each slot's `photo` in `src/content.ts`.
 
+## State
+
+All state lives in [effect-machine](https://github.com/cevr/effect-machine) actors
+in `src/machines/`, one per concern: `Page` (follows the Router), `Eggs` (saves
+to localStorage), `Toast`, `Thesis`, `Gpu`, `Horde` and `Keys`. `Site` starts
+them for the Site component's lifetime, renders their combined snapshot, and
+sends what the user did through the `Dispatch` Command. Timers, frames,
+navigation and saving belong to the machines. The Workshop replay and Rattles'
+typing are actors owned by their components (`src/components/`), so each visit
+starts them over. Tests drive the actors directly (`src/machines/machines.test.ts`)
+and the whole app through `HtmlPlay` (`src/Site.test.ts`).
+
 ## WebGPU
 
 The blueprint grid behind the page is drawn by WebGPU (`src/gpu/`). It bends

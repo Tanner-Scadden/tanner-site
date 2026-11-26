@@ -183,7 +183,8 @@
         "overrides": [
           {
             "include": [
-              "src/Site.ts"
+              "src/Site.ts",
+              "src/components/*.ts"
             ],
             "options": {
               "diagnosticSeverity": {
