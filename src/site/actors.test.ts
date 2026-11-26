@@ -23,7 +23,7 @@ import { Thesis, ThesisEvent, thesisText } from '../thesis/machines/Thesis.ts'
 import { ToastState, Toasts } from '../toast/machines/Toast.ts'
 import { siteActors } from './actors.ts'
 import { Keys, KeysEvent } from './machines/Keys.ts'
-import { Page } from './machines/Page.ts'
+import { Page, PageEvent } from './machines/Page.ts'
 
 // The site's actors as the app runs them, on an in-memory Router and a
 // 1000px window with no frames: a test sends the frames it wants.
@@ -239,6 +239,9 @@ const enter = (room: 'parlour' | 'trophy' | 'workshop') =>
   Effect.gen(function* () {
     const router = yield* Router.Router
     yield* router.push(roomRoute(room))
+    // The Site root hands the Page each route the Router reports.
+    const page = yield* Page
+    yield* page.send(PageEvent.Navigated({ route: roomRoute(room) }))
     const rattles = yield* Rattles
     return yield* rattles.waitFor(
       state => state._tag !== 'Away' && state.room === room,
