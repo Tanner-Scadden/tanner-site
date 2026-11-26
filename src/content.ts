@@ -4,6 +4,7 @@
 export interface Job {
   readonly when: string
   readonly name: string
+  readonly href: string
   readonly role: string
   readonly problem: string
   readonly approach: string
@@ -14,6 +15,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2024 → NOW',
     name: 'Vitalize',
+    href: 'https://www.vitalize.care',
     role: 'FOUNDING ENGINEER',
     problem:
       'Hospital staffing depends on forecasts, skills, costs, union rules and many day\u2011of variables.',
@@ -24,6 +26,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2022 → 2024',
     name: 'Demiplane',
+    href: 'https://www.demiplane.com',
     role: 'SENIOR FULL STACK',
     problem:
       'Every tabletop RPG has its own rules, and each character tool was hand\u2011built.',
@@ -34,7 +37,8 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2021 → 2022',
     name: 'Webaholics',
-    role: 'TEAM LEAD',
+    href: 'https://www.oneapp.today',
+    role: 'TECH LEAD',
     problem:
       'An ATV parts business sold on Amazon, Walmart, eBay and WooCommerce, and kept listings, stock and orders in sync by hand.',
     approach:
@@ -44,6 +48,7 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: '2019 → 2020',
     name: 'Solo',
+    href: 'https://gosolo.io',
     role: 'SOLAR PROPOSALS',
     problem:
       'Getting a solar proposal took days, and each permitting packet took hours to put together.',
@@ -54,7 +59,8 @@ export const WORK: ReadonlyArray<Job> = [
   {
     when: 'SIDE PROJECT',
     name: 'Munch Manor',
-    role: 'MUNCHMANOR.COM',
+    href: 'https://munchmanor.com',
+    role: 'ZOMBIE GAME',
     problem:
       'I wanted real-time 4-player co-op in a browser tab, with no install, that still holds up on a phone with bad signal.',
     approach:
@@ -103,10 +109,10 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
 ]
 
 export const THESES = [
-  'I like making hard problems simple.',
-  'Hard problems, made simple.',
-  'Hard → simple.',
-  'Simple.',
+  'I take messy problems and make them boring.',
+  'Messy problems, made boring.',
+  'Messy → boring.',
+  'Solved.',
 ] as const
 
 export const ROOMS = ['parlour', 'trophy', 'workshop'] as const
@@ -171,7 +177,7 @@ export const TROPHY_REST = 'Looking for my actual trophies? They live over here.
 
 export const WORKSHOP_SAYS: ReadonlyArray<string> = [
   'Munch Manor is a deterministic simulation. The server runs the same game as every player, step for step, so everyone agrees on what happened, even on a phone with a bad connection. Any run can be replayed from its seed.',
-  "Below is a tiny version of the idea, using the game's own crew and zombies: four survivors, four waves and a seed. Replay it as many times as you like. Every shot lands the same way and the run hash never changes. Pick a new seed and you get a whole new run.",
+  "The machine up top is a tiny version of the idea, using the game's own crew and zombies: four survivors, four waves and a seed. Replay it as many times as you like. Every shot lands the same way and the run hash never changes. Pick a new seed and you get a whole new run.",
 ]
 
 export const WORKSHOP_STACK = 'TypeScript and Effect, on Cloudflare.'
@@ -249,8 +255,8 @@ export const HELLO_LINKS: ReadonlyArray<Link> = [
 ]
 
 export const HELLO_NOTE: ReadonlyArray<string> = [
-  "Thanks for poking around. I'm Tanner, and I like making",
-  'hard problems simple. Say hi anytime:',
+  "Thanks for poking around. I'm Tanner, and I take messy",
+  'problems and make them boring. Say hi anytime:',
 ]
 
 // The value `tanner.hello()` returns, shown last in the console.

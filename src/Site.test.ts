@@ -110,6 +110,8 @@ it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
         const play = yield* HtmlPlay.make(Site, siteProps)
         yield* play.expect(Locator.text('YOU FOUND THE MANOR')).toExist()
         yield* play.expect(Locator.text(RATTLES_SAYS.trophy)).toExist()
+        // A hidden page docks the toast as the way back home.
+        yield* play.expect(Locator.text('← BACK')).toExist()
         assert.strictEqual(
           play.root.head().title,
           'Trophy · The Manor · Tanner Scadden',

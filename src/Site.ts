@@ -103,6 +103,28 @@ const toastView = SiteDef.fragment((h, toast: ToastState) =>
     .children(toast._tag === 'Showing' ? toast.text : ''),
 )
 
+// NOTE: on a hidden page the toast never leaves. It floats at the bottom as
+// the way home, and shows the latest news (like EGG FOUND) while there is
+// some, then turns back into BACK.
+const dock = SiteDef.fragment((h, toast: ToastState) => {
+  const text = toast._tag === 'Showing' ? toast.text : toast.last
+  return h.a
+    .class('toast', 'on', 'dock', toast._tag === 'Showing' && 'news')
+    .attrs({ href: href(homeRoute), 'aria-label': 'Back to the front page' })
+    .children(
+      h.span
+        .class('news-text')
+        .attrs({
+          role: 'status',
+          // NOTE: the text's length in characters, so the CSS can ease the
+          // pill's width from exactly this text down to BACK.
+          style: `--chars: ${text.length}`,
+        })
+        .children(text),
+      h.span.class('back-text').attr('aria-hidden', 'true').children('← BACK'),
+    )
+})
+
 const questLog = SiteDef.fragment((h, eggs: EggsState) => {
   const found = foundOf(eggs)
   return (
@@ -151,15 +173,22 @@ const hero = SiteDef.fragment((h, thesis: string) =>
     .class('hero')
     .children(
       h.h1('Tanner Scadden'),
-      h.p.class('role').children('Full stack engineer'),
+      h.p.class('role').children('Product engineer'),
       h.p
         .class('thesis')
+        .attrs({ role: 'button', tabindex: '0' })
         .on('click', SiteMessage.ClickedThesis())
+        .on(
+          'keydown',
+          ({ key }) =>
+            key === 'Enter' || key === ' ' ? SiteMessage.ClickedThesis() : undefined,
+          { preventDefault: true },
+        )
         .children(thesis),
       h.p
         .class('bio')
         .children(
-          "Founding engineer, usually one of the first few hires at an early startup. I work across the stack in TypeScript, mostly with Effect these days. Self-taught.",
+          "I'm usually one of the first engineers at an early startup. I figure out what to build, build it, and keep it running. Mostly TypeScript and Effect these days. Self-taught.",
         ),
     ),
 )
@@ -173,7 +202,7 @@ const work = SiteDef.fragment(h =>
     .class('blk')
     .attr('id', 'work')
     .children(
-      label(h, 1, 'SELECTED WORK · PROBLEM → APPROACH → RESULT'),
+      label(h, 1, 'SELECTED WORK'),
       h.div.class('work').children(
         ...Arr.map(WORK, job =>
           h.div
@@ -181,7 +210,15 @@ const work = SiteDef.fragment(h =>
             .children(
               h.div
                 .class('meta')
-                .children(h.small(job.when), h.strong(job.name), h.small(job.role)),
+                .children(
+                  h.small(job.when),
+                  h.strong(
+                    h.a
+                      .attrs({ href: job.href, target: '_blank', rel: 'noopener noreferrer' })
+                      .children(job.name),
+                  ),
+                  h.small(job.role),
+                ),
               h.div
                 .class('flow')
                 .children(
@@ -259,7 +296,7 @@ const footer = SiteDef.fragment(h =>
   h.footer
     .class('foot')
     .children(
-      h.div(h.small('TANNER SCADDEN'), h.strong('Full stack engineer')),
+      h.div(h.small('TANNER SCADDEN'), h.strong('Product engineer')),
       h.div(
         h.small('ELSEWHERE'),
         ...Arr.flatMap(ELSEWHERE, (link, i) => [
@@ -521,7 +558,7 @@ const siteView = SiteDef.view((h, model) =>
     blueprint(h, model.gpu, h.props.reducedMotion),
     page(h, model),
     horde(h, zombiesOf(model.horde)),
-    toastView(h, model.toast),
+    model.page._tag === 'Home' ? toastView(h, model.toast) : dock(h, model.toast),
   ),
 )
 

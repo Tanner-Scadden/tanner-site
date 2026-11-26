@@ -143,7 +143,6 @@ const workshopView = WorkshopDef.view((h, state) => {
     .class('panel')
     .children(
       h.h2("HOW IT'S BUILT"),
-      ...Arr.map(WORKSHOP_SAYS, line => h.p(line)),
       h.div.class('screen').children(
         h.div
           .class('hud')
@@ -247,6 +246,7 @@ const workshopView = WorkshopDef.view((h, state) => {
             .on('click', WorkshopMessage.ClickedNewSeed())
             .children('NEW SEED'),
         ),
+      ...Arr.map(WORKSHOP_SAYS, line => h.p(line)),
       h.p.class('aside').children(WORKSHOP_STACK),
     )
 })

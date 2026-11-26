@@ -7,7 +7,9 @@ export const TOAST_MS = 2600
 export const MUNCHED_MS = 900
 
 export const ToastState = State({
-  Hidden: {},
+  // The last text shown outlives its toast, so the dock on a hidden page can
+  // shrink it away smoothly instead of dropping it at once.
+  Hidden: { last: Schema.String },
   Showing: { text: Schema.String, ms: Schema.Finite },
 })
 export type ToastState = typeof ToastState.Type
@@ -23,7 +25,7 @@ export type ToastEvent = typeof ToastEvent.Type
 export const toastMachine = Machine.make({
   state: ToastState,
   event: ToastEvent,
-  initial: ToastState.Hidden,
+  initial: ToastState.Hidden({ last: '' }),
 })
   .reenter(
     [ToastState.Hidden, ToastState.Showing],
@@ -34,7 +36,9 @@ export const toastMachine = Machine.make({
     duration: state => state.ms,
     event: ToastEvent.Expired,
   })
-  .on(ToastState.Showing, ToastEvent.Expired, () => ToastState.Hidden)
+  .on(ToastState.Showing, ToastEvent.Expired, ({ state }) =>
+    ToastState.Hidden({ last: state.text }),
+  )
 
 export class Toasts extends Context.Service<
   Toasts,

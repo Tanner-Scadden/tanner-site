@@ -17,7 +17,7 @@ import { Keys, KeysEvent } from './Keys'
 import { Page } from './Page'
 import { siteActors } from './Site'
 import { Thesis, ThesisEvent, thesisText } from './Thesis'
-import { Toasts } from './Toast'
+import { ToastState, Toasts } from './Toast'
 import { Viewport } from './Viewport'
 import { WorkshopEvent, WorkshopState, workshopMachine } from './Workshop'
 
@@ -59,7 +59,12 @@ it.layer(site(), { buildPerTest: true })('Eggs', it => {
       yield* toastSays('EGG FOUND: PAPER COPY · 1/7')
       yield* TestClock.adjust('3 seconds')
       const toasts = yield* Toasts
-      yield* toasts.waitFor(state => state._tag === 'Hidden')
+      const hidden = yield* toasts.waitFor(state => state._tag === 'Hidden')
+      // The dock on a hidden page keeps the last text to shrink it away.
+      assert.deepStrictEqual(
+        hidden,
+        ToastState.Hidden({ last: 'EGG FOUND: PAPER COPY · 1/7' }),
+      )
     }),
   )
 })
@@ -87,7 +92,7 @@ it.layer(site(), { buildPerTest: true })('Thesis', it => {
         yield* thesis.call(ThesisEvent.Clicked)
         yield* thesis.call(ThesisEvent.Clicked)
         const simple = yield* thesis.call(ThesisEvent.Clicked)
-        assert.strictEqual(thesisText(simple.newState), 'Simple.')
+        assert.strictEqual(thesisText(simple.newState), 'Solved.')
         yield* eggs.waitFor(state => state.found.includes('thesis'))
         const over = yield* thesis.call(ThesisEvent.Clicked)
         assert.strictEqual(thesisText(over.newState), THESES[0])
