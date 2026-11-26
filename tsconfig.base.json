@@ -198,7 +198,9 @@
           {
             "include": [
               "src/blueprint/webgpu/renderer.ts",
-              "src/blueprint/webgpu/shaders.ts"
+              "src/blueprint/webgpu/shaders.ts",
+              "src/work/webgpu/renderer.ts",
+              "src/work/webgpu/shaders.ts"
             ],
             "options": {
               "diagnosticSeverity": {

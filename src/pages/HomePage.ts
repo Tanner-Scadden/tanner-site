@@ -6,6 +6,7 @@ import { ELSEWHERE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
 import { SiteRoute, href, restRoute } from '../routes.ts'
+import { WorkDrawing } from '../work/mounts/WorkDrawing.ts'
 
 // NOTE: the front page, at /. The thesis and the WebGPU credit are the two
 // things on it that act like buttons; the page reports their clicks.
@@ -16,6 +17,7 @@ export const HomePage = <M>(
     readonly thesis: string
     readonly clickedThesis: M
     readonly clickedWebGpu: M
+    readonly still: boolean
   },
 ) =>
   h.div
@@ -23,7 +25,7 @@ export const HomePage = <M>(
     .children(
       TopBar(h, options.eggs),
       Hero(h, options.thesis, options.clickedThesis),
-      Work(h),
+      Work(h, options.still),
       OpenSource(h),
       Outside(h),
       Footer(h, options.clickedWebGpu),
@@ -74,13 +76,19 @@ const Step = <M>(h: Html.H<M>, title: string, text: string, out: boolean) =>
 const Arrow = <M>(h: Html.H<M>) =>
   h.div.class('arr').attr('aria-hidden', 'true').children('→')
 
-const Work = <M>(h: Html.H<M>) =>
+const Work = <M>(h: Html.H<M>, still: boolean) =>
   h.section
     .class('blk')
     .attr('id', 'work')
     .children(
       Label(h, 1, 'SELECTED WORK'),
       h.div.class('work').children(
+        // NOTE: WebGPU drafts the boxes and runs a spark along the arrows.
+        // Without it this canvas stays empty and the CSS borders show.
+        h.canvas
+          .class('work-gpu')
+          .attr('aria-hidden', 'true')
+          .onMount(WorkDrawing({ still })),
         ...Arr.map(WORK, job =>
           h.div
             .class('job')

@@ -53,7 +53,7 @@ const MAX_PIXEL_RATIO = 2
 // Acquiring the GPU
 // ---------------------------------------------------------------------------
 
-const requestAdapter = Effect.gen(function* () {
+export const requestAdapter = Effect.gen(function* () {
   if (!('gpu' in navigator)) return yield* unavailable('no-webgpu')
   const adapter = yield* Effect.promise(() =>
     navigator.gpu.requestAdapter({ powerPreference: 'low-power' }),
@@ -61,7 +61,7 @@ const requestAdapter = Effect.gen(function* () {
   return adapter ?? (yield* unavailable('no-adapter'))
 })
 
-const acquireDevice = (adapter: GPUAdapter) =>
+export const acquireDevice = (adapter: GPUAdapter) =>
   Effect.acquireRelease(
     Effect.tryPromise({
       try: () => adapter.requestDevice(),
@@ -70,19 +70,23 @@ const acquireDevice = (adapter: GPUAdapter) =>
     device => Effect.sync(() => device.destroy()),
   )
 
-const acquireContext = (canvas: HTMLCanvasElement, device: GPUDevice) =>
+export const acquireContext = (
+  canvas: HTMLCanvasElement,
+  device: GPUDevice,
+  alphaMode: GPUCanvasAlphaMode = 'opaque',
+) =>
   Effect.acquireRelease(
     Effect.gen(function* () {
       const context = canvas.getContext('webgpu')
       if (context === null) return yield* unavailable('no-context')
       const format = navigator.gpu.getPreferredCanvasFormat()
-      context.configure({ device, format, alphaMode: 'opaque' })
+      context.configure({ device, format, alphaMode })
       return { context, format }
     }),
     ({ context }) => Effect.sync(() => context.unconfigure()),
   )
 
-const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor) =>
+export const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor) =>
   Effect.acquireRelease(
     Effect.sync(() => device.createBuffer(descriptor)),
     buffer => Effect.sync(() => buffer.destroy()),
@@ -256,7 +260,7 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
   })
 
 // The next animation frame's time, cancelled if the fiber is interrupted.
-const nextFrame = Effect.callback<number>(resume => {
+export const nextFrame = Effect.callback<number>(resume => {
   const id = requestAnimationFrame(now => resume(Effect.succeed(now)))
   return Effect.sync(() => cancelAnimationFrame(id))
 })

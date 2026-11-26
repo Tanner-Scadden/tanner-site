@@ -113,6 +113,7 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
         thesis: thesisText(model.thesis),
         clickedThesis: SiteMessage.ClickedThesis(),
         clickedWebGpu: SiteMessage.ClickedWebGpu(),
+        still: h.props.reducedMotion,
       })
     case 'Manor':
       return ManorPage(h, {
