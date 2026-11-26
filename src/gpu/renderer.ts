@@ -1,8 +1,32 @@
-// NOTE: the imperative edge of the site. WebGPU is a stateful, callback
-// driven browser API, so this module speaks it directly. The Effect side
-// (Blueprint.ts) owns its lifetime: it starts the renderer when the canvas
-// mounts, passes it the Model's settings, and destroys it when the canvas goes.
+// NOTE: the blueprint renderer, as one scoped Effect. Every GPU object is
+// acquired with its release, so closing the scope (the canvas unmounting)
+// tears it all down in reverse order. Input arrives as Streams, the frame
+// rules live in ./frame as pure functions, and the loop is a fiber that
+// sleeps until something wakes it: a still page costs nothing.
 
+import {
+  Data,
+  Effect,
+  Queue,
+  Random,
+  Ref,
+  Schema,
+  type Scope,
+  Stream,
+} from 'effect'
+
+import {
+  type Frame,
+  MINOR,
+  NO_POINTER,
+  type Pointer,
+  type Settings,
+  extentFor,
+  initialFrame,
+  settled,
+  step,
+  wake,
+} from './frame'
 import {
   BACKGROUND,
   PARTICLE_COUNT,
@@ -12,315 +36,350 @@ import {
   WORKGROUP,
 } from './shaders'
 
-export interface BlueprintSettings {
-  readonly flow: boolean
-  readonly still: boolean
-}
+export class GpuUnavailable extends Schema.TaggedError<
+  GpuUnavailable,
+  { readonly brand: unique symbol }
+>()('GpuUnavailable', {
+  reason: Schema.Literals(['no-webgpu', 'no-adapter', 'no-device', 'no-context']),
+}) {}
 
-export interface BlueprintRenderer {
-  readonly update: (settings: BlueprintSettings) => void
-  readonly destroy: () => void
-}
+const unavailable = (reason: typeof GpuUnavailable.fields.reason.Type) =>
+  GpuUnavailable.make({ reason })
 
-const MINOR = 24
-const MAJOR = 120
 const FRAME_FLOATS = 16
-const LONGEST_STEP_S = 0.05
-const EASE_PER_S = 3
+const MAX_PIXEL_RATIO = 2
 
-const approach = (from: number, to: number, dt: number): number => {
-  const t = 1 - Math.exp(-EASE_PER_S * dt)
-  const next = from + (to - from) * t
-  return Math.abs(next - to) < 0.002 ? to : next
+// ---------------------------------------------------------------------------
+// Acquiring the GPU
+// ---------------------------------------------------------------------------
+
+const requestAdapter = Effect.gen(function* () {
+  if (!('gpu' in navigator)) return yield* unavailable('no-webgpu')
+  const adapter = yield* Effect.promise(() =>
+    navigator.gpu.requestAdapter({ powerPreference: 'low-power' }),
+  )
+  return adapter ?? (yield* unavailable('no-adapter'))
+})
+
+const acquireDevice = (adapter: GPUAdapter) =>
+  Effect.acquireRelease(
+    Effect.tryPromise({
+      try: () => adapter.requestDevice(),
+      catch: () => unavailable('no-device'),
+    }),
+    device => Effect.sync(() => device.destroy()),
+  )
+
+const acquireContext = (canvas: HTMLCanvasElement, device: GPUDevice) =>
+  Effect.acquireRelease(
+    Effect.gen(function* () {
+      const context = canvas.getContext('webgpu')
+      if (context === null) return yield* unavailable('no-context')
+      const format = navigator.gpu.getPreferredCanvasFormat()
+      context.configure({ device, format, alphaMode: 'opaque' })
+      return { context, format }
+    }),
+    ({ context }) => Effect.sync(() => context.unconfigure()),
+  )
+
+const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor) =>
+  Effect.acquireRelease(
+    Effect.sync(() => device.createBuffer(descriptor)),
+    buffer => Effect.sync(() => buffer.destroy()),
+  )
+
+// Each pen starts on a random grid line, heading along it at its own speed.
+const seedPens = (field: number) =>
+  Effect.gen(function* () {
+    const data = new Float32Array(PARTICLE_COUNT * PARTICLE_FLOATS)
+    const lines = Math.floor(field / MINOR)
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const alongX = (yield* Random.next) < 0.5
+      const velocity =
+        ((yield* Random.next) < 0.5 ? -1 : 1) *
+        (yield* Random.nextBetween(40, 150))
+      const along = yield* Random.nextBetween(0, field)
+      const line = (yield* Random.nextIntBetween(0, lines - 1)) * MINOR + 0.5
+      data.set(
+        alongX ? [along, line, velocity, 0] : [line, along, 0, velocity],
+        i * PARTICLE_FLOATS,
+      )
+    }
+    return data
+  })
+
+const PEN_BLEND: GPUBlendState = {
+  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
 }
 
-// The wrap extent is a whole number of major cells larger than the screen,
-// so a pen that wraps lands back on a grid line.
-const extentFor = (size: number): number =>
-  (Math.ceil(size / MAJOR) + 1) * MAJOR
+// Everything a frame needs, built once per canvas.
+const makeGpu = (canvas: HTMLCanvasElement) =>
+  Effect.gen(function* () {
+    const adapter = yield* requestAdapter
+    const device = yield* acquireDevice(adapter)
+    const { context, format } = yield* acquireContext(canvas, device)
 
-const seedParticles = (width: number, height: number): Float32Array => {
-  const data = new Float32Array(PARTICLE_COUNT * PARTICLE_FLOATS)
-  const cellsX = width / MINOR
-  const cellsY = height / MINOR
-  for (let i = 0; i < PARTICLE_COUNT; i++) {
-    const alongX = Math.random() < 0.5
-    const speed = 40 + Math.random() * 110
-    const sign = Math.random() < 0.5 ? -1 : 1
-    const o = i * PARTICLE_FLOATS
-    if (alongX) {
-      data[o] = Math.random() * width
-      data[o + 1] = Math.floor(Math.random() * cellsY) * MINOR + 0.5
-      data[o + 2] = sign * speed
-      data[o + 3] = 0
-    } else {
-      data[o] = Math.floor(Math.random() * cellsX) * MINOR + 0.5
-      data[o + 1] = Math.random() * height
-      data[o + 2] = 0
-      data[o + 3] = sign * speed
+    const frameBuffer = yield* acquireBuffer(device, {
+      size: FRAME_FLOATS * 4,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })
+    const particleBuffer = yield* acquireBuffer(device, {
+      size: PARTICLE_COUNT * PARTICLE_FLOATS * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    })
+    // The pens start somewhere on a large field, so they never need
+    // reseeding when the window grows.
+    const field = extentFor(Math.max(screen.width, screen.height, 2400))
+    const pens = yield* seedPens(field)
+    device.queue.writeBuffer(particleBuffer, 0, pens)
+
+    const module = (code: string) => device.createShaderModule({ code })
+    const backgroundModule = module(BACKGROUND)
+    const simulateModule = module(SIMULATE)
+    const pensModule = module(PENS)
+
+    const background = device.createRenderPipeline({
+      layout: 'auto',
+      vertex: { module: backgroundModule, entryPoint: 'vs' },
+      fragment: { module: backgroundModule, entryPoint: 'fs', targets: [{ format }] },
+      primitive: { topology: 'triangle-list' },
+    })
+    const simulate = device.createComputePipeline({
+      layout: 'auto',
+      compute: { module: simulateModule, entryPoint: 'step' },
+    })
+    const draw = device.createRenderPipeline({
+      layout: 'auto',
+      vertex: { module: pensModule, entryPoint: 'vs' },
+      fragment: {
+        module: pensModule,
+        entryPoint: 'fs',
+        targets: [{ format, blend: PEN_BLEND }],
+      },
+      primitive: { topology: 'triangle-list' },
+    })
+
+    const bind = (
+      pipeline: GPURenderPipeline | GPUComputePipeline,
+      buffers: ReadonlyArray<GPUBuffer>,
+    ) =>
+      device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })),
+      })
+
+    return {
+      device,
+      context,
+      frameBuffer,
+      frameData: new Float32Array(FRAME_FLOATS),
+      background: { pipeline: background, group: bind(background, [frameBuffer]) },
+      simulate: {
+        pipeline: simulate,
+        group: bind(simulate, [frameBuffer, particleBuffer]),
+      },
+      pens: { pipeline: draw, group: bind(draw, [frameBuffer, particleBuffer]) },
     }
-  }
-  return data
+  })
+
+type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
+
+// ---------------------------------------------------------------------------
+// Drawing a frame
+// ---------------------------------------------------------------------------
+
+// The canvas backing store follows its CSS size times the pixel ratio.
+const fitCanvas = (canvas: HTMLCanvasElement) => {
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
+  const width = Math.max(1, Math.round(canvas.clientWidth * dpr))
+  const height = Math.max(1, Math.round(canvas.clientHeight * dpr))
+  if (canvas.width !== width) canvas.width = width
+  if (canvas.height !== height) canvas.height = height
 }
 
-export const startBlueprint = async (
-  canvas: HTMLCanvasElement,
-  initial: BlueprintSettings,
-): Promise<BlueprintRenderer | null> => {
-  if (!('gpu' in navigator)) return null
-  const adapter = await navigator.gpu.requestAdapter({
-    powerPreference: 'low-power',
-  })
-  if (adapter === null) return null
-  const device = await adapter.requestDevice()
-  const context = canvas.getContext('webgpu')
-  if (context === null) {
-    device.destroy()
-    return null
-  }
-  const format = navigator.gpu.getPreferredCanvasFormat()
-  context.configure({ device, format, alphaMode: 'opaque' })
-
-  const frameBuffer = device.createBuffer({
-    size: FRAME_FLOATS * 4,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  })
-  const frameData = new Float32Array(FRAME_FLOATS)
-
-  // The pens start somewhere on a large field, so they never need reseeding
-  // when the window grows.
-  const field = extentFor(Math.max(screen.width, screen.height, 2400))
-  const particleBuffer = device.createBuffer({
-    size: PARTICLE_COUNT * PARTICLE_FLOATS * 4,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-  })
-  device.queue.writeBuffer(particleBuffer, 0, seedParticles(field, field))
-
-  const background = device.createShaderModule({ code: BACKGROUND })
-  const simulate = device.createShaderModule({ code: SIMULATE })
-  const pens = device.createShaderModule({ code: PENS })
-
-  const backgroundPipeline = device.createRenderPipeline({
-    layout: 'auto',
-    vertex: { module: background, entryPoint: 'vs' },
-    fragment: { module: background, entryPoint: 'fs', targets: [{ format }] },
-    primitive: { topology: 'triangle-list' },
-  })
-  const simulatePipeline = device.createComputePipeline({
-    layout: 'auto',
-    compute: { module: simulate, entryPoint: 'step' },
-  })
-  const pensPipeline = device.createRenderPipeline({
-    layout: 'auto',
-    vertex: { module: pens, entryPoint: 'vs' },
-    fragment: {
-      module: pens,
-      entryPoint: 'fs',
-      targets: [
-        {
-          format,
-          blend: {
-            color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-          },
-        },
-      ],
-    },
-    primitive: { topology: 'triangle-list' },
-  })
-
-  const backgroundGroup = device.createBindGroup({
-    layout: backgroundPipeline.getBindGroupLayout(0),
-    entries: [{ binding: 0, resource: { buffer: frameBuffer } }],
-  })
-  const simulateGroup = device.createBindGroup({
-    layout: simulatePipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: frameBuffer } },
-      { binding: 1, resource: { buffer: particleBuffer } },
-    ],
-  })
-  const pensGroup = device.createBindGroup({
-    layout: pensPipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: frameBuffer } },
-      { binding: 1, resource: { buffer: particleBuffer } },
-    ],
-  })
-
-  let settings = initial
-  let destroyed = false
-  let frameId: number | null = null
-  let last = performance.now()
-  let started = last
-  let seed = 0
-  let pointer = { x: -9999, y: -9999 }
-  let eased = { x: -9999, y: -9999 }
-  let pointerInside = false
-  let warp = 0
-  let flow = initial.flow && initial.still ? 1 : 0
-  // The pens freeze where they are when motion is reduced.
-  let simulated = false
-
-  const resize = (): boolean => {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    const width = Math.max(1, Math.round(canvas.clientWidth * dpr))
-    const height = Math.max(1, Math.round(canvas.clientHeight * dpr))
-    if (canvas.width === width && canvas.height === height) return false
-    canvas.width = width
-    canvas.height = height
-    return true
-  }
-
-  const settled = (): boolean => {
-    const warpTarget = pointerInside && !settings.still ? 1 : 0
-    const flowTarget = settings.flow ? 1 : 0
-    const pointerSettled =
-      Math.abs(eased.x - pointer.x) < 0.5 && Math.abs(eased.y - pointer.y) < 0.5
-    const flowMoving = flow > 0 && !settings.still
-    return (
-      warp === warpTarget &&
-      flow === flowTarget &&
-      (pointerSettled || warp === 0) &&
-      !flowMoving
-    )
-  }
-
-  const draw = (now: number) => {
-    frameId = null
-    if (destroyed) return
-    const dt = Math.min((now - last) / 1000, LONGEST_STEP_S)
-    last = now
-    resize()
-
-    const warpTarget = pointerInside && !settings.still ? 1 : 0
-    warp = approach(warp, warpTarget, dt)
-    flow = settings.still
-      ? settings.flow
-        ? 1
-        : 0
-      : approach(flow, settings.flow ? 1 : 0, dt)
-    if (warp === 0 || eased.x < -9000) {
-      eased = { ...pointer }
-    } else {
-      const t = 1 - Math.exp(-14 * dt)
-      eased = {
-        x: eased.x + (pointer.x - eased.x) * t,
-        y: eased.y + (pointer.y - eased.y) * t,
-      }
-    }
-
-    const viewportW = canvas.clientWidth
-    const viewportH = canvas.clientHeight
-    seed = (seed + 1) % 1_000_000
-    const runPens = flow > 0
-    const stepPens = runPens && (!settings.still || !simulated)
-    frameData.set([
-      viewportW,
-      viewportH,
+const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number) =>
+  Effect.sync(() => {
+    fitCanvas(canvas)
+    const width = canvas.clientWidth
+    const height = canvas.clientHeight
+    const { state } = frame
+    // NOTE: the order matches `struct Frame` in the shaders.
+    gpu.frameData.set([
+      width,
+      height,
       window.scrollX,
       window.scrollY,
-      eased.x,
-      eased.y,
-      extentFor(viewportW),
-      extentFor(viewportH),
-      warp,
-      flow,
-      canvas.width / Math.max(viewportW, 1),
-      // A frozen first frame steps a little, so the pens show as dashes.
-      settings.still ? 0.001 : dt,
-      (now - started) / 1000,
-      seed,
+      state.eased.x,
+      state.eased.y,
+      extentFor(width),
+      extentFor(height),
+      state.warp,
+      state.flow,
+      canvas.width / Math.max(width, 1),
+      frame.dt,
+      time / 1000,
+      state.seed,
       0,
       0,
     ])
-    device.queue.writeBuffer(frameBuffer, 0, frameData)
+    gpu.device.queue.writeBuffer(gpu.frameBuffer, 0, gpu.frameData)
 
-    const encoder = device.createCommandEncoder()
-    if (stepPens) {
+    const encoder = gpu.device.createCommandEncoder()
+    if (frame.stepPens) {
       const compute = encoder.beginComputePass()
-      compute.setPipeline(simulatePipeline)
-      compute.setBindGroup(0, simulateGroup)
+      compute.setPipeline(gpu.simulate.pipeline)
+      compute.setBindGroup(0, gpu.simulate.group)
       compute.dispatchWorkgroups(Math.ceil(PARTICLE_COUNT / WORKGROUP))
       compute.end()
-      simulated = true
     }
     const pass = encoder.beginRenderPass({
       colorAttachments: [
         {
-          view: context.getCurrentTexture().createView(),
+          view: gpu.context.getCurrentTexture().createView(),
           loadOp: 'clear',
           storeOp: 'store',
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
         },
       ],
     })
-    pass.setPipeline(backgroundPipeline)
-    pass.setBindGroup(0, backgroundGroup)
+    pass.setPipeline(gpu.background.pipeline)
+    pass.setBindGroup(0, gpu.background.group)
     pass.draw(3)
-    if (runPens) {
-      pass.setPipeline(pensPipeline)
-      pass.setBindGroup(0, pensGroup)
+    if (frame.drawPens) {
+      pass.setPipeline(gpu.pens.pipeline)
+      pass.setBindGroup(0, gpu.pens.group)
       pass.draw(6, PARTICLE_COUNT)
     }
     pass.end()
-    device.queue.submit([encoder.finish()])
-
-    if (!settled()) request()
-  }
-
-  // NOTE: frames run only while something moves: the pointer lens easing,
-  // the flow fading, or the pens drawing. A still page costs nothing.
-  const request = () => {
-    if (frameId === null && !destroyed) {
-      frameId = requestAnimationFrame(draw)
-    }
-  }
-
-  const onPointerMove = (event: PointerEvent) => {
-    if (event.pointerType !== 'mouse') return
-    pointer = { x: event.clientX, y: event.clientY }
-    pointerInside = true
-    request()
-  }
-  const onPointerLeave = () => {
-    pointerInside = false
-    request()
-  }
-  const onChange = () => request()
-
-  window.addEventListener('pointermove', onPointerMove, { passive: true })
-  document.documentElement.addEventListener('pointerleave', onPointerLeave)
-  window.addEventListener('scroll', onChange, { passive: true })
-  window.addEventListener('resize', onChange)
-
-  device.lost.then(() => {
-    if (!destroyed) canvas.dataset['gpu'] = 'lost'
+    gpu.device.queue.submit([encoder.finish()])
   })
 
-  canvas.dataset['gpu'] = 'on'
-  started = performance.now()
-  request()
+// The next animation frame's time, cancelled if the fiber is interrupted.
+const nextFrame = Effect.callback<number>(resume => {
+  const id = requestAnimationFrame(now => resume(Effect.succeed(now)))
+  return Effect.sync(() => cancelAnimationFrame(id))
+})
 
-  return {
-    update: next => {
-      if (next.still !== settings.still) simulated = false
-      settings = next
-      last = performance.now()
-      request()
-    },
-    destroy: () => {
-      destroyed = true
-      if (frameId !== null) cancelAnimationFrame(frameId)
-      window.removeEventListener('pointermove', onPointerMove)
-      document.documentElement.removeEventListener(
-        'pointerleave',
-        onPointerLeave,
-      )
-      window.removeEventListener('scroll', onChange)
-      window.removeEventListener('resize', onChange)
-      delete canvas.dataset['gpu']
-      device.destroy()
-    },
-  }
-}
+// ---------------------------------------------------------------------------
+// Input
+// ---------------------------------------------------------------------------
+
+type Input = Data.TaggedEnum<{
+  // A mouse moved over the page. Touch never bends the grid.
+  Moved: { readonly pointer: Pointer }
+  Left: {}
+  // The page scrolled or resized, so the grid needs one more frame.
+  Changed: {}
+}>
+const Input = Data.taggedEnum<Input>()
+
+const sources: ReadonlyArray<Stream.Stream<Input>> = [
+  Stream.fromEventListener<PointerEvent>(window, 'pointermove', { passive: true }).pipe(
+    Stream.filter(event => event.pointerType === 'mouse'),
+    Stream.map(event =>
+      Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } }),
+    ),
+  ),
+  Stream.fromEventListener(document.documentElement, 'pointerleave').pipe(
+    Stream.as(Input.Left()),
+  ),
+  Stream.fromEventListener(window, 'scroll', { passive: true }).pipe(
+    Stream.as(Input.Changed()),
+  ),
+  Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Changed())),
+]
+
+const inputs = Stream.mergeAll(sources, { concurrency: 'unbounded' })
+
+const pointerAfter = (pointer: Pointer) =>
+  Input.$match({
+    Moved: ({ pointer: next }) => next,
+    Left: () => ({ ...pointer, inside: false }),
+    Changed: () => pointer,
+  })
+
+// Marks the canvas while the GPU draws it, so CSS and tests can tell.
+const markCanvas = (canvas: HTMLCanvasElement) =>
+  Effect.acquireRelease(
+    Effect.sync(() => {
+      canvas.dataset['gpu'] = 'on'
+    }),
+    () =>
+      Effect.sync(() => {
+        delete canvas.dataset['gpu']
+      }),
+  )
+
+// ---------------------------------------------------------------------------
+// The blueprint
+// ---------------------------------------------------------------------------
+
+// Starts the blueprint on `canvas` and returns once it's drawing. It follows
+// `changes` and the page's input for as long as `Scope` stays open, and
+// fails with GpuUnavailable when this browser can't run it.
+export const runBlueprint = (
+  canvas: HTMLCanvasElement,
+  initial: Settings,
+  changes: Stream.Stream<Settings>,
+): Effect.Effect<void, GpuUnavailable, Scope.Scope> =>
+  Effect.gen(function* () {
+    const gpu = yield* makeGpu(canvas)
+
+    const settings = yield* Ref.make(initial)
+    const pointer = yield* Ref.make(NO_POINTER)
+    const state = yield* Ref.make(initialFrame(initial))
+    // One pending wake is enough: the loop reads the latest values anyway.
+    const wakes = yield* Queue.sliding<void>(1)
+    const started = performance.now()
+
+    const poke = Queue.offer(wakes, undefined)
+
+    // Draws frames until the page settles, then returns.
+    const animate = Effect.gen(function* () {
+      yield* Ref.update(state, wake)
+      while (true) {
+        const now = yield* nextFrame
+        const moment = {
+          settings: yield* Ref.get(settings),
+          pointer: yield* Ref.get(pointer),
+        }
+        const frame = yield* Ref.modify(state, before => {
+          const next = step(before, { ...moment, now })
+          return [next, next.state]
+        })
+        yield* render(gpu, canvas, frame, now - started)
+        if (settled(frame.state, moment)) return
+      }
+    })
+
+    yield* Effect.forkScoped(Effect.forever(Effect.andThen(Queue.take(wakes), animate)))
+
+    yield* Effect.forkScoped(
+      Stream.runForEach(inputs, input =>
+        Effect.andThen(
+          Ref.update(pointer, at => pointerAfter(at)(input)),
+          poke,
+        ),
+      ),
+    )
+
+    yield* Effect.forkScoped(
+      Stream.runForEach(changes, next =>
+        Effect.andThen(Ref.set(settings, next), poke),
+      ),
+    )
+
+    // A lost device leaves the CSS grid showing, so the page still looks right.
+    yield* Effect.forkScoped(
+      Effect.andThen(
+        Effect.promise(() => gpu.device.lost),
+        Effect.sync(() => {
+          canvas.dataset['gpu'] = 'lost'
+        }),
+      ),
+    )
+
+    yield* markCanvas(canvas)
+    yield* poke
+  })
