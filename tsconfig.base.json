@@ -19,6 +19,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "@effect/language-service",
@@ -184,7 +185,9 @@
           {
             "include": [
               "src/Site.ts",
-              "src/components/*.ts"
+              "src/pages/**/*.ts",
+              "src/components/*.ts",
+              "src/*/components/*.ts"
             ],
             "options": {
               "diagnosticSeverity": {
@@ -194,10 +197,10 @@
           },
           {
             "include": [
-              "src/gpu/renderer.ts",
-              "src/gpu/shaders.ts",
-              "src/gpu/workRenderer.ts",
-              "src/gpu/workShaders.ts"
+              "src/blueprint/webgpu/renderer.ts",
+              "src/blueprint/webgpu/shaders.ts",
+              "src/work/webgpu/renderer.ts",
+              "src/work/webgpu/shaders.ts"
             ],
             "options": {
               "diagnosticSeverity": {

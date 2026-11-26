@@ -1,7 +1,7 @@
 import { Route } from '@effect/ui'
 import { Schema } from 'effect'
 
-import type { RoomId } from './content'
+import type { RoomId } from '#domain/Room'
 
 // NOTE: the parlour is the Manor's front room, so it lives at /manor itself.
 // Always build URLs with `SiteRoute.print`, never by hand.
@@ -23,14 +23,5 @@ export const roomRoute = (room: RoomId): SiteRoute =>
   room === 'parlour'
     ? SiteRoute.Manor()
     : SiteRoute.ManorRoom({ params: { room } })
-
-export const roomOf = (route: SiteRoute): RoomId | null =>
-  SiteRoute.match(route, {
-    Home: () => null,
-    Manor: () => 'parlour' as const,
-    ManorRoom: ({ params }) => params.room,
-    Rest: () => null,
-    NotFound: () => null,
-  })
 
 export const href = (route: SiteRoute): string => SiteRoute.print(route)
