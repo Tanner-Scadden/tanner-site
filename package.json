@@ -2,6 +2,11 @@
   "name": "tanner-site",
   "private": true,
   "type": "module",
+  "imports": {
+    "#components/*": "./src/components/*.ts",
+    "#content/*": "./src/content/*.ts",
+    "#domain/*": "./src/domain/*.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",

@@ -3,10 +3,10 @@ import { Effect, Layer } from 'effect'
 
 import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 
-import { readFoundEggs } from './eggs'
-import { Viewport } from './machines/Viewport'
-import { SiteRoute } from './routes'
-import { Site } from './Site'
+import { readFoundEggs } from './eggs/storage.ts'
+import { Viewport } from './horde/services/Viewport.ts'
+import { SiteRoute } from './routes.ts'
+import { Site } from './Site.ts'
 import './styles.css'
 
 // NOTE: the devtools egg starts as plain console output on purpose: styled
