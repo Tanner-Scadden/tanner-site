@@ -5,6 +5,7 @@ import type { EggId } from '#domain/Egg'
 import { Gpu, GpuState, gpuMachine } from '../blueprint/machines/Gpu.ts'
 import { Eggs, EggsState, eggsOf } from '../eggs/machines/Eggs.ts'
 import { Horde, HordeState, hordeMachine } from '../horde/machines/Horde.ts'
+import { Rattles, RattlesState, rattlesOf } from '../manor/machines/Rattles.ts'
 import type { SiteRoute } from '../routes.ts'
 import { Thesis, ThesisState, thesisMachine } from '../thesis/machines/Thesis.ts'
 import { ToastState, Toasts, toastMachine } from '../toast/machines/Toast.ts'
@@ -17,6 +18,7 @@ import { Page, PageState, pageOf } from './machines/Page.ts'
 
 export const SiteSnapshot = Schema.Struct({
   page: PageState,
+  rattles: RattlesState,
   eggs: EggsState,
   thesis: ThesisState,
   gpu: GpuState,
@@ -27,12 +29,18 @@ export type SiteSnapshot = typeof SiteSnapshot.Type
 
 export interface SiteSeed {
   readonly found: ReadonlyArray<EggId>
+  readonly reducedMotion: boolean
   readonly route: SiteRoute
 }
 
 // The snapshot the actors start in, so the first render matches them.
-export const initialSnapshot = ({ found, route }: SiteSeed): SiteSnapshot => ({
+export const initialSnapshot = ({
+  found,
+  reducedMotion,
+  route,
+}: SiteSeed): SiteSnapshot => ({
   page: pageOf(route),
+  rattles: rattlesOf({ reducedMotion, route }),
   eggs: eggsOf(found),
   thesis: thesisMachine.initial,
   gpu: gpuMachine.initial,
@@ -45,6 +53,7 @@ export const initialSnapshot = ({ found, route }: SiteSeed): SiteSnapshot => ({
 export const siteSnapshots = Stream.unwrap(
   Effect.gen(function* () {
     const page = yield* Page
+    const rattles = yield* Rattles
     const eggs = yield* Eggs
     const thesis = yield* Thesis
     const gpu = yield* Gpu
@@ -52,6 +61,7 @@ export const siteSnapshots = Stream.unwrap(
     const toast = yield* Toasts
     return Stream.zipLatestAll(
       page.changes,
+      rattles.changes,
       eggs.changes,
       thesis.changes,
       gpu.changes,
@@ -59,8 +69,9 @@ export const siteSnapshots = Stream.unwrap(
       toast.changes,
     ).pipe(
       Stream.map(
-        ([page, eggs, thesis, gpu, horde, toast]): SiteSnapshot => ({
+        ([page, rattles, eggs, thesis, gpu, horde, toast]): SiteSnapshot => ({
           page,
+          rattles,
           eggs,
           thesis,
           gpu,
@@ -73,12 +84,16 @@ export const siteSnapshots = Stream.unwrap(
 )
 
 // NOTE: the actors start in dependency order (toasts, then eggs, then the
-// machines that find eggs, then the keyboard that drives them), and stop
-// when the Site unmounts. The Router and the Viewport are the platform's.
-export const siteActors = ({ found, route }: SiteSeed) => {
+// machines that find eggs, then Rattles, who follows the page, then the
+// keyboard that drives them), and stop when the Site unmounts. The Router
+// and the Viewport are the platform's.
+export const siteActors = ({ found, reducedMotion, route }: SiteSeed) => {
   const shared = Layer.provideMerge(Eggs.layer(found), Toasts.layer)
   const machines = Layer.provideMerge(
-    Layer.mergeAll(Page.layer(route), Thesis.layer, Gpu.layer, Horde.layer),
+    Layer.provideMerge(
+      Rattles.layer({ reducedMotion, route }),
+      Layer.mergeAll(Page.layer(route), Thesis.layer, Gpu.layer, Horde.layer),
+    ),
     shared,
   )
   return Layer.provideMerge(Keys.layer, machines)

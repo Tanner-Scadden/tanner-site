@@ -14,19 +14,27 @@ import {
 } from '#content/manor'
 import { ROOMS, type RoomId } from '#domain/Room'
 
-import { Dialogue } from '../../manor/components/Dialogue.ts'
+import { RattlesBox } from '../../manor/components/RattlesBox.ts'
 import { Workshop } from '../../manor/components/Workshop.ts'
+import type { RattlesState } from '../../manor/machines/Rattles.ts'
 import { homeRoute, href, restRoute, roomRoute } from '../../routes.ts'
 
 // NOTE: the hidden Manor, at /manor (the parlour) and /manor/:room. Rattles
-// greets each room, and the Workshop runs its own replay.
+// greets each room, and the Workshop runs its own replay. Cut Rattles off
+// enough times and the Manor breaks: the room doors jam and hang crooked
+// until he calms down.
 export const ManorPage = <M>(
   h: Html.H<M>,
-  options: { readonly room: RoomId; readonly reducedMotion: boolean },
+  options: {
+    readonly room: RoomId
+    readonly rattles: RattlesState
+    readonly reducedMotion: boolean
+  },
 ) => {
-  const { room, reducedMotion } = options
+  const { room, rattles, reducedMotion } = options
+  const upset = rattles._tag === 'Upset'
   return h.main
-    .class('manor')
+    .class('manor', upset && 'broken')
     .attr('aria-label', 'Hidden room')
     .children(
       h.div.class('mw').children(
@@ -46,6 +54,7 @@ export const ManorPage = <M>(
                 .class('room', r === room && 'on')
                 .attr('href', href(roomRoute(r)))
                 .attr('aria-current', r === room ? 'page' : 'false')
+                .attr('aria-disabled', upset ? 'true' : 'false')
                 .children(
                   h.b(ROOM_NAMES[r]),
                   h.small(ROOM_TAGS[r]),
@@ -53,7 +62,7 @@ export const ManorPage = <M>(
                 ),
             ),
           ),
-        Dialogue(h, { key: room, props: { room, reducedMotion } }),
+        RattlesBox(h, rattles),
         room === 'parlour' && Parlour(h),
         room === 'trophy' && TrophyRoom(h),
         room === 'workshop' && Workshop(h, { props: { reducedMotion } }),

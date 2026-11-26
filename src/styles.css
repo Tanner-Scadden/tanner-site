@@ -270,3 +270,17 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
   .hero h1 { font-size: 36px }
   a { color: #111 }
 }
+
+/* cut Rattles off too many times and the Manor breaks for a moment */
+.manor.broken .mw { animation: quake .5s steps(4, end) }
+.manor.broken .rooms { background: #2a0d14 }
+.manor.broken .room { pointer-events: none; filter: saturate(.3) brightness(.7) }
+.manor.broken .room:nth-child(1) { transform: rotate(-4deg) translateY(6px) }
+.manor.broken .room:nth-child(2) { transform: rotate(3deg) translateY(-4px) }
+.manor.broken .room:nth-child(3) { transform: rotate(-2deg) translate(4px, 10px) }
+.dlg.upset { background: #e8443a; color: #f7f0c6; box-shadow: 6px 6px 0 #1c1426; animation: rattle .12s steps(2, end) infinite }
+.dlg.upset .who { color: #1c1426 }
+.dlg.upset .txt { font: 700 clamp(18px, 4vw, 30px) Silkscreen, monospace }
+@keyframes quake { 25% { transform: translate(-6px, 2px) } 50% { transform: translate(5px, -3px) } 75% { transform: translate(-3px, 4px) } }
+@keyframes rattle { 50% { transform: translate(3px, -2px) rotate(.6deg) } }
+@media (prefers-reduced-motion: reduce) { .manor.broken .mw, .dlg.upset { animation: none } }

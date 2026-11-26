@@ -115,7 +115,11 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
         clickedWebGpu: SiteMessage.ClickedWebGpu(),
       })
     case 'Manor':
-      return ManorPage(h, { room: model.page.room, reducedMotion: h.props.reducedMotion })
+      return ManorPage(h, {
+        room: model.page.room,
+        rattles: model.rattles,
+        reducedMotion: h.props.reducedMotion,
+      })
     case 'Rest':
       return RestPage(h)
     case 'NotFound':
