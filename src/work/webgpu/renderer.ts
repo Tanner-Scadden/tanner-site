@@ -16,25 +16,29 @@ import {
 } from '../../blueprint/webgpu/renderer.ts'
 import {
   type Hovered,
+  MAX_RIPPLES,
   STEPS,
   type WorkState,
   entered,
   initialWork,
   pingOf,
   revealOf,
+  rippleOf,
   seen,
   settled,
   sparkOf,
   step,
+  tapped,
   wake,
 } from './work.ts'
-import { BOXES, BOX_FLOATS, SPARKS, SPARK_FLOATS } from './shaders.ts'
+import { BOXES, BOX_FLOATS, RIPPLES, SPARKS, SPARK_FLOATS } from './shaders.ts'
 
 export interface WorkSettings {
   readonly still: boolean
 }
 
-const VIEW_FLOATS = 4
+// NOTE: size.xy, dpr, padding, then MAX_RIPPLES of centre.xy, t, unused.
+const VIEW_FLOATS = 4 + 4 * MAX_RIPPLES
 const MAX_PIXEL_RATIO = 2
 const GAPS = STEPS - 1
 
@@ -128,6 +132,7 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
       })
     const boxes = pipeline(BOXES)
     const sparks = pipeline(SPARKS)
+    const ripples = pipeline(RIPPLES)
 
     return {
       device,
@@ -142,6 +147,7 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
       sparkCount,
       boxes: { pipeline: boxes, group: bind(boxes, [viewBuffer, boxBuffer]) },
       sparks: { pipeline: sparks, group: bind(sparks, [viewBuffer, sparkBuffer]) },
+      ripples: { pipeline: ripples, group: bind(ripples, [viewBuffer]) },
     }
   })
 
@@ -176,6 +182,14 @@ const render = (
   Effect.sync(() => {
     const dpr = fitCanvas(canvas, gpu.device.limits.maxTextureDimension2D)
     gpu.viewData.set([canvas.clientWidth, canvas.clientHeight, dpr, 0])
+    for (let i = 0; i < MAX_RIPPLES; i++) {
+      const ripple = state.ripples[i]
+      const t = ripple === undefined ? null : rippleOf(ripple, now)
+      gpu.viewData.set(
+        ripple === undefined || t === null ? [0, 0, -1, 0] : [ripple.x, ripple.y, t, 0],
+        4 + i * 4,
+      )
+    }
     gpu.device.queue.writeBuffer(gpu.viewBuffer, 0, gpu.viewData)
 
     gpu.boxData.fill(0)
@@ -224,6 +238,10 @@ const render = (
         },
       ],
     })
+    // Ripples first, so the boxes they light sit on top of them.
+    pass.setPipeline(gpu.ripples.pipeline)
+    pass.setBindGroup(0, gpu.ripples.group)
+    pass.draw(6, MAX_RIPPLES)
     if (gpu.boxCount > 0) {
       pass.setPipeline(gpu.boxes.pipeline)
       pass.setBindGroup(0, gpu.boxes.group)
@@ -247,6 +265,8 @@ type Input = Data.TaggedEnum<{
   Seen: { readonly job: number }
   // A mouse is over a box (or between boxes), or left the list.
   Pointed: { readonly hovered: Hovered | null }
+  // A finger or button went down on the list, in CSS px from the canvas.
+  Tapped: { readonly x: number; readonly y: number }
   // The list's layout changed, so every box is measured again.
   Moved: {}
 }>
@@ -314,6 +334,19 @@ const pointed = (
     Stream.fromEventListener(container, 'pointerleave').pipe(
       Stream.as(Input.Pointed({ hovered: null })),
     ),
+  )
+
+// Taps and clicks, from where the canvas starts (it bleeds past the list).
+const taps = (
+  container: HTMLElement,
+  canvas: HTMLCanvasElement,
+): Stream.Stream<Input> =>
+  Stream.fromEventListener<PointerEvent>(container, 'pointerdown', { passive: true }).pipe(
+    Stream.filter(event => event.isPrimary),
+    Stream.map(event => {
+      const origin = canvas.getBoundingClientRect()
+      return Input.Tapped({ x: event.clientX - origin.left, y: event.clientY - origin.top })
+    }),
   )
 
 // ---------------------------------------------------------------------------
@@ -385,6 +418,11 @@ export const runWorkDrawing = (
             yield* Ref.update(state, s => entered(s, { job: next.job, now: performance.now() }))
           }
         }),
+      Tapped: ({ x, y }) =>
+        Effect.gen(function* () {
+          const { still } = yield* Ref.get(settings)
+          yield* Ref.update(state, s => tapped(s, { x, y, at: performance.now(), still }))
+        }),
       Moved: () => Ref.set(layout, measure(canvas, jobs)),
     })
 
@@ -392,6 +430,7 @@ export const runWorkDrawing = (
       [
         seenJobs(jobs),
         pointed(container, jobs),
+        taps(container, canvas),
         resized([container, ...container.querySelectorAll('.step')]),
         Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Moved())),
         // Web fonts landing can reflow every box.
