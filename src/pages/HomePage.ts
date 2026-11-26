@@ -36,8 +36,16 @@ export const HomePage = <M>(
 const pressed = <M>(message: M) => ({ key }: { readonly key: string }) =>
   key === 'Enter' || key === ' ' ? message : undefined
 
+// NOTE: a section heading drawn like a drawing callout: a numbered bubble,
+// the title, and a leader line out to the sheet edge.
 const Label = <M>(h: Html.H<M>, n: number, text: string) =>
-  h.div.class('label').children(h.i(String(n)), text)
+  h.h2
+    .class('label')
+    .children(
+      h.i.attr('aria-hidden', 'true').children(String(n)),
+      text,
+      h.span.class('rule').attr('aria-hidden', 'true'),
+    )
 
 const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   h.div
