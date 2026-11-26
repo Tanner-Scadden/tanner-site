@@ -99,7 +99,7 @@ const REST = { name: 'rest', color: '#07090d' }
 
 const titleOf = (page: PageState): string =>
   PageState.$match(page, {
-    Home: () => 'Tanner Scadden',
+    Home: () => 'Tanner Scadden · Product engineer',
     Manor: ({ room }) =>
       room === 'parlour'
         ? 'The Manor · Tanner Scadden'
