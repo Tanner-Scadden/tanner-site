@@ -1,0 +1,5 @@
+node_modules
+dist
+.alchemy
+infra/node_modules
+.env

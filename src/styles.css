@@ -1,0 +1,247 @@
+:root {
+  --bp: #0f3b78;
+  --line: rgba(220, 235, 255, 0.9);
+  --faint: rgba(200, 222, 255, 0.14);
+  --dim: rgba(220, 235, 255, 0.64);
+  --hi: #ffd166;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0 }
+html { scroll-behavior: smooth }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto } }
+body {
+  background: var(--bp);
+  color: var(--line);
+  font: 14px/1.65 "Space Mono", monospace;
+  background-image:
+    linear-gradient(var(--faint) 1px, transparent 1px),
+    linear-gradient(90deg, var(--faint) 1px, transparent 1px),
+    linear-gradient(rgba(200, 222, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 222, 255, 0.05) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+}
+a { color: var(--hi) }
+:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px }
+
+.sheet { max-width: 1080px; margin: 20px auto; border: 2px solid var(--line); outline: 1px solid var(--line); outline-offset: 6px }
+@media (max-width: 1120px) { .sheet { margin: 20px 16px } }
+.top { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 10px 18px; font-size: 11px; letter-spacing: .14em; gap: 12px; flex-wrap: wrap }
+.top nav a { color: var(--line); text-decoration: none; margin-left: 14px }
+.top nav a:first-child { margin-left: 0 }
+.top nav a:hover { color: var(--hi) }
+.eggs { cursor: help; position: relative }
+.eggs.got { color: var(--hi) }
+.eggs .log { display: none; position: absolute; right: -10px; top: calc(100% + 12px); z-index: 20; width: min(320px, calc(100vw - 32px)); background: var(--bp); border: 1px solid var(--line); outline: 1px solid var(--line); outline-offset: 3px; box-shadow: 6px 6px 0 rgba(0, 0, 0, .35); padding: 14px 16px; color: var(--line); letter-spacing: .06em; cursor: default; text-align: left }
+.eggs:hover .log, .eggs:focus .log, .eggs:focus-within .log { display: block }
+.eggs .log::before { content: ""; position: absolute; top: -14px; left: 0; right: 0; height: 14px }
+.log-head { font-size: 10px; letter-spacing: .16em; color: var(--hi); padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dashed var(--faint) }
+.log ol { list-style: none; display: grid; gap: 10px }
+.log li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; font-size: 11px; line-height: 1.5 }
+.log li b { display: inline-grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--dim); font-size: 10px; color: var(--dim) }
+.log li span { display: grid; gap: 2px }
+.log li em { font-style: normal; color: var(--dim); letter-spacing: .2em }
+.log li small { font-size: 11px; color: var(--line); letter-spacing: .02em }
+.log li.done b { border-color: var(--hi); color: var(--hi) }
+.log li.done span { color: var(--hi); align-self: center }
+@media (max-width: 640px) {
+  .top { position: relative }
+  .eggs { position: static }
+  .eggs .log { left: 8px; right: 8px; width: auto; top: calc(100% + 8px) }
+}
+
+.blk { padding: 44px 40px; border-bottom: 1px solid var(--line) }
+.label { font-size: 11px; letter-spacing: .18em; color: var(--dim); margin-bottom: 22px; display: flex; gap: 12px; align-items: center }
+.label i { display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--line); border-radius: 50%; font-style: normal; color: var(--line); flex: none }
+
+.hero { padding: 72px 40px 56px; border-bottom: 1px solid var(--line) }
+.hero h1 { font-family: Archivo, sans-serif; font-weight: 900; font-size: clamp(36px, 7vw, 84px); line-height: .95; font-stretch: 125%; text-transform: uppercase }
+.hero .role { font-family: Archivo, sans-serif; font-weight: 800; font-size: clamp(18px, 2.6vw, 28px); line-height: 1.2; font-stretch: 112%; text-transform: uppercase; color: var(--dim); margin-top: 14px }
+.hero .thesis { margin-top: 40px; padding-left: 18px; border-left: 2px solid var(--hi); font-size: 17px; max-width: 560px; user-select: none }
+.hero .bio { margin-top: 18px; max-width: 600px; color: var(--dim) }
+
+.job { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding: 30px 0; border-bottom: 1px dashed var(--faint) }
+.job:first-child { padding-top: 0 }
+.job:last-child { border-bottom: none; padding-bottom: 0 }
+.job .meta small { display: block; font-size: 10.5px; letter-spacing: .16em; color: var(--dim) }
+.job .meta strong { display: block; font-family: Archivo, sans-serif; font-weight: 800; font-size: 19px; line-height: 1.1; font-stretch: 115%; text-transform: uppercase; margin: 4px 0 }
+.flow { display: grid; grid-template-columns: 1fr 24px 1fr 24px .8fr; align-items: stretch }
+.flow .step { border: 1px solid var(--line); padding: 14px 16px }
+.flow .step small { display: block; font-size: 10px; letter-spacing: .16em; color: var(--dim); margin-bottom: 6px }
+.flow .step p { font-size: 13px }
+.flow .step.out { border-color: var(--hi) }
+.flow .step.out p { color: var(--hi) }
+.flow .arr { display: grid; place-items: center; color: var(--dim) }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px }
+ul.plain { list-style: none }
+ul.plain li { padding: 10px 0; border-top: 1px dashed var(--faint); font-size: 13px; display: flex; justify-content: space-between; gap: 16px }
+ul.plain li span:last-child { color: var(--dim); text-align: right }
+ul.plain li a { display: flex; justify-content: space-between; gap: 16px; flex: 1; color: var(--line); text-decoration: none }
+ul.plain li a:hover, ul.plain li a:focus-visible { color: var(--hi) }
+ul.plain li a:hover span:last-child { color: var(--hi) }
+ul.plain li a .what { margin-left: auto; color: var(--dim); text-align: right }
+.p { color: var(--dim); max-width: 640px; margin-bottom: 14px }
+.p b { color: var(--line); font-weight: 400 }
+#outside { border-bottom: 1px solid var(--line) }
+.sheet > .hero:last-child { border-bottom: none }
+
+.foot { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr }
+.foot > div { padding: 14px 18px; border-right: 1px solid var(--line) }
+.foot > div:last-child { border-right: none }
+.foot small { display: block; font-size: 10px; letter-spacing: .16em; color: var(--dim) }
+.foot strong { font-family: Archivo, sans-serif; font-weight: 800; font-size: 15px; font-stretch: 115%; text-transform: uppercase }
+.foot a.source { color: var(--hi); white-space: nowrap }
+.door { cursor: pointer; color: inherit; text-decoration: none; display: block; width: 100% }
+.door:hover strong { color: var(--hi) }
+.door:focus-visible { outline: 2px solid var(--hi); outline-offset: 4px }
+
+/* an egg looks like the words around it */
+a.egg, span.egg { cursor: pointer; color: inherit; text-decoration: none; border-bottom: 1px dotted transparent; transition: border-color .2s }
+a.egg:hover, span.egg:hover { border-bottom-color: var(--dim) }
+a.egg:focus-visible, span.egg:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; background: var(--hi); color: #0f3b78; font: 700 12px "Space Mono", monospace; letter-spacing: .1em; padding: 10px 16px; z-index: 30; transition: .25s; pointer-events: none; max-width: calc(100vw - 32px) }
+.toast.on { opacity: 1; transform: translateX(-50%) }
+
+/* the live blueprint: WebGPU draws the grid behind the page. Until it
+   starts, or without WebGPU, the canvas is empty and body's CSS grid shows. */
+canvas.blueprint { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; display: block }
+canvas.blueprint[data-gpu="lost"] { display: none }
+
+/* sprites: one pixel box, box-shadow paints the rest */
+.sprite { display: inline-block; position: relative; flex: none }
+.sprite .px { position: absolute; left: 0; top: 0; background: transparent }
+
+/* the hidden pages are their own rooms: the whole document takes the room's
+   color, and the blueprint (CSS grid and GPU canvas) steps out */
+html[data-room="manor"], html[data-room="manor"] body { background: #141022 }
+html[data-room="rest"], html[data-room="rest"] body { background: #07090d }
+html[data-room="manor"] canvas.blueprint, html[data-room="rest"] canvas.blueprint { display: none }
+main.manor, main.worlds { display: block; min-height: 100vh; min-height: 100dvh }
+
+main.worlds { background: #07090d; color: #e8edf5; font: 15px/1.5 Inter, system-ui, sans-serif }
+.wg { max-width: 1040px; margin: 0 auto; padding: 28px 20px 48px }
+.wg .bar { display: flex; justify-content: space-between; align-items: center; font: 700 12px "Space Mono", monospace; letter-spacing: .16em; color: #7c879b; gap: 12px }
+.wg .bar a { cursor: pointer; text-decoration: none; color: #07090d; background: #ff3b4e; padding: 8px 14px }
+.wg .bar a:focus-visible { outline: 2px solid #fff; outline-offset: 2px }
+.wg h1 { font-family: Archivo, sans-serif; font-weight: 900; font-size: clamp(56px, 12vw, 140px); line-height: .85; font-stretch: 125%; margin: 26px 0 6px; background: linear-gradient(180deg, #fff 30%, #6f7a8f); -webkit-background-clip: text; background-clip: text; color: transparent }
+.wg .sub { color: #7c879b; font: 700 13px "Space Mono", monospace; letter-spacing: .14em; margin-bottom: 28px }
+.wg .sub span { white-space: nowrap }
+.shots { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px }
+.shot { position: relative; border: 1px solid #1d2431; background: #0e1219; aspect-ratio: 4/3; overflow: hidden }
+.shot.big { grid-column: span 4; grid-row: span 2; aspect-ratio: auto }
+.shot.mid { grid-column: span 2 }
+.shot.full { grid-column: span 6; aspect-ratio: 16/9 }
+.shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 25% }
+.shot figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 12px; background: linear-gradient(transparent, rgba(0, 0, 0, .85)); font: 700 11px "Space Mono", monospace; letter-spacing: .12em }
+.shot figcaption span { display: block; color: #ffc24b; font-size: 10px }
+
+main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospace }
+.mw { max-width: 880px; margin: 0 auto; padding: 24px 16px 40px }
+.mh { display: flex; justify-content: space-between; align-items: center; font: 12px Silkscreen, monospace; color: #bfb2d6; gap: 12px }
+.mh a { cursor: pointer; text-decoration: none; font: 700 12px Silkscreen, monospace; background: #7ce36b; color: #1c1426; padding: 8px 12px; box-shadow: 4px 4px 0 #000 }
+.mh a:focus-visible { outline: 2px solid #f3c14b; outline-offset: 2px }
+.mt { font: 700 clamp(24px, 5vw, 44px)/1 Silkscreen, monospace; color: #f7f0c6; text-shadow: 4px 4px 0 #8a5bd6; text-align: center; margin: 28px 0 22px }
+.rooms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 6px; background: #1c1426 }
+.room { cursor: pointer; text-decoration: none; color: inherit; background: #3b2a4a; min-height: 140px; padding: 16px; position: relative; display: flex; align-items: flex-end; gap: 10px }
+.room:hover, .room.on { background: #4a3459 }
+.room.on { outline: 4px solid #f3c14b; outline-offset: -4px }
+.room:focus-visible { outline: 4px solid #7ce36b; outline-offset: -4px }
+.room b { font: 700 12px Silkscreen, monospace; color: #f3c14b; position: absolute; top: 12px; left: 16px }
+.room small { font: 10px Silkscreen, monospace; color: #bfb2d6; position: absolute; top: 30px; left: 16px; right: 16px }
+.room.on small { color: #f3e6c8 }
+.dlg { margin-top: 20px; background: #f3e6c8; color: #1c1426; border: 6px solid #1c1426; box-shadow: 6px 6px 0 #8a5bd6; display: flex; gap: 16px; padding: 14px; min-height: 130px }
+.dlg .who { font: 700 12px Silkscreen, monospace; color: #8a5bd6 }
+.dlg .txt { font-size: 23px }
+.play { margin-top: 26px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; color: #bfb2d6 }
+.play a { font: 700 14px Silkscreen, monospace; background: #f3c14b; color: #1c1426; padding: 12px 16px; box-shadow: 4px 4px 0 #8a5bd6; text-decoration: none }
+.play a:hover { background: #7ce36b }
+.play a:focus-visible { outline: 2px solid #f3e6c8; outline-offset: 3px }
+
+/* each room has its own panel under Rattles */
+.panel { margin-top: 20px; background: #1c1426; border: 4px solid #3b2a4a; padding: 22px 22px 24px }
+.panel h2 { font: 700 16px Silkscreen, monospace; color: #f3c14b; margin-bottom: 14px }
+.panel > p { max-width: 680px; margin-bottom: 12px }
+.panel .aside { margin: 18px 0 0; color: #bfb2d6 }
+.panel .aside a { color: #7ce36b }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 18px }
+.facts > div { background: #3b2a4a; padding: 10px 12px }
+.facts dt { font: 10px Silkscreen, monospace; color: #bfb2d6 }
+.facts dd { font-size: 24px; color: #f7f0c6 }
+.shelf { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 20px; border-bottom: 8px solid #c98a2b }
+.shelf li { background: #3b2a4a; padding: 16px 12px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center }
+.shelf b { font: 700 11px Silkscreen, monospace; color: #f3c14b }
+.shelf span { font-size: 19px; color: #bfb2d6; line-height: 1.1 }
+/* the Workshop board: a little arcade screen, 16 by 9 tiles */
+.screen { margin-top: 18px; background: #140c10; border: 4px solid #140c10; box-shadow: 6px 6px 0 #8a5bd6; position: relative }
+.screen::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(rgba(0, 0, 0, .16) 0 1px, transparent 1px 3px) }
+.hud { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 10px; font: 700 clamp(10px, 1.8vw, 13px) Silkscreen, monospace; color: #f4f1de }
+.hearts { display: flex; gap: 4px }
+.hearts i { width: 12px; height: 11px; background: #e8443a; clip-path: polygon(0 18%, 18% 0, 41% 0, 50% 18%, 59% 0, 82% 0, 100% 18%, 100% 45%, 50% 100%, 0 45%) }
+.hearts i.lost { background: #3b2a4a }
+.board { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: repeating-conic-gradient(#2a1f36 0 25%, #241a30 0 50%) 0 0 / 12.5% 22.2222% }
+.doorway { position: absolute; width: 6.25%; height: 11.1111%; background: #0b0614; box-shadow: inset 0 0 0 3px #3b2a4a }
+.tok { position: absolute; transform: translate(-50%, -80%); transition: left .45s steps(3, end), top .45s steps(3, end) }
+.tok img { display: block; width: 100%; height: auto; image-rendering: pixelated; animation: shamble .9s steps(2, end) infinite }
+.tok.brute img { animation-duration: 1.2s }
+.tok.hit img { animation: hit .3s steps(2, end) .15s 1, shamble .9s steps(2, end) infinite .45s }
+/* shots: a muzzle flash at the gun, a tracer to the zombie, then it drops */
+.flash { position: absolute; width: 1.6%; aspect-ratio: 1; transform: translate(-50%, -50%); background: #fff1a8; box-shadow: 0 0 0 2px #ffd23f; z-index: 2; animation: pop .12s steps(2, end) both }
+.bullet { position: absolute; left: var(--x1); top: var(--y1); width: 2.6%; height: 1.2%; transform: translate(-50%, -50%) rotate(var(--a)); background: linear-gradient(90deg, transparent, #ffd23f 45%, #fff1a8); z-index: 2; animation: fly .16s linear both }
+.dying img { animation: die .6s steps(4, end) .15s both }
+@keyframes pop { to { opacity: 0 } }
+@keyframes fly { from { left: var(--x0); top: var(--y0); opacity: 1 } 85% { opacity: 1 } to { left: var(--x1); top: var(--y1); opacity: 0 } }
+@keyframes die { 20% { filter: brightness(5) saturate(0) } 60% { transform: rotate(90deg) translateX(30%); opacity: 1 } to { transform: rotate(90deg) translateX(30%); opacity: 0 } }
+.survivor { aspect-ratio: 8 / 12; background-size: 200% 100%; background-repeat: no-repeat; image-rendering: pixelated; animation: idle 1.2s steps(2, end) infinite }
+.survivor.left { transform: translate(-50%, -80%) scaleX(-1) }
+.survivor.down { animation: none; transform: translate(-50%, -50%) rotate(90deg); transition: none }
+@keyframes idle { to { background-position: 200% 0 } }
+@keyframes shamble { to { transform: translateY(-6%) } }
+@keyframes hit { 50% { filter: brightness(5) saturate(0) } }
+.verdict { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 700 clamp(18px, 5vw, 40px) Silkscreen, monospace; text-shadow: 4px 4px 0 #140c10; white-space: nowrap; animation: blink 1s steps(2, end) infinite }
+.verdict.held { color: #9be36a }
+.verdict.eaten { color: #e8443a }
+@keyframes blink { 50% { opacity: 0 } }
+@media (prefers-reduced-motion: reduce) { .tok { transition: none } .tok img, .survivor, .verdict { animation: none } .flash, .bullet, .dying { display: none } }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font: 11px Silkscreen, monospace; color: #bfb2d6 }
+.stats b { color: #f3c14b; font-weight: 700 }
+.ctl { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px }
+.ctl button { all: unset; cursor: pointer; font: 700 12px Silkscreen, monospace; background: #3b2a4a; color: #f3e6c8; padding: 10px 14px; box-shadow: 4px 4px 0 #000 }
+.ctl button:hover { background: #7ce36b; color: #1c1426 }
+.ctl button:focus-visible { outline: 2px solid #f3c14b; outline-offset: 2px }
+.ctl button:active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000 }
+
+/* the horde */
+.horde { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; pointer-events: none; z-index: 15; overflow: hidden }
+.zombie { all: unset; position: absolute; bottom: 6px; width: 56px; height: 56px; pointer-events: auto; cursor: crosshair }
+
+@media (max-width: 820px) {
+  .blk, .hero { padding: 36px 20px }
+  .job { grid-template-columns: 1fr; gap: 12px }
+  .flow { grid-template-columns: 1fr }
+  .flow .arr { transform: rotate(90deg); height: 22px }
+  .two { grid-template-columns: 1fr }
+  .foot { grid-template-columns: 1fr 1fr }
+  .foot > div { border-bottom: 1px solid var(--line) }
+  .rooms { grid-template-columns: 1fr }
+  .room { min-height: 96px }
+  .facts { grid-template-columns: 1fr 1fr }
+  .shelf { grid-template-columns: 1fr }
+  .panel { padding: 18px 16px 20px }
+  .shots { grid-template-columns: 1fr 1fr }
+  .shot.big, .shot.mid { grid-column: span 2; aspect-ratio: 4/3 }
+  .shot.full { grid-column: span 2; aspect-ratio: 16/9 }
+}
+
+/* printing the page gives a plain resume */
+@media print {
+  :root { --line: #111; --dim: #555; --hi: #111; --faint: #ddd }
+  .top nav, .eggs, .door-cell, .horde, .toast, canvas.blueprint { display: none !important }
+  body { background: #fff !important; color: #111 }
+  .sheet { border: none; outline: none; margin: 0; max-width: none }
+  .blk, .hero, .foot > div, .flow .step, .top { border-color: #bbb !important }
+  .hero { padding: 12px 0 }
+  .blk { padding: 16px 0; break-inside: avoid }
+  .hero h1 { font-size: 36px }
+  a { color: #111 }
+}
