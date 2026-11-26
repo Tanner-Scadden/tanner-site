@@ -153,7 +153,7 @@ export const PARLOUR_FACTS: ReadonlyArray<Fact> = [
 export const TROPHY_SAYS: ReadonlyArray<string> = [
   'I grew up playing Zombie Estate II and Call of Duty Zombies with friends. Munch Manor is me trying to bring that feeling back: a quick game you can start with friends from anywhere.',
   "It's a family project, built for playing with family and friends.",
-  "It's also my excuse to learn. I wanted to understand game development properly, and to see how far I could push Effect outside of work.",
+  "It's also my excuse to learn. I wanted to dive deeper into Effect, Foldkit and Alchemy.",
 ]
 
 export interface Plaque {

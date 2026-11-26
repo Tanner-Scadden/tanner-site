@@ -52,11 +52,12 @@ something moves. Without WebGPU the canvas stays empty and the CSS grid on
 
 ## Deploy
 
-Not deployed yet. The code is public at https://github.com/Tanner-Scadden/tanner-site.
+Live at https://tannerscadden.com (the `prod` stage; www redirects to it).
+Other stages only get a workers.dev URL.
 
 ```sh
 cd infra && bun install
-CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bun alchemy deploy --stage dev
+CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... bun alchemy deploy --stage prod
 ```
 
 Never put tokens in the repo or in `VITE_` variables, and don't connect Cloudflare Workers Builds.

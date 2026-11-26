@@ -9,9 +9,10 @@ const PRODUCTION_STAGE = 'prod'
 const workerName = (stage: string): string =>
   stage === PRODUCTION_STAGE ? 'tanner-site' : `tanner-site-${stage}`
 
-// NOTE: no custom domain yet, so every stage lives on workers.dev. The site
-// is private for now: put Cloudflare Access in front of the workers.dev URL
-// before sharing it, and keep `noindex` in index.html until launch.
+// NOTE: prod serves tannerscadden.com (www redirects to it). Other stages
+// live on workers.dev only.
+const DOMAIN = 'tannerscadden.com'
+
 const Website = Effect.gen(function* () {
   const stage = yield* Alchemy.Stage
   const path = yield* Path.Path
@@ -21,6 +22,10 @@ const Website = Effect.gen(function* () {
     rootDir: path.resolve(import.meta.dirname, '..'),
     // NOTE: every path serves index.html, and the Router picks the page.
     assets: { notFoundHandling: 'single-page-application' },
+    domain:
+      stage === PRODUCTION_STAGE
+        ? { name: DOMAIN, redirects: [`www.${DOMAIN}`] }
+        : null,
     memo: {
       include: ['src/**', 'public/**', 'index.html', 'vite.config.ts', 'package.json'],
       lockfile: true,
