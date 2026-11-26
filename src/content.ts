@@ -38,7 +38,7 @@ export const WORK: ReadonlyArray<Job> = [
     when: '2021 → 2022',
     name: 'Webaholics',
     href: 'https://www.oneapp.today',
-    role: 'TEAM LEAD',
+    role: 'TECH LEAD',
     problem:
       'An ATV parts business sold on Amazon, Walmart, eBay and WooCommerce, and kept listings, stock and orders in sync by hand.',
     approach:

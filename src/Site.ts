@@ -362,7 +362,7 @@ const hero = SiteDef.fragment((h, thesis: number) =>
     .class('hero')
     .children(
       h.h1('Tanner Scadden'),
-      h.p.class('role').children('Full stack engineer'),
+      h.p.class('role').children('Product engineer'),
       h.p
         .class('thesis')
         .attrs({ role: 'button', tabindex: '0' })
@@ -377,7 +377,7 @@ const hero = SiteDef.fragment((h, thesis: number) =>
       h.p
         .class('bio')
         .children(
-          "Founding engineer, usually one of the first few hires at an early startup. I work across the stack in TypeScript, mostly with Effect these days. Self-taught.",
+          "I'm usually one of the first engineers at an early startup. I figure out what to build, build it, and keep it running. Mostly TypeScript and Effect these days. Self-taught.",
         ),
     ),
 )
@@ -481,7 +481,7 @@ const footer = SiteDef.fragment(h =>
   h.footer
     .class('foot')
     .children(
-      h.div(h.small('TANNER SCADDEN'), h.strong('Full stack engineer')),
+      h.div(h.small('TANNER SCADDEN'), h.strong('Product engineer')),
       h.div(
         h.small('ELSEWHERE'),
         ...Arr.flatMap(ELSEWHERE, (link, i) => [
