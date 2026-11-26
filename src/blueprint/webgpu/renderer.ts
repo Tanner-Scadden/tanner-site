@@ -366,12 +366,29 @@ type Input = Data.TaggedEnum<{
   // A mouse moved over the page. Touch never bends the grid.
   Moved: { readonly pointer: Pointer }
   Left: {}
-  // The page scrolled or resized, so the grid needs one more frame.
+  // The page scrolled or resized, or the canvas came back into view, so the
+  // grid needs one more frame.
   Changed: {}
 }>
 const Input = Data.taggedEnum<Input>()
 
-const sources: ReadonlyArray<Stream.Stream<Input>> = [
+// NOTE: the canvas hides on the Manor and Rest pages, and anything drawn
+// while hidden lands on a 1px canvas. Coming back gives it a size again, so
+// this redraws it. Without it a touch screen, which never moves a mouse,
+// showed an empty blueprint until the first scroll.
+const resized = (canvas: HTMLCanvasElement): Stream.Stream<Input> =>
+  Stream.callback<Input>(queue =>
+    Effect.acquireRelease(
+      Effect.sync(() => {
+        const observer = new ResizeObserver(() => Queue.offerUnsafe(queue, Input.Changed()))
+        observer.observe(canvas)
+        return observer
+      }),
+      observer => Effect.sync(() => observer.disconnect()),
+    ),
+  )
+
+const sources = (canvas: HTMLCanvasElement): ReadonlyArray<Stream.Stream<Input>> => [
   Stream.fromEventListener<PointerEvent>(window, 'pointermove', { passive: true }).pipe(
     Stream.filter(event => event.pointerType === 'mouse'),
     Stream.map(event =>
@@ -385,9 +402,11 @@ const sources: ReadonlyArray<Stream.Stream<Input>> = [
     Stream.as(Input.Changed()),
   ),
   Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Changed())),
+  resized(canvas),
 ]
 
-const inputs = Stream.mergeAll(sources, { concurrency: 'unbounded' })
+const inputs = (canvas: HTMLCanvasElement) =>
+  Stream.mergeAll(sources(canvas), { concurrency: 'unbounded' })
 
 const pointerAfter = (pointer: Pointer) =>
   Input.$match({
@@ -458,7 +477,7 @@ export const runBlueprint = (
     yield* Effect.forkScoped(Effect.forever(Effect.andThen(Queue.take(wakes), animate)))
 
     yield* Effect.forkScoped(
-      Stream.runForEach(inputs, input =>
+      Stream.runForEach(inputs(canvas), input =>
         Effect.andThen(
           Ref.update(pointer, at => pointerAfter(at)(input)),
           poke,
