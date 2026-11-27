@@ -5,6 +5,7 @@ import {
   ALERT_FRAME,
   DRAFT_MS,
   FILL_MS,
+  MAX_WALLS,
   PRINTS,
   PRINT_LIFE,
   REST_FRAME,
@@ -42,6 +43,8 @@ const rooms: Rooms = {
 }
 // A spot up in Work.
 const inWork = { x: 150, y: 50 }
+// How tall the bookcases' ends stand; every book is shorter.
+const CASE = 0.72
 const plan = planFor(rooms)
 
 const inside = ({ x, y }: Point, r: { x: number; y: number; w: number; h: number }) =>
@@ -86,23 +89,44 @@ describe('planFor', () => {
     assert.strictEqual(door.length, 1)
   })
 
-  it('stands bookcases in the library, lower than the walls', () => {
-    const shelves = Arr.filter(
-      plan.walls,
-      w => w.rise > 0 && w.rise < 0.8 && inside(w.from, rooms.library) && inside(w.to, rooms.library),
-    )
-    assert.isAbove(shelves.length, 4)
-    // Against the walls, clear of the doorway into Work.
+  // Everything standing in the library that isn't a wall: the books and
+  // the bookcase ends.
+  const furniture = Arr.filter(
+    plan.walls,
+    w => w.rise > 0 && w.rise < 0.8 && inside(w.from, rooms.library) && inside(w.to, rooms.library),
+  )
+
+  it('fills the library\'s shelves with books of different heights', () => {
+    // Books are short panels on the shelf, so they show as spines. The
+    // bookcase ends stand taller.
+    const books = Arr.filter(furniture, w => w.rise < CASE)
+    assert.isAtLeast(books.length, 20)
+    // Uneven, with a few gold spines and one lying flat on each shelf.
+    assert.isAtLeast(new Set(Arr.map(books, w => w.rise)).size, 8)
+    assert.isAtLeast(Arr.filter(books, w => w.gold === 1).length, 4)
+    assert.strictEqual(Arr.filter(books, w => w.rise < 0.2).length, 2)
+  })
+
+  it('keeps the library\'s furniture clear of its doorway', () => {
     const toLibrary: ReadonlyArray<Door> = Arr.filter(plan.doors, d => d.between.includes('library'))
     const mouths = Arr.flatMap(toLibrary, d => d.mouths)
     assert.strictEqual(mouths.length, 2)
     assert.isTrue(
-      Arr.every(shelves, w => Arr.every(mouths, m => distance(m, w.from) > 8 && distance(m, w.to) > 8)),
+      Arr.every(furniture, w => Arr.every(mouths, m => distance(m, w.from) > 8 && distance(m, w.to) > 8)),
     )
   })
 
+  it('lays a rug in the library, clear of the shelves', () => {
+    const rug = Arr.filter(
+      plan.walls,
+      w => w.rise === 0 && w.gold === 1 && w.dash > 0 && inside(w.from, rooms.library) && inside(w.to, rooms.library),
+    )
+    assert.strictEqual(rug.length, 4)
+    assert.isTrue(Arr.every(rug, w => w.from.x > rooms.library.x + 7.5 && w.from.y > rooms.library.y + 7.5))
+  })
+
   it('fits every wall in what the renderer draws', () => {
-    assert.isAtMost(plan.walls.length, 64)
+    assert.isAtMost(plan.walls.length, MAX_WALLS)
   })
 
   it('keeps the yard inside Personal Life', () => {
@@ -321,6 +345,31 @@ describe('the pets', () => {
     // He stays clear of the bookcases.
     assert.isAbove(later.teddy.at.x, rooms.library.x + 7.5)
     assert.isAbove(later.teddy.at.y, rooms.library.y + 7.5)
+  })
+
+  it('Teddy gets into the library on a phone-sized plan too', () => {
+    // The plan at 390px wide.
+    const small = planFor({
+      house: { x: 16, y: 16, w: 301, h: 183 },
+      library: { x: 16, y: 16, w: 82, h: 88 },
+      work: { x: 98, y: 16, w: 104, h: 88 },
+      oss: { x: 202, y: 16, w: 115, h: 88 },
+      outside: { x: 16, y: 104, w: 222, h: 95 },
+      locked: { x: 238, y: 104, w: 79, h: 95 },
+    })
+    assert.isAtMost(small.walls.length, MAX_WALLS)
+    let state = initialPets(small, 3)
+    const pointer = { x: 60, y: 60 }
+    for (let now = 0; now <= 8000; now += 1000 / 60) {
+      const next = stepPets(state, { now, plan: small, pointer, still: false })
+      assert.isFalse(
+        Arr.some(small.walls, w => w.rise > 0 && crosses({ from: state.teddy.at, to: next.teddy.at }, w)),
+        `Teddy went through a wall at ${now}ms`,
+      )
+      state = next
+    }
+    assert.strictEqual(areaOf(small, state.teddy.at), 'library')
+    assert.isTrue(state.teddy.alert)
   })
 
   it('Teddy waits at the door of D-13, since it stays closed', () => {

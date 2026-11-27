@@ -18,6 +18,7 @@ import {
 } from '../../blueprint/webgpu/renderer.ts'
 import {
   type Draft,
+  MAX_WALLS,
   PRINTS,
   ROOMS as ROOM_ORDER,
   type Pet,
@@ -83,7 +84,6 @@ export interface HouseSettings {
 // NOTE: matches `struct View` in the shaders.
 const VIEW_FLOATS = 32
 const MAX_PIXEL_RATIO = 2
-const MAX_WALLS = 64
 const MAX_ROOMS = ROOM_ORDER.length
 // Five dots a paw print.
 const MAX_DOTS = PRINTS * 2 * 5
