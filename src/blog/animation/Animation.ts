@@ -6,7 +6,7 @@ import { Array as Arr, Effect, Number as Num, Option, Queue, Schema, Stream } fr
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, post } from '../../styles/tokens.stylex.ts'
-import { Controls, PlayerUnavailable, SLIDER_STEPS, Started } from './controls.ts'
+import { Controls, PlayerUnavailable, type Report, SLIDER_STEPS, Started } from './controls.ts'
 import type { Scene, Variant } from './scene.ts'
 
 // NOTE: a blog animation: a scene on a canvas, its controls, and a caption.
@@ -15,8 +15,10 @@ import type { Scene, Variant } from './scene.ts'
 //
 // The controls are play and pause, replay, a time slider that plays on from
 // wherever it's dropped, the time, and the scene's variants when it has more
-// than one. If the canvas can't be drawn on at all, the controls go and the
-// caption stays. The Model is only
+// than one. A scene that takes interactions gets an INTERACT button after
+// the time, the same in every figure; what it does is up to the scene. If
+// the canvas can't be drawn on at all, the controls go and the caption
+// stays. The Model is only
 // what the controls say; the drawing keeps the clock (see play.ts), and
 // loads only once the canvas is on the page, WebGPU and all.
 //
@@ -28,7 +30,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     `${name}Drawing`,
     { args: Controls },
     (canvas: HTMLCanvasElement, controls, changes) =>
-      Stream.callback<Started>(queue =>
+      Stream.callback<Report>(queue =>
         Effect.tryPromise({
           try: () => import('./play.ts'),
           catch: cause => PlayerUnavailable.make({ cause }),
@@ -39,7 +41,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
           // No WebGPU and no 2D canvas, or the player didn't load.
           Effect.catch(error =>
             Effect.logDebug(`No ${name}`, error).pipe(
-              Effect.andThen(Queue.offer(queue, { renderer: 'none' as const, still: false })),
+              Effect.andThen(Queue.offer(queue, { _tag: 'Started' as const, renderer: 'none' as const, still: false })),
             ),
           ),
         ),
@@ -50,6 +52,9 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     ChoseVariant: { variant: Schema.String },
     ClickedPlay: {},
     ClickedReplay: {},
+    ClickedInteract: {},
+    // The reader clicked the drawing to aim an interaction.
+    Aimed: {},
     MovedSlider: { value: Schema.String },
     Started: Started.fields,
   })
@@ -74,6 +79,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       playing: true,
       seek: 0,
       seeks: 0,
+      restarts: 0,
+      interacts: 0,
       renderer: 'pending' as const,
       still: false,
     }),
@@ -84,7 +91,13 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       ChoseVariant: ($, { variant }) =>
         variant === $.model.variant ? $.model : $.evolve({ variant: () => variant, playing: () => !$.model.still }),
       ClickedPlay: $ => $.evolve({ playing: playing => !playing }),
-      ClickedReplay: $ => $.evolve({ playing: () => true, seek: () => 0, seeks: seeks => seeks + 1 }),
+      ClickedReplay: $ =>
+        $.evolve({ playing: () => true, seek: () => 0, seeks: seeks => seeks + 1, restarts: restarts => restarts + 1 }),
+      // It plays on so the reader sees what they did, except under reduced
+      // motion, where the still frame repaints with it.
+      ClickedInteract: $ =>
+        $.evolve({ interacts: interacts => interacts + 1, playing: playing => playing || !$.model.still }),
+      Aimed: $ => $.evolve({ playing: playing => playing || !$.model.still }),
       MovedSlider: ($, { value }) =>
         $.evolve({
           seek: () => Option.getOrElse(Num.parse(value), () => 0) / SLIDER_STEPS,
@@ -105,7 +118,15 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                 playing: model.playing,
                 seek: model.seek,
                 seeks: model.seeks,
-              }).pipe(Mount.map(report => Message.Started(report))),
+                restarts: model.restarts,
+                interacts: model.interacts,
+              }).pipe(
+                Mount.map(report =>
+                  report._tag === 'Aimed'
+                    ? Message.Aimed()
+                    : Message.Started({ renderer: report.renderer, still: report.still }),
+                ),
+              ),
             ),
           model.renderer !== 'none' &&
             sx(h.div, styles.controls).children(
@@ -133,6 +154,15 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                 .on('input', ({ value }) => Message.MovedSlider({ value })),
               // The drawing keeps this up to date as it plays.
               sx(h.span, styles.clock).attrs({ 'data-clock': '', 'aria-hidden': 'true' }).children('0:00'),
+              scene.interact !== undefined &&
+                sx(h.button, base.button, styles.button, styles.interact)
+                  .attrs({
+                    type: 'button',
+                    'aria-label': `Interact: ${scene.interact.hint}`,
+                    title: scene.interact.hint,
+                  })
+                  .on('click', Message.ClickedInteract())
+                  .children(sx(h.span, styles.glyph, styles.small, glyphs.interact).attr('aria-hidden', 'true'), 'INTERACT'),
               scene.variants.length > 1 &&
                 sx(h.div, styles.variants)
                   .attrs({ role: 'group', 'aria-label': 'Version' })
@@ -156,8 +186,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
   })
 }
 
-// The usual media icons (Material's, Apache 2.0): play, pause, and replay
-// from the start. Each is a mask over the text colour, so it takes the
+// The usual media icons (Material's, Apache 2.0): play, pause, replay
+// from the start, and a tap for INTERACT. Each is a mask over the text colour, so it takes the
 // button's colour and hover like a word would.
 
 const Icon = <M>(h: Html.H<M>, icon: keyof typeof glyphs) =>
@@ -235,6 +265,9 @@ const styles = stylex.create({
     color: blueprint.dim,
     whiteSpace: 'nowrap',
   },
+  // A word and an icon, the height of the icon buttons.
+  interact: { display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, height: 32, paddingBlock: 0 },
+  small: { width: 14, height: 14 },
   alarmLead: { color: post.alarm, borderColor: post.alarm },
   on: { color: blueprint.hi, borderColor: blueprint.hi },
   onAlarm: { color: post.alarm, borderColor: post.alarm },
@@ -271,6 +304,10 @@ const glyphs = stylex.create({
   pause: {
     maskImage:
       "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 19h4V5H6v14zm8-14v14h4V5h-4z'/%3E%3C/svg%3E\")",
+  },
+  interact: {
+    maskImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 11.24V7.5C9 6.12 10.12 5 11.5 5S14 6.12 14 7.5v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72c-.08-.01-.15-.03-.24-.03-.31 0-.59.13-.79.33l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z'/%3E%3C/svg%3E\")",
   },
   restart: {
     maskImage:

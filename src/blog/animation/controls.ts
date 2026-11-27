@@ -11,6 +11,11 @@ export const Controls = Schema.Struct({
   // moving it to the same spot twice still counts.
   seek: Schema.Finite,
   seeks: Schema.Finite,
+  // How many times restart and INTERACT have been pressed. The drawing
+  // keeps the interactions themselves, at the clock's time when each
+  // happened.
+  restarts: Schema.Finite,
+  interacts: Schema.Finite,
 })
 export type Controls = typeof Controls.Type
 
@@ -21,6 +26,11 @@ export const Started = Schema.Struct({
   still: Schema.Boolean,
 })
 export type Started = typeof Started.Type
+
+// What the drawing tells the figure: that it's started, or that the reader
+// clicked the drawing to aim an interaction, so the figure plays to show it.
+export const Report = Schema.Union([Schema.TaggedStruct('Started', Started.fields), Schema.TaggedStruct('Aimed', {})])
+export type Report = typeof Report.Type
 
 export const SLIDER_STEPS = 1000
 // Seconds a finished run holds, then fades, before the next one starts.

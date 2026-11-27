@@ -18,6 +18,11 @@
 // the network breathe around those spots without shoving anyone across the
 // canvas. It's kept as keyframes, so a slider can scrub to any moment and
 // `frameAt` reads it without simulating anything.
+//
+// A reader can add a bad interaction (see `tearsOf`): a red ripple goes out
+// from you along your link to someone you helped, and the link tears.
+// Their branch dims and pulls away a little, and any call that would have
+// come through them never arrives.
 
 import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
@@ -503,6 +508,8 @@ export interface FrameEdge {
   readonly kind: EdgeKind
   // 0 to 1 while its circle is lit up.
   readonly lit: number
+  // 0 to 1 as a bad interaction dims it.
+  readonly cut: number
 }
 
 export interface FrameDot {
@@ -517,6 +524,8 @@ export interface FrameDot {
   readonly caller: boolean
   // A call has come through them on its way to you.
   readonly relayed: boolean
+  // 0 to 1 as a bad interaction dims their branch.
+  readonly cut: number
 }
 
 // A ring that spreads out from someone: small when you help them or they
@@ -526,6 +535,8 @@ export interface FrameRing {
   readonly y: number
   readonly progress: number
   readonly big: boolean
+  // Red, from a bad interaction.
+  readonly alarm?: boolean
 }
 
 // The part of a call's path it has covered so far.
@@ -536,6 +547,16 @@ export interface FrameTrail {
   readonly b: number
   readonly from: readonly [number, number]
   readonly to: readonly [number, number]
+  readonly cut: number
+}
+
+// Your link to someone, just torn: each end springs back toward its own
+// side from the middle.
+export interface FrameSnap {
+  readonly you: readonly [number, number]
+  readonly them: readonly [number, number]
+  readonly mid: readonly [number, number]
+  readonly progress: number
 }
 
 export interface Frame {
@@ -545,6 +566,10 @@ export interface Frame {
   readonly trails: ReadonlyArray<FrameTrail>
   // Bright points travelling a link: your help going out, calls coming in.
   readonly sparks: ReadonlyArray<readonly [number, number]>
+  // Bad interactions on their way out along your link, from you to where
+  // they've got to.
+  readonly ripples: ReadonlyArray<{ readonly from: readonly [number, number]; readonly to: readonly [number, number] }>
+  readonly snaps: ReadonlyArray<FrameSnap>
   // 0 to 1 as the network goes quiet when you jump.
   readonly quiet: number
   // How many calls have reached you.
@@ -560,13 +585,128 @@ const lerp = (a: readonly [number, number], b: readonly [number, number], t: num
 
 const xy = ([x, y]: readonly [number, number]) => ({ x, y })
 
+// ---------------------------------------------------------------------------
+// Bad interactions
+// ---------------------------------------------------------------------------
+
+// A bad interaction with someone you helped: the ripple leaves you at
+// `start` and tears your link to them when it gets there. -1 is a bad
+// interaction with nobody left to lose, which only ripples out from you.
+export interface Tear {
+  readonly person: number
+  readonly start: number
+  // Their branch: their circle, and everyone on a call that comes through
+  // them.
+  readonly branch: ReadonlyArray<number>
+  // The calls that come through them.
+  readonly calls: ReadonlyArray<number>
+  // Which way their branch pulls away, a unit vector away from you.
+  readonly away: readonly [number, number]
+}
+
+// The ripple's trip along your link, how long the torn ends take to
+// spring back, and how long the branch takes to dim and pull away, and how
+// far it goes.
+export const RIPPLE = 0.7
+const SNAP = 0.9
+const DRIFT = 1.4
+const PULL = 0.1
+// Seconds until a tear has played out.
+export const TEAR_SETTLE = RIPPLE + DRIFT
+// The most bad interactions a run takes: one per person you could help.
+export const MAX_TEARS = 8
+
+export const tornAt = (tear: Tear): number => tear.start + RIPPLE
+
+// The person you helped that a call reaches you through.
+const throughOf = (call: Call): number => call.path[call.path.length - 2] ?? 0
+
+// What each interaction does, in the order they happened. An interaction
+// aimed near someone you helped who's still with you tears their link;
+// otherwise it's the biggest branch you still have. `aim` is in world
+// units.
+export const tearsOf = (
+  timeline: Timeline,
+  interactions: ReadonlyArray<{ readonly time: number; readonly aim: Option.Option<readonly [number, number]> }>,
+): ReadonlyArray<Tear> => {
+  const { nodes, helps, calls } = timeline
+  const tears: Array<Tear> = []
+  for (const { time, aim } of interactions) {
+    const torn = new Set(Arr.map(tears, tear => tear.person))
+    const left = Arr.filter(helps, help => nodes[help.person]!.born <= time && !torn.has(help.person))
+    const sizeOf = (person: number) =>
+      Arr.filter(nodes, (node, i) => i !== person && node.circle === person && node.born <= time).length
+    const aimed = Option.flatMap(aim, ([x, y]) => {
+      let best = Option.none<number>()
+      let nearest = AIM_REACH ** 2
+      for (const { person } of left) {
+        const [px, py] = positionAt(timeline, person, time)
+        const d = (px - x) ** 2 + (py - y) ** 2
+        if (d < nearest) {
+          nearest = d
+          best = Option.some(person)
+        }
+      }
+      return best
+    })
+    const biggest = Arr.reduce(left, Option.none<number>(), (best, { person }) =>
+      Option.match(best, {
+        onNone: () => Option.some(person),
+        onSome: b => Option.some(sizeOf(person) > sizeOf(b) ? person : b),
+      }),
+    )
+    const person = Option.getOrElse(Option.orElse(aimed, () => biggest), () => -1)
+    const through = Arr.filter(Arr.range(0, calls.length - 1), k => person >= 0 && throughOf(calls[k]!) === person)
+    const branch = Arr.dedupe([
+      ...Arr.filter(Arr.range(1, nodes.length - 1), i => person >= 0 && nodes[i]!.circle === person),
+      ...Arr.flatMap(through, k => Arr.filter(calls[k]!.path, i => i !== 0)),
+    ])
+    const [ax, ay] = person >= 0 ? positionAt(timeline, person, time) : [1, 0]
+    const d = Math.max(Math.hypot(ax, ay), 1e-6)
+    tears.push({ person, start: time, branch, calls: through, away: [ax / d, ay / d] })
+  }
+  return tears
+}
+
+// How close, in world units, an aimed interaction has to be to someone.
+const AIM_REACH = 0.25
+
 // How long the small and big rings take to spread.
 const RING = 1.2
 const JUMP_RING = 1.6
 
-export const frameAt = (timeline: Timeline, time: number): Frame => {
+export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<Tear> = []): Frame => {
   const { nodes, edges, helps, calls, jump } = timeline
-  const at = (i: number) => positionAt(timeline, i, time)
+
+  // The bad interactions so far: how far each branch has dimmed and pulled
+  // away, which of your links have torn, and which calls they cut.
+  const started = Arr.filter(tears, tear => tear.start <= time)
+  const cut = new Map<number, number>()
+  const pulls = new Map<number, readonly [number, number]>()
+  const torn = new Set<number>()
+  const cutAt = new Map<number, number>()
+  for (const tear of started) {
+    if (tear.person < 0) continue
+    const drift = ease(clamp01((time - tornAt(tear)) / DRIFT))
+    if (time >= tornAt(tear)) torn.add(tear.person)
+    for (const k of tear.calls) {
+      if (arrivalOf(calls[k]!) > tornAt(tear)) cutAt.set(k, Math.min(cutAt.get(k) ?? Infinity, tornAt(tear)))
+    }
+    for (const i of tear.branch) {
+      cut.set(i, Math.max(cut.get(i) ?? 0, drift))
+      const [px, py] = pulls.get(i) ?? [0, 0]
+      pulls.set(i, [px + tear.away[0] * PULL * drift, py + tear.away[1] * PULL * drift])
+    }
+  }
+  const cutOf = (i: number) => cut.get(i) ?? 0
+  const at = (i: number): readonly [number, number] => {
+    const [x, y] = positionAt(timeline, i, time)
+    const [px, py] = pulls.get(i) ?? [0, 0]
+    return [
+      Num.clamp(x + px, { minimum: -BOUNDS.x + 0.02, maximum: BOUNDS.x - 0.02 }),
+      Num.clamp(y + py, { minimum: -BOUNDS.y + 0.02, maximum: BOUNDS.y - 0.02 }),
+    ]
+  }
 
   // How far everyone is from you over the links started so far, so nobody
   // changes colour just as they appear.
@@ -600,8 +740,12 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
   const relayed = new Set<number>()
   const trails: Array<FrameTrail> = []
   let answered = 0
-  for (const call of calls) {
-    const since = time - call.start
+  for (const [k, call] of calls.entries()) {
+    // A call cut by a tear stops where it was. One that hadn't started yet
+    // never does.
+    const stop = cutAt.get(k) ?? Infinity
+    if (call.start >= stop) continue
+    const since = Math.min(time, stop) - call.start
     if (since < 0) continue
     const caller = Arr.headNonEmpty(call.path)
     callers.add(caller)
@@ -612,12 +756,19 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
       const from = at(call.path[s]!)
       const to = at(call.path[s + 1]!)
       const covered = Math.min(travelled - s, 1)
-      trails.push({ caller, a: call.path[s]!, b: call.path[s + 1]!, from, to: lerp(from, to, covered) })
+      trails.push({
+        caller,
+        a: call.path[s]!,
+        b: call.path[s + 1]!,
+        from,
+        to: lerp(from, to, covered),
+        cut: Math.max(cutOf(call.path[s]!), cutOf(caller)),
+      })
       if (covered >= 1) relayed.add(call.path[s + 1]!)
-      else sparks.push(lerp(from, to, covered))
+      else if (time < stop) sparks.push(lerp(from, to, covered))
     }
     const landed = time - arrivalOf(call)
-    if (landed >= 0) {
+    if (landed >= 0 && stop === Infinity) {
       answered++
       if (landed < RING) rings.push({ ...xy(at(0)), progress: landed / RING, big: false })
     }
@@ -629,10 +780,30 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     return d === 0 ? 'you' : d === 1 ? 'met' : d === 2 ? 'circle' : 'stranger'
   }
 
+  // The ripples on their way out, and the torn links springing back.
+  const ripples: Array<{ readonly from: readonly [number, number]; readonly to: readonly [number, number] }> = []
+  const snaps: Array<FrameSnap> = []
+  for (const tear of started) {
+    const since = time - tear.start
+    if (tear.person < 0) {
+      if (since < RING) rings.push({ ...xy(at(0)), progress: since / RING, big: false, alarm: true })
+      continue
+    }
+    if (since < RIPPLE) ripples.push({ from: at(0), to: lerp(at(0), at(tear.person), ease(since / RIPPLE)) })
+    const sinceTorn = time - tornAt(tear)
+    if (sinceTorn < 0) continue
+    const mid = lerp(at(0), at(tear.person), 0.5)
+    if (sinceTorn < SNAP) snaps.push({ you: at(0), them: at(tear.person), mid, progress: sinceTorn / SNAP })
+    if (sinceTorn < RING) rings.push({ ...xy(mid), progress: sinceTorn / RING, big: false, alarm: true })
+  }
+
+  const tornLink = (edge: GraphEdge) =>
+    (edge.a === 0 && torn.has(edge.b)) || (edge.b === 0 && torn.has(edge.a))
+
   return {
     edges: Arr.flatMap(edges, (edge): ReadonlyArray<FrameEdge> => {
       const grown = ease(clamp01((time - edge.born) / GROW))
-      if (grown <= 0) return []
+      if (grown <= 0 || tornLink(edge)) return []
       const from = at(edge.a)
       const near = Math.min(
         known(edge.a) ? distance[edge.a]! : 99,
@@ -646,6 +817,7 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
           to: lerp(from, at(edge.b), grown),
           kind: near === 0 ? 'yours' : near === 1 ? 'circle' : 'remote',
           lit: Math.max(litOf(edge.a), litOf(edge.b)),
+          cut: Math.max(cutOf(edge.a), cutOf(edge.b)),
         },
       ]
     }),
@@ -663,12 +835,15 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
           lit: litOf(i),
           caller: callers.has(i),
           relayed: relayed.has(i) && i !== 0,
+          cut: cutOf(i),
         },
       ]
     }),
     rings,
     trails,
     sparks,
+    ripples,
+    snaps,
     quiet,
     answered,
   }

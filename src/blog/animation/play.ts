@@ -10,45 +10,23 @@
 // moves when they press play or drag the slider. It only animates while the
 // canvas is on screen, and while paused it waits for the next change (the
 // controls, the reader's pointer, a resize) instead of drawing every frame.
+//
+// INTERACT is recorded here, at the clock's time, so scrubbing back before
+// it shows the world without it. Pressing it while paused applies it at
+// that moment and plays on, past the end it goes in at the end and the
+// hold waits until it's played out, and under reduced motion it goes in
+// `interact.settle` before the still frame. Restart, a new variant or the
+// next seed clears them. Clicking the drawing does the same, aimed there.
 
-import { Effect, Latch, Number as Num, Option, Ref, Stream, String as Str } from 'effect'
+import { Effect, Latch, Option, Ref, Stream, String as Str } from 'effect'
 
 import { nextFrame } from '../../blueprint/webgpu/renderer.ts'
-import { type Controls, FADE, HOLD, SLIDER_STEPS, type Started } from './controls.ts'
-import type { Point, Run, Scene } from './scene.ts'
+import { type Clock, clamp01, follow, interact, opacityAt, startClock, tick } from './clock.ts'
+import { type Controls, type Report, SLIDER_STEPS } from './controls.ts'
+import type { Point, Scene } from './scene.ts'
 import { painterFor } from './webgpu/painters.ts'
 
 const MAX_PIXEL_RATIO = 2
-
-interface Clock {
-  readonly seed: number
-  readonly variant: string
-  readonly run: Run
-  readonly time: number
-  readonly playing: boolean
-  readonly seeks: number
-}
-
-const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
-
-// The clock after the controls change. A new variant starts over, unless
-// it's paused, where it keeps its place.
-const follow = (scene: Scene, clock: Clock, controls: Controls): Clock => {
-  const changed = controls.variant !== clock.variant
-  const run = changed ? scene.run(controls.variant, clock.seed) : clock.run
-  const kept = !changed ? clock.time : controls.playing ? 0 : clamp01(clock.time / clock.run.end) * run.end
-  const time = controls.seeks !== clock.seeks ? controls.seek * run.end : kept
-  return { ...clock, variant: controls.variant, run, time, playing: controls.playing, seeks: controls.seeks }
-}
-
-const tick = (scene: Scene, clock: Clock, seconds: number): Clock => {
-  const time = clock.time + seconds
-  if (time <= clock.run.end + HOLD + FADE) return { ...clock, time }
-  const seed = clock.seed + 1
-  return { ...clock, seed, run: scene.run(clock.variant, seed), time: 0 }
-}
-
-const opacityAt = ({ run, time }: Clock): number => 1 - clamp01((time - run.end - HOLD) / FADE)
 
 // Seconds as m:ss.
 const clockOf = (seconds: number): string => {
@@ -98,6 +76,31 @@ const wakeOnResize = (canvas: HTMLCanvasElement, wake: Latch.Latch) =>
     observer => Effect.sync(() => observer.disconnect()),
   )
 
+// Clicking the drawing interacts, aimed where it was clicked, and tells the
+// figure so it plays on.
+const aimOnClick = (
+  scene: Scene,
+  canvas: HTMLCanvasElement,
+  clock: Ref.Ref<Clock>,
+  wake: Latch.Latch,
+  report: (report: Report) => Effect.Effect<unknown>,
+) =>
+  Stream.fromEventListener<MouseEvent>(canvas, 'click').pipe(
+    Stream.runForEach(event =>
+      Effect.gen(function* () {
+        const rect = canvas.getBoundingClientRect()
+        const aim: Point = [
+          clamp01(event.offsetX / Math.max(1, rect.width)),
+          clamp01(event.offsetY / Math.max(1, rect.height)),
+        ]
+        yield* Ref.update(clock, now => interact(scene, now, Option.some(aim)))
+        yield* Latch.open(wake)
+        yield* report({ _tag: 'Aimed' })
+      }),
+    ),
+    Effect.forkScoped,
+  )
+
 // Where the reader's pointer is over the canvas, in CSS px.
 const followPointer = (canvas: HTMLCanvasElement, pointer: Ref.Ref<Option.Option<Point>>, wake: Latch.Latch) =>
   Stream.merge(
@@ -115,31 +118,23 @@ export const playScene = (
   scene: Scene,
   controls: Controls,
   changes: Stream.Stream<Controls>,
-  started: (report: Started) => Effect.Effect<unknown>,
+  report: (report: Report) => Effect.Effect<unknown>,
 ) =>
   Effect.gen(function* () {
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const painter = yield* painterFor(canvas, scene.maxLines, scene.maxDots)
-    yield* started({ renderer: painter.renderer, still })
+    yield* report({ _tag: 'Started', renderer: painter.renderer, still })
 
     const figure = canvas.closest('figure')
     const slider = Option.fromNullishOr(figure?.querySelector<HTMLInputElement>('input[type="range"]'))
     const readout = Option.fromNullishOr(figure?.querySelector<HTMLElement>('[data-clock]'))
-    const run = scene.run(controls.variant, 1)
-    const clock = yield* Ref.make<Clock>({
-      seed: 1,
-      variant: controls.variant,
-      run,
-      time: still ? run.end : 0,
-      playing: controls.playing && !still,
-      seeks: controls.seeks,
-    })
+    const clock = yield* Ref.make(startClock(scene, controls, still))
     const pointer = yield* Ref.make(Option.none<Point>())
 
     const draw = (now: Clock, at: Option.Option<Point>) => {
       const size = fit(canvas)
-      const shapes = now.run.shapesAt(now.time, size.width, size.height, at)
-      painter.paint(shapes, size.width, size.height, opacityAt(now))
+      const shapes = now.run.shapesAt(now.time, size.width, size.height, at, now.interactions)
+      painter.paint(shapes, size.width, size.height, opacityAt(scene, now))
       Option.map(slider, input => {
         // Not while the reader is holding it, or it'd fight their drag.
         const step = String(Math.round(clamp01(now.time / now.run.end) * SLIDER_STEPS))
@@ -155,6 +150,7 @@ export const playScene = (
     const wake = yield* Latch.make(true)
     yield* wakeOnResize(canvas, wake)
     yield* followPointer(canvas, pointer, wake)
+    if (scene.interact !== undefined) yield* aimOnClick(scene, canvas, clock, wake, report)
     yield* Stream.runForEach(changes, next =>
       Ref.update(clock, now => follow(scene, now, next)).pipe(Effect.andThen(Latch.open(wake))),
     ).pipe(Effect.forkScoped)

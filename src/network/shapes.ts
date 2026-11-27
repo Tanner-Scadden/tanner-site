@@ -13,11 +13,24 @@
 //
 // Pointing at someone picks them out: their links and the people on the
 // other end stay bright, a ring goes round them, and the rest dims.
+//
+// A bad interaction is the post's red, and only that: a ripple runs out
+// along your link, the link tears and springs back, and a ring goes out
+// from the tear. The branch it cost you dims to a ghost.
 
 import { Array as Arr, Option } from 'effect'
 
 import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
-import { BOUNDS, type Frame, type FrameDot, type FrameEdge, MAX_CALLS, MAX_EDGES, MAX_NODES } from './graph.ts'
+import {
+  BOUNDS,
+  type Frame,
+  type FrameDot,
+  type FrameEdge,
+  MAX_CALLS,
+  MAX_EDGES,
+  MAX_NODES,
+  MAX_TEARS,
+} from './graph.ts'
 
 type Rgb = readonly [number, number, number]
 
@@ -25,11 +38,19 @@ type Rgb = readonly [number, number, number]
 const LINE: Rgb = [0.86, 0.92, 1]
 const GOLD: Rgb = [1, 0.82, 0.4]
 const WARM: Rgb = [1, 0.94, 0.8]
+// The post's red, #ff6b61.
+const RED: Rgb = [1, 0.42, 0.38]
 
 // The most a frame draws: every link plus a trail per link a call crosses,
 // and everyone, plus rings, callers' rings, sparks and the picked ring.
-export const MAX_LINES = MAX_EDGES + MAX_CALLS * 6
-export const MAX_DOTS = MAX_NODES + MAX_CALLS * 4 + 16
+// Each bad interaction adds its ripple, the two torn ends and a ring.
+export const MAX_LINES = MAX_EDGES + MAX_CALLS * 6 + MAX_TEARS * 3
+export const MAX_DOTS = MAX_NODES + MAX_CALLS * 4 + 16 + MAX_TEARS * 3
+
+// How much of itself a branch keeps once a bad interaction has cost you it.
+const CUT = 0.28
+const cutKeep = (cut: number) => 1 - (1 - CUT) * cut
+const kept = ([r, g, b, a]: Rgba, cut: number): Rgba => [r, g, b, a * cutKeep(cut)]
 
 // How much of itself the network keeps once you've jumped.
 const QUIET = 0.45
@@ -138,9 +159,12 @@ export const shapesOf = (
       from: px(edge.from),
       to: px(edge.to),
       width: lit ? style.width + 1 : style.width,
-      color: lit
-        ? [style.color[0], style.color[1], style.color[2], Math.max(style.color[3], 0.85)]
-        : faded(hushed(style.color, edge.kind === 'yours' ? HELPED_QUIET : QUIET), touches(edge)),
+      color: kept(
+        lit
+          ? [style.color[0], style.color[1], style.color[2], Math.max(style.color[3], 0.85)]
+          : faded(hushed(style.color, edge.kind === 'yours' ? HELPED_QUIET : QUIET), touches(edge)),
+        edge.cut,
+      ),
     }
   })
 
@@ -151,9 +175,9 @@ export const shapesOf = (
       to: px(trail.to),
       width: 2.5,
       // Pointing at whoever called keeps their whole call lit.
-      color: faded(
-        rgba(GOLD, 0.95),
-        touches(trail) || Option.exists(picked, id => id === trail.caller),
+      color: kept(
+        faded(rgba(GOLD, 0.95), touches(trail) || Option.exists(picked, id => id === trail.caller)),
+        trail.cut,
       ),
     }),
   )
@@ -167,7 +191,9 @@ export const shapesOf = (
       radius: ring.big ? 10 + 110 * t : 6 + 30 * t,
       glow: 0,
       ring: ring.big ? 2 : 1.5,
-      color: faded(rgba(GOLD, (ring.big ? 0.6 : 0.75) * (1 - ring.progress)), Option.isNone(picked)),
+      color: ring.alarm === true
+        ? rgba(RED, 0.8 * (1 - ring.progress))
+        : faded(rgba(GOLD, (ring.big ? 0.6 : 0.75) * (1 - ring.progress)), Option.isNone(picked)),
     }
   })
 
@@ -181,11 +207,11 @@ export const shapesOf = (
       x,
       y,
       radius: style.radius * dot.grown,
-      glow: glow * dot.grown,
+      glow: glow * dot.grown * (1 - dot.cut),
       ring: 0,
-      color: faded(
-        stays ? style.color : hushed(style.color, dot.kind === 'met' ? HELPED_QUIET : QUIET),
-        shown(dot.id),
+      color: kept(
+        faded(stays ? style.color : hushed(style.color, dot.kind === 'met' ? HELPED_QUIET : QUIET), shown(dot.id)),
+        dot.cut,
       ),
     }
   })
@@ -194,7 +220,7 @@ export const shapesOf = (
   const callers = Arr.flatMap(frame.dots, (dot): ReadonlyArray<Dot> => {
     if (!dot.caller || dot.kind === 'you') return []
     const [x, y] = px([dot.x, dot.y])
-    return [{ x, y, radius: 9, glow: 0, ring: 1.5, color: faded(rgba(GOLD, 0.85), shown(dot.id)) }]
+    return [{ x, y, radius: 9, glow: 0, ring: 1.5, color: kept(faded(rgba(GOLD, 0.85), shown(dot.id)), dot.cut) }]
   })
 
   const halo = Option.flatMap(picked, id =>
@@ -219,8 +245,29 @@ export const shapesOf = (
     return { x, y, radius: 3.5, glow: 14, ring: 0, color: rgba(GOLD, 1) }
   })
 
+  // The link lights red behind the ripple, and once it tears each end
+  // springs back toward its own side.
+  const ripples = Arr.map(
+    frame.ripples,
+    (ripple): Line => ({ from: px(ripple.from), to: px(ripple.to), width: 2.5, color: rgba(RED, 0.9) }),
+  )
+  const heads = Arr.map(frame.ripples, (ripple): Dot => {
+    const [x, y] = px(ripple.to)
+    return { x, y, radius: 3.5, glow: 14, ring: 0, color: rgba(RED, 1) }
+  })
+  const snaps = Arr.flatMap(frame.snaps, (snap): ReadonlyArray<Line> => {
+    const back = 1 - (1 - snap.progress) ** 2
+    const end = (from: readonly [number, number]): Line => ({
+      from: px(from),
+      to: px([snap.mid[0] + (from[0] - snap.mid[0]) * back, snap.mid[1] + (from[1] - snap.mid[1]) * back]),
+      width: 2,
+      color: rgba(RED, 0.9 * (1 - snap.progress)),
+    })
+    return [end(snap.you), end(snap.them)]
+  })
+
   return {
-    lines: [...links, ...trails],
-    dots: [...rings, ...people, ...callers, ...Option.toArray(halo), ...sparks],
+    lines: [...links, ...trails, ...ripples, ...snaps],
+    dots: [...rings, ...people, ...callers, ...Option.toArray(halo), ...sparks, ...heads],
   }
 }

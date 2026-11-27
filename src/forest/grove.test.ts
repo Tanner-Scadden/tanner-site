@@ -7,12 +7,15 @@ import {
   GROUND,
   GROVE,
   LATE,
+  MAX_PLANTS,
   MAX_SEGMENTS,
   MAX_TREES,
+  PLANT_SETTLE,
   ROOTS,
   buildTimeline,
   frameAt,
   landingOf,
+  plantedIn,
 } from './grove.ts'
 import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
 
@@ -225,5 +228,83 @@ describe('grove frames', () => {
     const end = frameAt(timeline, timeline.end).branches
     assert.isTrue(Arr.some(end, branch => branch.root && branch.bond > 0.5))
     assert.isTrue(Arr.every(end, branch => branch.bond === 0 || branch.root))
+  })
+})
+
+describe('grove plantings', () => {
+  const timeline = buildTimeline(3)
+  const press = (time: number, aim: Option.Option<number> = Option.none()) => ({ time, aim })
+
+  it('plants a seed that grows into another tree', () => {
+    const planted = plantedIn(timeline, [press(5)])
+    assert.strictEqual(planted.trees.length, timeline.trees.length + 1)
+    assert.strictEqual(planted.flights.length, planted.trees.length)
+    const tree = planted.trees[planted.trees.length - 1]!
+    const flight = planted.flights[planted.flights.length - 1]!
+    assert.strictEqual(flight.release, 5)
+    assert.strictEqual(flight.to[0], tree.x)
+    assert.isAbove(tree.sprout, landingOf(flight))
+    // It's grown by the time it's meant to have played out.
+    const id = planted.trees.length - 1
+    const grown = frameAt(planted, 5 + PLANT_SETTLE)
+    assert.strictEqual(Option.getOrThrow(Arr.findFirst(grown.trees, t => t.id === id)).grown, 1)
+    // And it joins the grove underground: some of its roots knot.
+    const later = frameAt(planted, 5 + PLANT_SETTLE + 6)
+    assert.isTrue(Arr.some(later.branches, branch => branch.tree === id && branch.root && branch.bond > 0))
+  })
+
+  it('shows nothing of it before it was planted', () => {
+    const planted = plantedIn(timeline, [press(8)])
+    for (const t of [0.5, 4, 7.99]) assert.deepStrictEqual(frameAt(planted, t), frameAt(timeline, t))
+  })
+
+  it('plants where the reader aimed, else in the widest gap', () => {
+    const aimed = plantedIn(timeline, [press(5, Option.some(-0.9))])
+    assert.closeTo(aimed.trees[aimed.trees.length - 1]!.x, -0.9, 1e-9)
+    // Early on, only the first tree stands, so the gap is off to one side.
+    const early = plantedIn(timeline, [press(1)])
+    assert.isAbove(Math.abs(early.trees[early.trees.length - 1]!.x - timeline.trees[0]!.x), 0.6)
+    // Two unaimed seeds don't land on top of each other.
+    const two = plantedIn(timeline, [press(1), press(1.5)])
+    const [a, b] = Arr.takeRight(two.trees, 2)
+    assert.isAbove(Math.abs(a!.x - b!.x), 0.5)
+  })
+
+  it('replays the same plantings the same way', () => {
+    const presses = [press(2), press(6, Option.some(0.4)), press(12)]
+    assert.deepStrictEqual(plantedIn(timeline, presses), plantedIn(buildTimeline(3), presses))
+  })
+
+  it('only ever grows, and stays on the sheet and in its buffers, with every seed it takes', () => {
+    for (const seed of Arr.take(SEEDS, 4)) {
+      const planted = plantedIn(
+        buildTimeline(seed),
+        Arr.makeBy(MAX_PLANTS, k => press(1 + k * 2.3)),
+      )
+      assert.isAtMost(planted.trees.length, MAX_TREES)
+      const misses: Array<string> = []
+      let before = frameAt(planted, 0)
+      for (const t of momentsOf(planted.end).slice(1)) {
+        const now = frameAt(planted, t)
+        for (const tree of before.trees) {
+          const after = Arr.findFirst(now.trees, other => other.id === tree.id)
+          if (Option.isNone(after) || after.value.grown < tree.grown) misses.push(`tree ${tree.id} at ${t}`)
+          if (branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id)) misses.push(`branches ${tree.id} at ${t}`)
+        }
+        const shapes = shapesOf(now, 800, 450, Option.some([400, 270]))
+        if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
+        if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
+        for (const dot of shapes.dots) {
+          if (dot.x < 0 || dot.x > 800 || dot.y < 0 || dot.y > 450) misses.push(`dot at ${t}`)
+        }
+        for (const branch of now.branches) {
+          for (const [x, y] of [branch.from, branch.to]) {
+            if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) misses.push(`point ${x},${y} at ${t}`)
+          }
+        }
+        before = now
+      }
+      assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
+    }
   })
 })

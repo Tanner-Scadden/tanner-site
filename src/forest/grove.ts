@@ -17,8 +17,12 @@
 // along each branch at once, so growth is smooth and only ever adds. The
 // trees sway a little in the wind, which only turns branches, never
 // shortens them. `frameAt` reads any moment without simulating anything.
+//
+// A reader can plant another seed (see `plantedIn`): a gold seed drifts
+// down from the top and grows a tree where it lands, which joins the grove
+// like any other, roots and all.
 
-import { Array as Arr, Number as Num, Order } from 'effect'
+import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
 // The world is a box this wide and tall around the middle of the canvas,
 // in world units, with y pointing down like the canvas.
@@ -31,7 +35,9 @@ const MARGIN = { x: 1.54, top: -0.84 } as const
 // The most there can be of each, for the GPU buffers.
 export const GROVE = 8
 export const LATE = 4
-export const MAX_TREES = 1 + GROVE + LATE
+// The most seeds a reader can plant in a run.
+export const MAX_PLANTS = 6
+export const MAX_TREES = 1 + GROVE + LATE + MAX_PLANTS
 export const MAX_SEGMENTS = 96
 export const ROOTS = 3
 export const HATCH_GAP = 0.07
@@ -63,6 +69,11 @@ export const BLOSSOM = 0.8
 export const RING = 1.2
 // When everything that's going to happen in a run has happened.
 export const END = 15
+// A planted seed: how long it drifts down, and how long its tree takes to
+// grow. Seconds until a planting has played out.
+const PLANT_FLIGHT = 1.8
+const PLANT_GROW = 3
+export const PLANT_SETTLE = PLANT_FLIGHT + REST + PLANT_GROW
 
 // Mulberry32: a small seeded generator, so a run replays from its seed.
 const random = (seed: number) => {
@@ -458,6 +469,54 @@ export const buildTimeline = (seed: number): Timeline => {
   }
 
   return { trees, flights, end: END }
+}
+
+// ---------------------------------------------------------------------------
+// Seeds a reader plants
+// ---------------------------------------------------------------------------
+
+// Where the next seed goes if the reader didn't aim: the middle of the
+// widest gap between the trees whose seeds are down or on their way. The
+// edges of the sheet count as trees a little way past them, so a gap at
+// the edge is planted toward its middle, not against the margin.
+const EDGE = MARGIN.x * 1.25
+const widestGap = (trees: ReadonlyArray<Tree>, flights: ReadonlyArray<Flight>, time: number): number => {
+  const standing = Arr.filter(trees, (_, k) => k === 0 || flights[k]!.release <= time)
+  const xs = Arr.sort([-EDGE, EDGE, ...Arr.map(standing, tree => tree.x)], Order.Number)
+  const gaps = Arr.zip(xs, Arr.drop(xs, 1))
+  const [a, b] = Arr.reduce(gaps, gaps[0]!, (best, gap) => (gap[1] - gap[0] > best[1] - best[0] ? gap : best))
+  return (a + b) / 2
+}
+
+// The run with a seed planted at each interaction, in the order they
+// happened, at the aimed x or else the widest gap. Each drifts down from
+// the top and grows a young tree, which joins the grove like the rest.
+export const plantedIn = (
+  timeline: Timeline,
+  interactions: ReadonlyArray<{ readonly time: number; readonly aim: Option.Option<number> }>,
+): Timeline => {
+  const trees = [...timeline.trees]
+  const flights = [...timeline.flights]
+  for (const [k, { time, aim }] of Arr.take(interactions, MAX_PLANTS).entries()) {
+    const next = random((0x2545f491 ^ Math.round(time * 1000)) + k * 7919)
+    const x = Option.getOrElse(aim, () => widestGap(trees, flights, time))
+    const sprout = time + PLANT_FLIGHT + REST
+    const tree = makeTree(next, { x, scale: 0.4 + next() * 0.1, levels: 5, sprout, grow: PLANT_GROW })
+    const from: Point = [tree.x + (next() - 0.5) * 0.3, MARGIN.top + 0.08]
+    flights.push({
+      from,
+      lift: [lerp(from[0], tree.x, 0.6), lerp(from[1], GROUND, 0.4)],
+      to: [tree.x, GROUND],
+      release: time,
+      duration: PLANT_FLIGHT,
+      sway: 0.05,
+      swings: 1.2,
+      tree: -1,
+      leaf: -1,
+    })
+    trees.push(tree)
+  }
+  return { ...timeline, trees, flights }
 }
 
 // ---------------------------------------------------------------------------

@@ -7,11 +7,15 @@ import {
   MAX_CALLS,
   MAX_EDGES,
   MAX_NODES,
+  MAX_TEARS,
+  RIPPLE,
+  TEAR_SETTLE,
   arrivalOf,
   buildTimeline,
   distancesFrom,
   frameAt,
   positionAt,
+  tearsOf,
 } from './graph.ts'
 import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
 
@@ -260,6 +264,91 @@ describe('network frames', () => {
       const shapes = shapesOf(frameAt(timeline, time), 800, 450)
       for (const dot of shapes.dots) {
         assert.isTrue(dot.x >= 0 && dot.x <= 800 && dot.y >= 0 && dot.y <= 450)
+      }
+    }
+  })
+})
+
+describe('network bad interactions', () => {
+  const timeline = buildTimeline(3)
+  const none = Option.none<readonly [number, number]>()
+  const at = (time: number) => ({ time, aim: none })
+  const tornTime = (tear: { readonly start: number }) => tear.start + RIPPLE
+  const helped = new Set(Arr.map(timeline.helps, help => help.person))
+  const yourLinkTo = (frame: ReturnType<typeof frameAt>, person: number) =>
+    Arr.some(frame.edges, edge => (edge.a === 0 && edge.b === person) || (edge.b === 0 && edge.a === person))
+
+  it('tears your link to someone you helped, and dims their branch', () => {
+    const [tear] = tearsOf(timeline, [at(12)])
+    assert.isTrue(helped.has(tear!.person))
+    const before = frameAt(timeline, tornTime(tear!) - 0.01, [tear!])
+    assert.isTrue(yourLinkTo(before, tear!.person))
+    assert.strictEqual(before.ripples.length, 1)
+    const after = frameAt(timeline, tornTime(tear!) + TEAR_SETTLE, [tear!])
+    assert.isFalse(yourLinkTo(after, tear!.person))
+    assert.strictEqual(after.dots[tear!.person]!.cut, 1)
+    // Only their branch dims.
+    for (const dot of after.dots) assert.strictEqual(dot.cut > 0, tear!.branch.includes(dot.id), `person ${dot.id}`)
+    // And it pulls away from you.
+    const plain = frameAt(timeline, tornTime(tear!) + TEAR_SETTLE)
+    const d = (frame: typeof plain) => Math.hypot(frame.dots[tear!.person]!.x, frame.dots[tear!.person]!.y)
+    assert.isAbove(d(after), d(plain))
+  })
+
+  it('shows nothing of it before it happened', () => {
+    const tears = tearsOf(timeline, [at(12)])
+    for (const t of [0.5, 6, 11.99]) assert.deepStrictEqual(frameAt(timeline, t, tears), frameAt(timeline, t))
+  })
+
+  it('stops the calls that would have come through them', () => {
+    const plain = frameAt(timeline, timeline.end)
+    const tears = tearsOf(timeline, [at(timeline.jump - 1)])
+    const cut = tears[0]!
+    assert.isAbove(cut.calls.length, 0)
+    const after = frameAt(timeline, timeline.end, tears)
+    assert.strictEqual(after.answered, plain.answered - cut.calls.length)
+    for (const k of cut.calls) {
+      assert.isFalse(Arr.some(after.dots, dot => dot.caller && dot.id === Arr.headNonEmpty(timeline.calls[k]!.path)))
+    }
+  })
+
+  it('hits another branch with every press, aimed or not', () => {
+    const tears = tearsOf(timeline, Arr.map(Arr.range(1, timeline.helps.length), k => at(10 + k * 0.5)))
+    assert.deepStrictEqual(new Set(Arr.map(tears, tear => tear.person)), helped)
+    // With nobody there yet, or nobody left, a press only ripples out from
+    // you.
+    assert.strictEqual(tearsOf(timeline, [at(0.5)])[0]!.person, -1)
+    const more = tearsOf(timeline, Arr.map(Arr.range(0, timeline.helps.length), k => at(10 + k * 0.5)))
+    assert.strictEqual(more[more.length - 1]!.person, -1)
+    const ripple = frameAt(timeline, 0.5 + 0.3, tearsOf(timeline, [at(0.5)]))
+    assert.isTrue(Arr.some(ripple.rings, ring => ring.alarm === true))
+    // Aimed near someone you helped, it's them.
+    const target = timeline.helps[2]!.person
+    const spot = positionAt(timeline, target, 14)
+    assert.strictEqual(tearsOf(timeline, [{ time: 14, aim: Option.some(spot) }])[0]!.person, target)
+  })
+
+  it('draws the same frame from the same interactions', () => {
+    const presses = [at(9), { time: 15, aim: Option.some([0.4, -0.2] as const) }, at(20)]
+    for (const t of [9.3, 15.5, 21, timeline.end]) {
+      assert.deepStrictEqual(
+        shapesOf(frameAt(timeline, t, tearsOf(timeline, presses)), 800, 450),
+        shapesOf(frameAt(timeline, t, tearsOf(buildTimeline(3), presses)), 800, 450),
+      )
+    }
+  })
+
+  it('stays on the canvas and inside its buffers with every press it takes', () => {
+    for (const seed of Arr.take(SEEDS, 4)) {
+      const run = buildTimeline(seed)
+      const tears = tearsOf(run, Arr.map(Arr.range(0, MAX_TEARS - 1), k => at(3 + k * 2.2)))
+      for (let t = 0; t <= run.end + 4; t += 0.1) {
+        const shapes = shapesOf(frameAt(run, t, tears), 800, 450, Option.some([400, 225]))
+        assert.isAtMost(shapes.lines.length, MAX_LINES, `seed ${seed} at ${t}`)
+        assert.isAtMost(shapes.dots.length, MAX_DOTS, `seed ${seed} at ${t}`)
+        for (const dot of shapes.dots) {
+          assert.isTrue(dot.x >= 0 && dot.x <= 800 && dot.y >= 0 && dot.y <= 450, `seed ${seed} at ${t}`)
+        }
       }
     }
   })

@@ -92,6 +92,41 @@ the worked example.
   - it stays inside its bounds and buffer sizes
   - it tells the story you meant
 
+### INTERACT
+
+Readers can add to a figure while it plays. Every figure that takes
+interactions has the same button: INTERACT, with a tap icon, after the
+time. The figure still tells its own story; the button adds to it.
+
+- Give the scene `interact: { hint, settle, max }`. `hint` says what a
+  press does, for the tooltip and screen readers ("Plant another seed").
+  `settle` is how many seconds it takes to play out. `max` is the most a
+  run takes, so the buffers still hold.
+- The kit records each press as the clock time it happened, and passes
+  them all, in order, as the last argument to `shapesAt(time, width,
+  height, pointer, interactions)`. Show only the ones up to `time`, so
+  scrubbing back shows the world without them. Restart, a new variant and
+  the next seed clear them.
+- Work out what they do once per array with `rememberLast`, then answer
+  frames from that, so each frame stays pure and cheap. The figures fold
+  them into the timeline: `tearsOf` (network), `plantedIn` (forest),
+  `withFlares` (team).
+- Clicking the drawing interacts too, aimed there. `aim` is a 0 to 1
+  fraction of the canvas, which is always 16:9, so convert it with the
+  scene's projection at any 16:9 size. A press of the button has no aim,
+  so the scene picks a sensible target.
+- Pressing while paused applies at the paused time and plays on. Past the
+  end, it goes in at the end, and the hold waits `settle` seconds for it
+  to play out before the next run. Draw frames past `end` the same way
+  as before it, so it can. Under reduced
+  motion the figure stays still: the press goes in `settle` seconds
+  before the still frame, which repaints with it done.
+- Decide whether it's a good or a bad interaction, and draw it that way.
+  Bad ones use the post's red (`post.alarm`, `#ff6b61`), and only for the
+  harm itself.
+- Test that a press shows nothing before its time, that it does what you
+  meant after, and that the bounds and buffer sizes hold at `max` presses.
+
 ## Before it goes up
 
 Run `bun run typecheck`, `bun run lint`, `bun run test` and
