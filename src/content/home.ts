@@ -122,13 +122,4 @@ export const WELCOME = 'Welcome. Make sure you click around.'
 
 export const SIGN_OFF = 'Thanks for stopping by'
 
-// NOTE: every product I build runs on someone's rulebook, so the site gets
-// one too. Each rule nudges toward an egg without giving it away.
-export const HOUSE_RULES = (eggs: number): ReadonlyArray<string> => [
-  'Some things click back.',
-  'Developers, open your tools. Someone left a note.',
-  'Old cheat codes still work here.',
-  `There are ${eggs} eggs. Have fun.`,
-]
-
 export const SITE_REPO_URL = 'https://github.com/Tanner-Scadden/tanner-site'

@@ -3,14 +3,12 @@ import { Array as Arr } from 'effect'
 
 import {
   ELSEWHERE,
-  HOUSE_RULES,
   OPEN_SOURCE,
   SIGN_OFF,
   SITE_REPO_URL,
   WELCOME,
   WORK,
 } from '#content/home'
-import { EGG_COUNT } from '#domain/Egg'
 
 import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
@@ -81,12 +79,6 @@ const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M) =>
         .on('click', clicked)
         .on('keydown', pressed(clicked), { preventDefault: true })
         .children(thesis),
-      h.div
-        .class('rules')
-        .children(
-          h.small('HOUSE RULES'),
-          h.ol(...Arr.map(HOUSE_RULES(EGG_COUNT), rule => h.li(rule))),
-        ),
     )
 
 const Step = <M>(h: Html.H<M>, title: string, text: string, out: boolean) =>
