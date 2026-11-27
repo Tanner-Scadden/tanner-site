@@ -69,21 +69,21 @@ export const beSomeoneWorthCalling: Post = {
     h.h2('How to be someone worth calling'),
     h.p(
       h.strong('Understand the problems.'),
-      ' Talk to customers, watch session replays, and dig through data. The more of the picture you can see, the better the solutions you\'\ll come up with.',
+      ' Talk to customers, watch session replays, and dig through your data. The more of the picture you see, the better the solutions you’ll come up with.',
     ),
     h.p(
       h.strong('Build with intent.'),
-      ' Build for a better user experience, better DX / Agentic experience, or a real return for the org. Push your knowledge however you can along the way, don\'\t settle for status quo.',
+      ' Build for a better user experience, a better developer or agent experience, or a real return for the org. Push your knowledge however you can along the way, and don’t settle for the status quo.',
     ),
     h.p(
       h.strong('Be intentional about how you communicate.'),
-      ' When you need something from someone, lead with what you need, then give them the context to act on it. ',
+      ' The first sentence decides how the rest gets read, so make it count. When you need something from someone, lead with what you need, then give them the context to act on it. ',
       h.a.attr('href', 'https://www.smartbrevity.com/').children('Smart Brevity'),
       ' is a whole book on doing this well.',
     ),
     h.p(
       h.strong('Be the first to jump in.'),
-      ' Fix problems as you find them. Answer the question in Slack. Be the person people default coming to. If youre not sure where to start, mirror the top performers on your team. If there isnt one there, join a new team',
+      ' Fix problems as you find them. Answer the question in Slack. Be the person people come to by default. If you’re not sure where to start, mirror the top performers on your team. If there isn’t one, join a team that has one.',
     ),
     h.p(
       h.strong('Give back to open source.'),
@@ -100,13 +100,13 @@ export const beSomeoneWorthCalling: Post = {
     h.p(
       h.strong('Be picky about who and what you spend your time with.'),
       ' Surround yourself with people who have high standards and the same level of ambition. Like Arnold says in ',
-      h.em('Be Useful'),
+      h.a.attr('href', 'https://beusefulbook.com/').children(h.em('Be Useful')),
       ', nobody is self-made.',
     ),
 
     h.h2('The calls keep coming'),
     h.p(
-      'I still get calls. People I’ve worked with asking if I’m open to something new, or if I’d want to found a company with them. The network grows with the career, it happens naturally. Yours will grow the same way.',
+      'I still get calls. People I’ve worked with asking if I’m open to something new, or if I’d want to found a company with them. The network grows with the career. It happens naturally.',
     ),
     h.p(
       'In ',
@@ -114,11 +114,11 @@ export const beSomeoneWorthCalling: Post = {
       ', Sunil Pai writes about a fundraiser that brought in $56,000 in two weeks, and says the money really took fifteen years to raise. That’s how these calls work: years to earn, one phone call to arrive.',
     ),
     h.p(
-      'Arnold’s book is named after what his dad used to tell him: “Be useful, Arnold.” Be useful. Be kind. Chase the dream. Give your best when nobody’s keeping score.',
+      'Arnold’s book is named after what his dad used to tell him: “Be useful, Arnold.” Be useful. Be kind. Chase the dream. Enjoy the journey. Give your best even when nobody’s keeping score.',
     ),
     h.blockquote(
       h.p('Unless someone like you cares a whole awful lot, nothing is going to get better. It’s not.'),
-      h.p(h.em('The Lorax'), ', my favorite quote'),
+      h.p(h.em('The Lorax')),
     ),
     h.p('Be that someone. The calls will come on their own.'),
   ],
