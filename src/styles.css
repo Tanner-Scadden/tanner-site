@@ -420,9 +420,18 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 .prose .note { border: 1px dashed var(--hi); padding: 16px 20px }
 .prose .note small { display: block; font: 700 11px "Space Mono", monospace; letter-spacing: .16em; color: var(--hi); margin-bottom: 4px }
 .prose .note p + p { margin-top: .8em }
-.prose .code { background: #072553; border: 1px solid var(--rule); margin-left: -24px; margin-right: -24px }
-.prose .code figcaption { font: 400 11px "Space Mono", monospace; letter-spacing: .1em; color: var(--ink-dim); padding: 8px 16px; border-bottom: 1px solid var(--rule) }
-.prose .code pre { overflow-x: auto; padding: 16px; font: 400 14px/1.6 "Space Mono", monospace }
+.prose .code { --code-foreground: #e9f1ff; --code-token-comment: rgba(200, 222, 255, .5); --code-token-keyword: #ffd166; --code-token-string: #9be3b0; --code-token-string-expression: #9be3b0; --code-token-constant: #ffb38a; --code-token-function: #8cc8ff; --code-token-parameter: #e9f1ff; --code-token-punctuation: rgba(220, 235, 255, .62); --code-token-link: #8cc8ff; background: #072553; border: 1px solid var(--rule); margin-left: -24px; margin-right: -24px }
+.prose .code figcaption { display: flex; justify-content: space-between; align-items: center; gap: 12px; font: 400 11px "Space Mono", monospace; letter-spacing: .1em; color: var(--ink-dim); padding: 6px 8px 6px 16px; border-bottom: 1px solid var(--rule) }
+.prose .code .copy { all: unset; cursor: pointer; font: 700 10px "Space Mono", monospace; letter-spacing: .14em; color: var(--ink-dim); border: 1px solid var(--rule); padding: 3px 9px; transition: color .15s, border-color .15s }
+.prose .code .copy::after { content: "COPY" }
+.prose .code .copy:hover { color: var(--hi); border-color: var(--hi) }
+.prose .code .copy:focus-visible { outline: 2px solid var(--hi); outline-offset: 2px }
+.prose .code .copy[data-state="copied"] { color: #9be3b0; border-color: #9be3b0 }
+.prose .code .copy[data-state="copied"]::after { content: "COPIED" }
+.prose .code .copy[data-state="failed"] { color: #ff8a80; border-color: #ff8a80 }
+.prose .code .copy[data-state="failed"]::after { content: "FAILED" }
+/* a soft grid behind the code, one row per line, like graph paper */
+.prose .code pre { overflow-x: auto; padding: 12px 16px; font: 400 14px/24px "Space Mono", monospace; color: var(--code-foreground); background-image: linear-gradient(rgba(200, 222, 255, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(200, 222, 255, .06) 1px, transparent 1px); background-size: 24px 24px; background-position: -1px 11px; background-attachment: local }
 .prose .code code { background: none; padding: 0; font-size: inherit }
 .prose .fig img { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--rule) }
 .prose .fig figcaption { margin-top: 8px; text-align: center; font: 400 11px "Space Mono", monospace; letter-spacing: .14em; color: var(--ink-dim) }
@@ -454,5 +463,7 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
   .paper { --ink: #111; --ink-dim: #555; --rule: #ccc; margin: 0; border: none; background: none; padding: 16px 0 }
   .prose strong, .prose h2, .prose h3 { color: #111 }
   .prose .code { background: none; color: #111 }
+  .prose .code pre { background: none; color: #111 }
+  .prose .code .copy { display: none }
   .title-block { padding: 0 }
 }

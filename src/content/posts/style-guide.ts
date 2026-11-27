@@ -38,17 +38,22 @@ export const styleGuide: Post = {
     h.h3('A smaller heading'),
     h.blockquote(h.p('A quote sits in its own column, with a gold rule down the side.')),
     Note(h, 'NOTE', h.p('A note is for an aside: a caveat, a tip, or something you learned the hard way.')),
-    Code(
-      h,
-      `const post: Post = {
+    Code(h, {
+      lang: 'ts',
+      file: 'src/content/posts/my-post.ts',
+      code: `import type { Post } from '#domain/Post'
+
+// A post is data, and its body is a view.
+export const myPost: Post = {
   slug: 'my-post',
   title: 'My post',
   date: '2026-11-27',
   summary: 'What it is about.',
   body: h => [h.p('Hello.')],
 }`,
-      'src/content/posts/my-post.ts',
-    ),
+    }),
+    h.p('Code blocks are highlighted and have a copy button. Leave out the file and the tab shows the language.'),
+    Code(h, { lang: 'bash', code: 'bun run dev' }),
     h.p(
       'Images go in public/blog/ and use ',
       h.code('Figure'),

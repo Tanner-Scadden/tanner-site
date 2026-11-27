@@ -1,6 +1,9 @@
 import type { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 
+import { type CodeLang, LANG_NAMES } from '../highlight.ts'
+import { CopyCode, HighlightCode } from '../mounts/CodeMounts.ts'
+
 // NOTE: the few blocks a post needs beyond plain tags. Everything else is
 // just `h.p`, `h.h2`, `h.ul`, `h.blockquote` and friends inside `.prose`.
 
@@ -8,11 +11,24 @@ import type { Html } from '@effect/ui/html'
 export const Note = <M>(h: Html.H<M>, label: string, ...children: View.Children<M, never>) =>
   h.aside.class('note').children(h.small(label), h.div(...children))
 
-// A code listing. `label` names the file or language, shown on the tab.
-export const Code = <M>(h: Html.H<M>, code: string, label?: string) =>
+// A code listing, highlighted, with a copy button. The tab shows `file` if
+// given, else the language.
+export const Code = <M>(
+  h: Html.H<M>,
+  { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file?: string },
+) =>
   h.figure
     .class('code')
-    .children(label !== undefined && h.figcaption(label), h.pre(h.code(code)))
+    .children(
+      h.figcaption(
+        h.span(file ?? LANG_NAMES[lang]),
+        h.button
+          .class('copy')
+          .attrs({ type: 'button', 'aria-label': 'Copy code' })
+          .onMount(CopyCode({ code })),
+      ),
+      h.pre(h.code.attr('data-lang', lang).onMount(HighlightCode({ code, lang }))),
+    )
 
 // An image with a caption. Put the file in public/blog/ and pass '/blog/name.png'.
 export const Figure = <M>(
