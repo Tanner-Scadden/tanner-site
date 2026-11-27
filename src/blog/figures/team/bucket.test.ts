@@ -65,10 +65,10 @@ describe('team bucket', () => {
           if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
           for (const dot of shapes.dots) {
             const on = dot.x >= 0 && dot.x <= w && dot.y >= 0 && dot.y <= h
-            if (!on || !dot.color.every(unit)) misses.push(`dot at ${t}`)
+            if (!on || !Arr.every(dot.color, unit)) misses.push(`dot at ${t}`)
           }
           for (const line of shapes.lines) {
-            if (!line.color.every(unit) || ![...line.from, ...line.to].every(Number.isFinite)) {
+            if (!Arr.every(line.color, unit) || !Arr.every([...line.from, ...line.to], v => Number.isFinite(v))) {
               misses.push(`line at ${t}`)
             }
           }
