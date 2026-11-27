@@ -1,4 +1,4 @@
-import { Array as Arr, MutableHashMap, Option, String as Str } from 'effect'
+import { MutableHashMap, Option, String as Str } from 'effect'
 
 import { stem } from './stem.ts'
 
@@ -68,6 +68,3 @@ export const tokenize = (text: string): ReadonlyArray<Token> => {
   }
   return tokens
 }
-
-// Just the terms, for a query word.
-export const terms = (text: string): ReadonlyArray<string> => Arr.map(tokenize(text), token => token.term)

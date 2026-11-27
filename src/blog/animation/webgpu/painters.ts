@@ -15,10 +15,7 @@ import {
 import type { Rgba, Shapes } from '../scene.ts'
 import { DOTS, DOT_FLOATS, LINES, LINE_FLOATS } from './shaders.ts'
 
-export type Renderer = 'webgpu' | 'canvas'
-
 export interface Painter {
-  readonly renderer: Renderer
   readonly paint: (shapes: Shapes, width: number, height: number, opacity: number) => void
 }
 
@@ -73,7 +70,6 @@ const gpuPainter = (canvas: HTMLCanvasElement, maxLines: number, maxDots: number
     const dotData = new Float32Array(maxDots * DOT_FLOATS)
 
     const painter: Painter = {
-      renderer: 'webgpu',
       paint: (shapes, width, height, opacity) => {
         viewData.set([width, height, opacity, 0])
         device.queue.writeBuffer(viewBuffer, 0, viewData)
@@ -131,7 +127,6 @@ const canvasPainter = (canvas: HTMLCanvasElement) =>
     const context = canvas.getContext('2d')
     if (context === null) return yield* GpuUnavailable.make({ reason: 'no-context' })
     const painter: Painter = {
-      renderer: 'canvas',
       paint: (shapes, width, height, opacity) => {
         const ratio = canvas.width / Math.max(1, width)
         context.setTransform(ratio, 0, 0, ratio, 0, 0)

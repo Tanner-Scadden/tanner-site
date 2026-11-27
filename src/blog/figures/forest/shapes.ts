@@ -3,6 +3,7 @@
 //
 // The ground is drawn like a section on a drawing: a line with hatching
 // under it. Trunks, branches and roots are the sheet's pale line colour.
+// Where a tree's roots have knotted with a neighbour's, they turn gold.
 // Leaves and seeds are gold, and a leaf about to let a seed go glows.
 //
 // Pointing at a tree picks it out: its branches warm up and its leaves
@@ -10,7 +11,8 @@
 
 import { Array as Arr, Option } from 'effect'
 
-import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
+import { GOLD, LINE, type Projection, WARM, mix, rgba } from '../../animation/kit.ts'
+import type { Dot, Line, Point, Shapes } from '../../animation/scene.ts'
 import {
   BOUNDS,
   type Frame,
@@ -22,13 +24,6 @@ import {
 } from './grove.ts'
 import { REACH_LINES, ROOT_PIECES } from './roots.ts'
 
-type Rgb = readonly [number, number, number]
-
-// The sheet's line colour, its gold, and a warm white.
-const LINE: Rgb = [0.86, 0.92, 1]
-const GOLD: Rgb = [1, 0.82, 0.4]
-const WARM: Rgb = [1, 0.94, 0.8]
-
 // The most a frame draws: the ground and its hatching, every branch and
 // root, a wisp per seed; every leaf, a seed and a landing ring each.
 // Each tree has its own roots, up to ROOT_PIECES lines, plus two reaching
@@ -39,11 +34,8 @@ export const MAX_DOTS = MAX_TREES * MAX_SEGMENTS + MAX_TREES * 2
 // How much of itself the rest of the grove keeps while a tree's picked.
 const DIMMED = 0.55
 
-const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], alpha]
-const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
-
 // Scale and centre the world box into a canvas this big.
-export const projection = (width: number, height: number) => {
+export const projection: Projection = (width, height) => {
   const scale = Math.min(width / (BOUNDS.x * 2 + 0.1), height / (BOUNDS.y * 2 + 0.1))
   return {
     scale,
@@ -114,7 +106,9 @@ export const shapesOf = (
   })
 
   const wisps = Arr.flatMap(frame.seeds, (seed): ReadonlyArray<Line> =>
-    seed.flying ? [{ from: px(seed.tail), to: px([seed.x, seed.y]), width: 1.2, color: rgba(GOLD, 0.45 * seed.alpha) }] : [],
+    seed.flying
+      ? [{ from: px(seed.tail), to: px([seed.x, seed.y]), width: 1.2, color: rgba(GOLD, 0.45 * seed.alpha) }]
+      : [],
   )
 
   const rings = Arr.map(frame.rings, (ring): Dot => {

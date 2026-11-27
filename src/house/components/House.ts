@@ -21,12 +21,13 @@ type RoomName = 'library' | 'work' | 'oss' | 'outside'
 const WEBGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
 
 // NOTE: a floor plan of the page. Each room jumps to its section, the
-// library to the blog. With
-// WebGPU the walls are drafted in and Teddy and Rain move in; without it the
-// CSS walls show and the house is empty. The renderer finds the plan by
-// `data-plan` and each room by `data-room`, to measure them. It reports each
-// time Teddy starts playing.
-export const House = <M>(h: Html.H<M>, still: boolean, played: M) =>
+// library to the blog. With WebGPU the walls are drafted in and Teddy and
+// Rain move in; without it the CSS walls show and the house is empty. The
+// renderer finds the plan by `data-plan` and each room by `data-room`, to
+// measure them. It reports each time Teddy starts playing. Without a blog
+// (`blogOpen` false, no post published) the library is still drawn, but
+// it's a room like the locked one, not a link to a section that isn't there.
+export const House = <M>(h: Html.H<M>, still: boolean, played: M, blogOpen: boolean) =>
   sx(h.figure, styles.house, houseMarker)
     .attrs(WEBGPU ? { 'data-gpu': 'starting' } : {})
     .children(
@@ -39,7 +40,11 @@ export const House = <M>(h: Html.H<M>, still: boolean, played: M) =>
     sx(h.nav, styles.plan)
       .attrs({ 'aria-label': 'Floor plan of this page', 'data-plan': '' })
       .children(
-        Room(h, 'library', '#blog'),
+        blogOpen
+          ? Room(h, 'library', '#blog')
+          : sx(h.div, styles.room, rooms.library)
+              .attrs({ 'data-room': 'library', 'aria-hidden': 'true' })
+              .children(sx(h.b, styles.name, styles.pencilled).children(HOUSE.rooms.library.name)),
         Room(h, 'work', '#work'),
         Room(h, 'oss', '#oss'),
         Room(h, 'outside', '#outside'),

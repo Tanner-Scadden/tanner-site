@@ -3,9 +3,8 @@ import { Effect, Layer } from 'effect'
 import { RpcServer, RpcWorker } from 'effect/rpc'
 
 import { build } from './index.ts'
-import { searchIndex } from './found.ts'
-import { SearchRpcs } from './rpc.ts'
-import { Docs } from './schema.ts'
+import { Docs, SearchRpcs } from './schema.ts'
+import { searchIndex } from './search.ts'
 
 // NOTE: the search worker. It takes the posts' text as its initial message,
 // builds the index off the page's thread, and answers searches over RPC.

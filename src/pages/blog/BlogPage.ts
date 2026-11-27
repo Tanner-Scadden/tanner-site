@@ -6,7 +6,7 @@ import { Option } from 'effect'
 import { Section, sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
 
-import { AllPosts, ResultCount, SearchBar } from '../../blog/components/PostList.ts'
+import { AllPosts, ResultCount, SearchBar } from '../../blog/components/Register.ts'
 import { POSTS } from '../../blog/posts.ts'
 import { blogRoute, homeRoute, href } from '../../routes.ts'
 import { base } from '../../styles/base.ts'

@@ -7,7 +7,7 @@
 //      small gold drop, a small helpful moment, into one shared bucket of
 //      water below. Each one rings out across the surface and lifts the
 //      level a little.
-//   2. One teammate flares red and kicks the bucket. It lurches over, a
+//   2. One teammate turns red and kicks the bucket. It lurches over, a
 //      good half of the water slops over the lip and splashes red on the
 //      floor, and the bucket rocks back upright with the rest sloshing.
 //   3. Drops start again, slowly and sparsely. The last one lands, the
@@ -17,10 +17,12 @@
 // The run is a list of events, drops and kicks, and how much water is in
 // the bucket at any moment is a pure fold over that list. The kick at the
 // heart of the run is one entry in it, so more kicks at any time (a
-// reader's bad interaction, say) slot in with `withFlares`, and the level,
+// reader's bad interaction, say) slot in with `withKicks`, and the level,
 // the spill, the slosh and the bucket's pose all follow.
 
-import { Array as Arr, Number as Num, Option, Order } from 'effect'
+import { Array as Arr, Option, Order } from 'effect'
+
+import { clamp01, random, smooth } from '../../animation/kit.ts'
 
 // The figure lives in a box this wide and tall, in world units.
 export const BOUNDS = { x: 1.6, y: 0.9 } as const
@@ -41,13 +43,13 @@ export const FLOOR = BUCKET.base
 // The inside of the bucket's floor, where the water starts.
 export const INNER_BASE = BUCKET.base - BUCKET.wall * 0.6
 // How far one drop lifts the water.
-export const RISE = 0.034
+const RISE = 0.034
 
 // How many drops land before the kick, and after it.
-export const BEFORE = 14
-export const AFTER = 2
+const BEFORE = 14
+const AFTER = 2
 // The most kicks a run can hold, the one it starts with included.
-export const MAX_FLARES = 6
+export const MAX_KICKS = 6
 // How many beads a kick that spills everything would throw.
 export const SPRAY = 36
 
@@ -55,22 +57,22 @@ export const SPRAY = 36
 const FIRST = 0.7
 const LAST_BEFORE = 7.4
 // How long a drop takes to fall, and its water to join the rest.
-export const FALL = 0.75
-export const JOIN = 0.35
+const FALL = 0.75
+const JOIN = 0.35
 // How long teammates and the bucket take to appear.
-export const POP = 0.6
+const POP = 0.6
 // How long a drop's ripple runs before the surface is still again.
 export const RIPPLE_FOR = 1.8
 
 // The run's own kick, and how much of the water it spills.
-export const FLARE = 7.9
+export const KICK_AT = 7.9
 export const KICK_SHARE = 0.58
 // After a kick, in seconds from it: the foot lands, the bucket lurches
 // over, and the water slops out over the lip.
-export const HIT = 0.08
-export const LURCH_FOR = 0.16
-export const SPILL_START = 0.14
-export const SPILL_FOR = 0.5
+const HIT = 0.08
+const LURCH_FOR = 0.16
+const SPILL_START = 0.14
+const SPILL_FOR = 0.5
 // It rocks back and forth on its edge, smaller each time, and is still
 // about two seconds after.
 const ROCK_FOR = 0.7
@@ -80,7 +82,7 @@ const LURCH = 0.55
 // stopped sloshing, and the spill has settled.
 export const KICK_SETTLE = HIT + 2.8
 // How long the red flash takes to fade.
-export const FLASH_FOR = 0.7
+const FLASH_FOR = 0.7
 // The drops after it land at about these times.
 const AFTER_LANDS = [10.9, 12.3] as const
 // The water goes still for this long after the last drop before the run
@@ -112,10 +114,10 @@ export interface Bead {
   readonly radius: number
 }
 
-// Someone flares and kicks the bucket. It lurches away from them and loses
+// Someone kicks the bucket. It lurches away from them and loses
 // `share` of whatever water is in it.
-export interface Flare {
-  readonly _tag: 'Flare'
+export interface Kick {
+  readonly _tag: 'Kick'
   readonly from: number
   readonly at: number
   readonly share: number
@@ -124,7 +126,7 @@ export interface Flare {
   readonly beads: ReadonlyArray<Bead>
 }
 
-export type Event = Drop | Flare
+export type Event = Drop | Kick
 
 export interface Timeline {
   readonly seed: number
@@ -132,50 +134,32 @@ export interface Timeline {
   // In time order: drops by when they land, kicks by when they happen.
   readonly events: ReadonlyArray<Event>
   // Whoever kicks in the run itself.
-  readonly flarer: number
+  readonly kicker: number
   readonly end: number
 }
 
-// Mulberry32: a small seeded generator, so a run replays from its seed.
-const random = (seed: number) => {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-export const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
-// Smoothstep, so ramps start and end gently.
-export const smooth = (t: number): number => {
-  const c = clamp01(t)
-  return c * c * (3 - 2 * c)
-}
 export const easeOut = (t: number) => 1 - (1 - clamp01(t)) ** 3
 
 const eventTime = (event: Event) => (event._tag === 'Drop' ? event.lands : event.at)
 const byTime = Order.mapInput(Order.Number, eventTime)
 export const dropsOf = (timeline: Timeline): ReadonlyArray<Drop> =>
   Arr.filter(timeline.events, (event): event is Drop => event._tag === 'Drop')
-export const flaresOf = (timeline: Timeline): ReadonlyArray<Flare> =>
-  Arr.filter(timeline.events, (event): event is Flare => event._tag === 'Flare')
+export const kicksOf = (timeline: Timeline): ReadonlyArray<Kick> =>
+  Arr.filter(timeline.events, (event): event is Kick => event._tag === 'Kick')
 
 // A kick from one teammate, its spill drawn from a seed so it replays.
-export const makeFlare = (
+const makeKick = (
   people: ReadonlyArray<Person>,
   from: number,
   at: number,
   share: number,
   seed: number,
-): Flare => {
+): Kick => {
   const next = random(seed)
   const between = (lo: number, hi: number) => lo + (hi - lo) * next()
   const count = Math.max(4, Math.round(SPRAY * share))
   return {
-    _tag: 'Flare',
+    _tag: 'Kick',
     from,
     at,
     share,
@@ -208,7 +192,7 @@ export const buildTimeline = (seed: number): Timeline => {
   )
   // Whoever kicks sits just off the middle, so the flash reads as theirs
   // and the bucket goes over away from them, toward the open side.
-  const flarer = next() < 0.5 ? 1 : 3
+  const kicker = next() < 0.5 ? 1 : 3
 
   // The gaps between drops before the kick, uneven, scaled so the last one
   // lands on time.
@@ -223,7 +207,7 @@ export const buildTimeline = (seed: number): Timeline => {
     return choices[Math.floor(next() * choices.length)]!
   }
   const everyone = Arr.range(0, PEOPLE - 1)
-  const others = Arr.filter(everyone, i => i !== flarer)
+  const others = Arr.filter(everyone, i => i !== kicker)
   let last = -1
   const before = Arr.map(starts, (start): Drop => {
     last = pick(everyone, last)
@@ -236,27 +220,27 @@ export const buildTimeline = (seed: number): Timeline => {
     return { _tag: 'Drop', from: last, start: lands - FALL, lands, across: between(-0.5, 0.5) }
   })
 
-  const kick = makeFlare(people, flarer, FLARE, KICK_SHARE, seed * 31 + 7)
+  const kick = makeKick(people, kicker, KICK_AT, KICK_SHARE, seed * 31 + 7)
   return {
     seed,
     people,
     events: Arr.sort([...before, ...after, kick], byTime),
-    flarer,
+    kicker,
     end: after[AFTER - 1]!.lands + REST,
   }
 }
 
 // The run with more kicks in it, at these times, each spilling this share
 // of the water that's there. Whoever gave last before each one is who
-// kicks, and the most a run holds is MAX_FLARES.
-export const withFlares = (timeline: Timeline, times: ReadonlyArray<number>, share = 0.5): Timeline => {
-  const room = MAX_FLARES - flaresOf(timeline).length
+// kicks, and the most a run holds is MAX_KICKS.
+export const withKicks = (timeline: Timeline, times: ReadonlyArray<number>, share = 0.5): Timeline => {
+  const room = MAX_KICKS - kicksOf(timeline).length
   const added = Arr.map(Arr.take(times, Math.max(0, room)), (at, i) => {
     const giver = Option.match(
       Arr.findLast(dropsOf(timeline), drop => drop.start <= at),
-      { onNone: () => timeline.flarer, onSome: drop => drop.from },
+      { onNone: () => timeline.kicker, onSome: drop => drop.from },
     )
-    return makeFlare(timeline.people, giver, at, share, timeline.seed * 977 + i * 131 + Math.round(at * 1000))
+    return makeKick(timeline.people, giver, at, share, timeline.seed * 977 + i * 131 + Math.round(at * 1000))
   })
   return { ...timeline, events: Arr.sort([...timeline.events, ...added], byTime) }
 }
@@ -264,13 +248,13 @@ export const withFlares = (timeline: Timeline, times: ReadonlyArray<number>, sha
 // How much of a drop's water has joined the rest.
 const joinedOf = (drop: Drop, time: number) => smooth((time - drop.lands) / JOIN)
 // How far through its spill a kick is.
-export const spillOf = (flare: Flare, time: number) => smooth((time - flare.at - SPILL_START) / SPILL_FOR)
+const spillOf = (kick: Kick, time: number) => smooth((time - kick.at - SPILL_START) / SPILL_FOR)
 
 // How far over a kick has the bucket, from 0 standing to 1 at the top of
 // its lurch: over fast, then rocking back on its edge, smaller each time,
 // until it's still.
-export const lurchOf = (flare: Flare, time: number): number => {
-  const since = time - flare.at - HIT
+const lurchOf = (kick: Kick, time: number): number => {
+  const since = time - kick.at - HIT
   if (since <= 0) return 0
   if (since < LURCH_FOR) return easeOut(since / LURCH_FOR)
   const s = since - LURCH_FOR
@@ -278,7 +262,7 @@ export const lurchOf = (flare: Flare, time: number): number => {
 }
 
 // How far a kick of this share pushes the bucket over, in radians.
-export const lurchAngle = (share: number) => LURCH * Math.min(1, 0.45 + share)
+const lurchAngle = (share: number) => LURCH * Math.min(1, 0.45 + share)
 
 // How much water is in the bucket, in drops: every drop that's landed,
 // less what each kick spilled of whatever was there when it went over.
@@ -293,9 +277,9 @@ export const fillAt = (timeline: Timeline, time: number): number =>
 // The most it's held, up to now: it peaks the moment before a kick.
 export const peakAt = (timeline: Timeline, time: number): number =>
   Arr.reduce(
-    Arr.filter(flaresOf(timeline), flare => flare.at <= time),
+    Arr.filter(kicksOf(timeline), kick => kick.at <= time),
     fillAt(timeline, time),
-    (most, flare) => Math.max(most, fillAt(timeline, flare.at)),
+    (most, kick) => Math.max(most, fillAt(timeline, kick.at)),
   )
 
 // Where the water's surface sits at its middle, in the bucket's own frame,
@@ -381,8 +365,7 @@ export interface Frame {
   readonly angle: number
   readonly side: 1 | -1
   readonly grown: number
-  // How full it is, and the most it held, in drops.
-  readonly fill: number
+  // The most it's held, in drops. How full it is now is `water.amount`.
   readonly peak: number
 }
 
@@ -423,9 +406,9 @@ export const surfaceAt = (water: Water, x: number): number => {
 
 // The bucket's pose: whichever kick has it furthest over.
 const poseAt = (timeline: Timeline, time: number): { readonly angle: number; readonly side: 1 | -1 } =>
-  Arr.reduce(flaresOf(timeline), { angle: 0, side: 1 as 1 | -1 }, (pose, flare) => {
-    const angle = lurchAngle(flare.share) * lurchOf(flare, time)
-    return angle > pose.angle ? { angle, side: flare.side } : pose
+  Arr.reduce(kicksOf(timeline), { angle: 0, side: 1 as 1 | -1 }, (pose, kick) => {
+    const angle = lurchAngle(kick.share) * lurchOf(kick, time)
+    return angle > pose.angle ? { angle, side: kick.side } : pose
   })
 
 // How the water tilts in the bucket: level in the world while the bucket's
@@ -433,7 +416,7 @@ const poseAt = (timeline: Timeline, time: number): { readonly angle: number; rea
 const slopeAt = (timeline: Timeline, time: number, angle: number, side: 1 | -1): number => {
   const level = Math.tan(angle * side)
   const slosh = Arr.reduce(timeline.events, 0, (sum, event) => {
-    if (event._tag === 'Flare') {
+    if (event._tag === 'Kick') {
       const s = time - event.at - HIT
       if (s <= 0) return sum
       const fade = Math.exp(-1.9 * s) * (1 - smooth((s - 2.2) / 0.6))
@@ -461,7 +444,7 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
   const fill = fillAt(timeline, time)
   const level = levelOf(fill)
   const drops = dropsOf(timeline)
-  const flares = Arr.filter(flaresOf(timeline), flare => flare.at <= time)
+  const kicks = Arr.filter(kicksOf(timeline), kick => kick.at <= time)
 
   const people = Arr.map(timeline.people, (person, id): FramePerson => {
     const giving = Arr.reduce(drops, 0, (most, drop) => {
@@ -470,8 +453,8 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
       return t <= 0 || t >= 1 ? most : Math.max(most, Math.sin(Math.PI * t))
     })
     const heat = Option.match(
-      Arr.findLast(flares, flare => flare.from === id),
-      { onNone: () => 0, onSome: flare => 0.75 + 0.25 * (1 - smooth((time - flare.at) / 0.8)) },
+      Arr.findLast(kicks, kick => kick.from === id),
+      { onNone: () => 0, onSome: kick => 0.75 + 0.25 * (1 - smooth((time - kick.at) / 0.8)) },
     )
     return { id, x: person.x, y: person.y, grown: smooth((time - id * 0.06) / POP), giving, heat }
   })
@@ -490,17 +473,17 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     return age < 0 || age > RIPPLE_FOR ? [] : [{ x: drop.across * halfAt(level), age }]
   })
 
-  const beads = Arr.flatMap(flares, (flare): ReadonlyArray<FrameBead> => {
-    const full = lurchAngle(flare.share)
+  const beads = Arr.flatMap(kicks, (kick): ReadonlyArray<FrameBead> => {
+    const full = lurchAngle(kick.share)
     // The lip on the low side, where the water goes over.
-    const lip = (lean: number) => posed(lean, flare.side)([BUCKET.x + flare.side * BUCKET.rimHalf, BUCKET.rim])
+    const lip = (lean: number) => posed(lean, kick.side)([BUCKET.x + kick.side * BUCKET.rimHalf, BUCKET.rim])
     const over = lip(full)
-    return Arr.flatMap(flare.beads, (bead): ReadonlyArray<FrameBead> => {
-      const start = flare.at + bead.delay
+    return Arr.flatMap(kick.beads, (bead): ReadonlyArray<FrameBead> => {
+      const start = kick.at + bead.delay
       if (time < start) return []
       const u = clamp01((time - start) / bead.flight)
-      const [mx, my] = lip(full * lurchOf(flare, start))
-      const lx = over[0] + flare.side * bead.reach
+      const [mx, my] = lip(full * lurchOf(kick, start))
+      const lx = over[0] + kick.side * bead.reach
       const x = mx + (lx - mx) * u
       const y = my + (FLOOR - my) * u * u - bead.lift * Math.sin(Math.PI * u) * (1 - u)
       return [{ x, y: Math.min(FLOOR, y), radius: bead.radius, flying: u < 1 }]
@@ -509,26 +492,26 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
 
   // The puddle runs out from the foot of the bucket, past where the beads
   // land, and dulls a little as it settles.
-  const puddles = Arr.map(flares, (flare): FramePuddle => {
-    const since = time - flare.at - SPILL_START
+  const puddles = Arr.map(kicks, (kick): FramePuddle => {
+    const since = time - kick.at - SPILL_START
     const spread = smooth(since / (SPILL_FOR + 0.35))
-    const foot = BUCKET.x + flare.side * (BUCKET.baseHalf + 0.03)
-    const reach = (0.12 + 0.7 * flare.share) * spread
-    return { from: foot, to: foot + flare.side * reach, fresh: 1 - smooth((since - 0.6) / 1.2) }
+    const foot = BUCKET.x + kick.side * (BUCKET.baseHalf + 0.03)
+    const reach = (0.12 + 0.7 * kick.share) * spread
+    return { from: foot, to: foot + kick.side * reach, fresh: 1 - smooth((since - 0.6) / 1.2) }
   })
 
-  const flashes = Arr.flatMap(flares, (flare): ReadonlyArray<FrameFlash> => {
-    const progress = (time - flare.at) / FLASH_FOR
-    const from = timeline.people[flare.from]!
-    return progress < 1 ? [{ x: from.x, y: from.y, progress, share: flare.share }] : []
+  const flashes = Arr.flatMap(kicks, (kick): ReadonlyArray<FrameFlash> => {
+    const progress = (time - kick.at) / FLASH_FOR
+    const from = timeline.people[kick.from]!
+    return progress < 1 ? [{ x: from.x, y: from.y, progress, share: kick.share }] : []
   })
 
   // The strike lands on the wall facing whoever kicked, high up.
-  const strikes = Arr.flatMap(flares, (flare): ReadonlyArray<FrameStrike> => {
-    const since = time - flare.at
+  const strikes = Arr.flatMap(kicks, (kick): ReadonlyArray<FrameStrike> => {
+    const since = time - kick.at
     if (since >= 0.4) return []
-    const from = timeline.people[flare.from]!
-    const wall = posed(0, flare.side)([BUCKET.x - flare.side * (BUCKET.rimHalf - 0.03), BUCKET.rim + 0.18])
+    const from = timeline.people[kick.from]!
+    const wall = posed(0, kick.side)([BUCKET.x - kick.side * (BUCKET.rimHalf - 0.03), BUCKET.rim + 0.18])
     return [
       {
         from: [from.x, from.y],
@@ -550,7 +533,6 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     angle,
     side,
     grown: smooth(time / POP),
-    fill,
     peak: peakAt(timeline, time),
   }
 }

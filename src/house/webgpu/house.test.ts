@@ -110,15 +110,24 @@ describe('planFor', () => {
     assert.isTrue(Arr.every(boards, w => w.base + w.rise <= CASE + 1e-9))
   })
 
+  // Each book's spine runs along the back wall; its covers run back to it.
+  const spines = Arr.filter(books, w => w.from.y === w.to.y)
+  const covers = Arr.filter(books, w => w.from.x === w.to.x)
+
   it('fills its two shelves with books of different heights', () => {
-    // Books are short panels on the shelf, so they show as spines.
-    assert.isAtLeast(books.length, 16)
+    assert.isAtLeast(spines.length, 16)
     // On two shelves: some on the floor of the case, some on the board.
-    assert.strictEqual(new Set(Arr.map(books, w => w.base)).size, 2)
+    assert.strictEqual(new Set(Arr.map(spines, w => w.base)).size, 2)
     // Uneven, with a few gold spines and one lying flat.
-    assert.isAtLeast(new Set(Arr.map(books, w => w.rise)).size, 8)
-    assert.isAtLeast(Arr.filter(books, w => w.gold === 1).length, 4)
-    assert.strictEqual(Arr.filter(books, w => w.rise < 0.15).length, 1)
+    assert.isAtLeast(new Set(Arr.map(spines, w => w.rise)).size, 8)
+    assert.isAtLeast(Arr.filter(spines, w => w.gold === 1).length, 4)
+    assert.strictEqual(Arr.filter(spines, w => w.rise < 0.15).length, 1)
+  })
+
+  it('gives every book depth: two covers running back from its spine', () => {
+    assert.strictEqual(covers.length, spines.length * 2)
+    assert.strictEqual(books.length, spines.length * 3)
+    assert.isTrue(Arr.every(covers, w => distance(w.from, w.to) > 2))
   })
 
   it('keeps every book on its shelf, under the board above', () => {

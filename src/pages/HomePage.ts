@@ -18,7 +18,7 @@ import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import { House } from '../house/components/House.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
-import { PostList } from '../blog/components/PostList.ts'
+import { PostList } from '../blog/components/Register.ts'
 import { BLOG_OPEN, POSTS } from '../blog/posts.ts'
 import { SiteRoute, blogRoute, href, restRoute } from '../routes.ts'
 import { base } from '../styles/base.ts'
@@ -217,7 +217,7 @@ const Hero = <M>(
         .children(thesis),
       sx(h.p, styles.welcome).children(WELCOME),
     ),
-    House(h, still, playedWithTeddy),
+    House(h, still, playedWithTeddy, BLOG_OPEN),
   )
 
 // The newest posts, first on the page.
@@ -236,7 +236,7 @@ const OpenSource = <M>(h: Html.H<M>) =>
     Callout(h, 3, 'OPEN SOURCE'),
     sx(h.div, styles.two).children(
       sx(h.p, sheet.prose).children(
-        "I love working on open source. If a tool I'm using has a bug or is missing something, I'd rather jump in and open a PR than hack around it.",
+        'I love working on open source, and I’m grateful to everyone who’s spent their time building the foundations the rest of us build on.',
       ),
       sx(h.ul, styles.projects).children(
         ...Arr.map(OPEN_SOURCE, project =>
@@ -258,12 +258,12 @@ const Outside = <M>(h: Html.H<M>) =>
   Section(h, 'outside').children(
     Callout(h, 4, PERSONAL_LIFE),
     sx(h.p, sheet.prose).children(
-      "I've always played games, and for a few years I ",
+      'I’ve always played games, and for a few years I ',
       sx(h.a, base.link).attr('href', href(restRoute)).children('played them professionally'),
       ': Arena of Valor with Allegiance, then Wild Rift with Sentinels, and made it to worlds three times. These days I mostly build them, sometimes with my family.',
     ),
     sx(h.p, sheet.prose).children(
-      "When I'm not at a keyboard, I'm usually hanging out with my wife Demi, our dog Teddy and our cat Rain.",
+      'When I’m not at a keyboard, I’m usually hanging out with my wife Demi, our dog Teddy and our cat Rain.',
     ),
   )
 

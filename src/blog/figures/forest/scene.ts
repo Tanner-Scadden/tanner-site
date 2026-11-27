@@ -1,20 +1,17 @@
 // NOTE: the grove as a blog animation, drawn by the kit in
 // src/blog/animation.
 
-import { makeAnimation } from '../blog/animation/Animation.ts'
 import { Array as Arr, Option } from 'effect'
 
-import { type Interaction, type Scene, rememberLast } from '../blog/animation/scene.ts'
+import { makeAnimation } from '../../animation/Animation.ts'
+import { worldOfAim } from '../../animation/kit.ts'
+import { type Interaction, type Scene, rememberLast } from '../../animation/scene.ts'
 import { MAX_PLANTS, PLANT_SETTLE, buildTimeline, frameAt, plantedIn } from './grove.ts'
 import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
 
-// Where across the ground an aim lands. The canvas is always 16:9, so any
-// size of it will do.
-const AIM_SIZE = { width: 1600, height: 900 } as const
-const groundXOf = ([u]: readonly [number, number]): number => {
-  const { scale, px } = projection(AIM_SIZE.width, AIM_SIZE.height)
-  return (u * AIM_SIZE.width - px([0, 0])[0]) / scale
-}
+// Where across the ground an aim lands.
+const worldOf = worldOfAim(projection)
+const groundXOf = (aim: readonly [number, number]): number => worldOf(aim)[0]
 
 export const forestScene: Scene = {
   variants: [

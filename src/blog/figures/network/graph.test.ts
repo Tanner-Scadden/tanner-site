@@ -6,13 +6,13 @@ import {
   MAX_EDGES,
   MAX_NODES,
   MAX_TEARS,
-  RIPPLE,
   TEAR_SETTLE,
   buildTimeline,
   distancesFrom,
   frameAt,
   positionAt,
   tearsOf,
+  tornAt,
 } from './graph.ts'
 import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
 
@@ -181,7 +181,7 @@ describe('network frames', () => {
     const frame = frameAt(timeline, timeline.end)
     const plain = shapesOf(frame, 800, 450)
     const you = frame.dots[0]!
-    const [x, y] = projection(800, 450)([you.x, you.y])
+    const [x, y] = projection(800, 450).px([you.x, you.y])
     const picked = shapesOf(frame, 800, 450, Option.some([x + 3, y]))
     assert.strictEqual(picked.dots.length, plain.dots.length + 1)
     assert.isTrue(Arr.some(picked.lines, line => line.width > 2))
@@ -202,7 +202,6 @@ describe('network bad interactions', () => {
   const timeline = buildTimeline(3)
   const none = Option.none<readonly [number, number]>()
   const at = (time: number) => ({ time, aim: none })
-  const tornTime = (tear: { readonly start: number }) => tear.start + RIPPLE
   const helped = new Set(Arr.map(timeline.helps, help => help.person))
   const yourLinkTo = (frame: ReturnType<typeof frameAt>, person: number) =>
     Arr.some(frame.edges, edge => (edge.a === 0 && edge.b === person) || (edge.b === 0 && edge.a === person))
@@ -210,16 +209,16 @@ describe('network bad interactions', () => {
   it('tears your link to someone you helped, and dims their branch', () => {
     const [tear] = tearsOf(timeline, [at(12)])
     assert.isTrue(helped.has(tear!.person))
-    const before = frameAt(timeline, tornTime(tear!) - 0.01, [tear!])
+    const before = frameAt(timeline, tornAt(tear!) - 0.01, [tear!])
     assert.isTrue(yourLinkTo(before, tear!.person))
     assert.strictEqual(before.ripples.length, 1)
-    const after = frameAt(timeline, tornTime(tear!) + TEAR_SETTLE, [tear!])
+    const after = frameAt(timeline, tornAt(tear!) + TEAR_SETTLE, [tear!])
     assert.isFalse(yourLinkTo(after, tear!.person))
     assert.strictEqual(after.dots[tear!.person]!.cut, 1)
     // Only their branch dims.
     for (const dot of after.dots) assert.strictEqual(dot.cut > 0, tear!.branch.includes(dot.id), `person ${dot.id}`)
     // And it pulls away from you.
-    const plain = frameAt(timeline, tornTime(tear!) + TEAR_SETTLE)
+    const plain = frameAt(timeline, tornAt(tear!) + TEAR_SETTLE)
     const d = (frame: typeof plain) => Math.hypot(frame.dots[tear!.person]!.x, frame.dots[tear!.person]!.y)
     assert.isAbove(d(after), d(plain))
   })

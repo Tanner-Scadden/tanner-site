@@ -14,10 +14,11 @@ import { POSTS, isDraft, sheetOf } from '../posts.ts'
 import type { Part, Snippet } from '../search/snippet.ts'
 
 // NOTE: the drawing register: a row per post, with its sheet number, date,
-// title and summary. The blog index lists every post, with a search over
-// them (see BlogIndex.ts); the home page lists the newest few. A search
-// result adds the part of the post that matched, with the matched words in
-// gold.
+// title and summary, and the search chrome over it: the box, the count and
+// the no-match note. The blog index lists every post, with a search over
+// them (see BlogIndex.ts); the home page lists the newest few (`PostList`).
+// A search result adds the part of the post that matched, with the matched
+// words in gold.
 
 export interface Row {
   readonly post: Post
@@ -39,7 +40,10 @@ export const Register = <M>(h: Html.H<M>, rows: ReadonlyArray<Row>) =>
             sx(h.span, styles.no).children(sheetOf(post)),
             sx(h.span, styles.text).children(
               sx(h.time, styles.date).attr('datetime', post.date).children(formatDate(post.date)),
-              sx(h.strong, styles.title).children(post.title, isDraft(post) && sx(h.em, styles.draft).children(' · DRAFT')),
+              sx(h.strong, styles.title).children(
+                post.title,
+                isDraft(post) && sx(h.em, styles.draft).children(' · DRAFT'),
+              ),
               sx(h.span, styles.summary).children(
                 ...Option.match(summary, { onNone: () => [post.summary], onSome: s => Marked(h, s.parts) }),
               ),
@@ -112,7 +116,14 @@ const styles = stylex.create({
     paddingBlock: 1,
     paddingInline: 6,
   },
-  count: { minHeight: 16, marginTop: -12, marginBottom: 6, fontSize: 10.5, letterSpacing: '.16em', color: blueprint.dim },
+  count: {
+    minHeight: 16,
+    marginTop: -12,
+    marginBottom: 6,
+    fontSize: 10.5,
+    letterSpacing: '.16em',
+    color: blueprint.dim,
+  },
   searchInput: {
     flexGrow: 1,
     minWidth: 0,

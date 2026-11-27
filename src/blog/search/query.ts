@@ -11,13 +11,15 @@ import { tokenize } from './tokenize.ts'
 //   vouc               the last word while typing is a prefix: vouch, vouching
 //
 // Words are folded like the text, so case, accents and curly apostrophes
-// don't matter. A word with punctuation inside, like "e-mail", is a phrase
-// of its parts. An unclosed quote runs to the end, so a phrase being typed
-// still searches.
+// don't matter, and curly double quotes (“safety net”, as a phone types
+// them) quote a phrase like straight ones. A word with punctuation inside,
+// like "e-mail", is a phrase of its parts. An unclosed quote runs to the end,
+// and while it's still being typed its last word is a prefix too, so
+// "safety ne already finds "safety net".
 
 export type Atom =
   | { readonly _tag: 'Word'; readonly word: string; readonly prefix: boolean }
-  | { readonly _tag: 'Phrase'; readonly words: ReadonlyArray<string> }
+  | { readonly _tag: 'Phrase'; readonly words: ReadonlyArray<string>; readonly prefix: boolean }
 
 export interface Query {
   // Every clause must match. A clause matches when any of its atoms does.
@@ -26,11 +28,10 @@ export interface Query {
   readonly excluded: ReadonlyArray<Atom>
 }
 
-export const emptyQuery: Query = { clauses: [], excluded: [] }
-
 export const isEmpty = (query: Query): boolean => query.clauses.length === 0 && query.excluded.length === 0
 
-const PIECES = /(-?)"([^"]*)"?|(\S+)/g
+// A quoted phrase, with its minus and closing quote if any, or a bare word.
+const PIECES = /(-?)["“”]([^"“”]*)(["“”]?)|(\S+)/g
 
 // The folded words of some text, as an atom: a word, a phrase, or nothing.
 const atomOf = (text: string, prefix: boolean): Option.Option<Atom> => {
@@ -39,7 +40,7 @@ const atomOf = (text: string, prefix: boolean): Option.Option<Atom> => {
     ? Option.none()
     : words.length === 1
       ? Option.some({ _tag: 'Word', word: words[0] as string, prefix })
-      : Option.some({ _tag: 'Phrase', words })
+      : Option.some({ _tag: 'Phrase', words, prefix })
 }
 
 export const parse = (input: string): Query => {
@@ -50,15 +51,18 @@ export const parse = (input: string): Query => {
   let joinNext = false
   const pieces = Array.from(Str.matchAll(PIECES)(input))
   Arr.forEach(pieces, (piece, i) => {
-    const [, minus, quoted, bareWord] = piece
+    const [, minus, quoted, close, bareWord] = piece
     const last = i === pieces.length - 1
     if (bareWord === 'OR') {
       joinNext = clauses.length > 0
       return
     }
-    const negated = quoted !== undefined ? minus === '-' : Str.startsWith('-')(bareWord ?? '') && (bareWord ?? '').length > 1
-    const text = quoted ?? (negated ? Str.slice(1)(bareWord ?? '') : (bareWord ?? ''))
-    const atom = atomOf(text, quoted === undefined && last && typing && !negated)
+    const bareText = bareWord ?? ''
+    const negated = quoted !== undefined ? minus === '-' : Str.startsWith('-')(bareText) && bareText.length > 1
+    const text = quoted ?? (negated ? Str.slice(1)(bareText) : bareText)
+    // A closed quote is done; an open one, or a bare word, may still be typed.
+    const open = quoted === undefined || close === ''
+    const atom = atomOf(text, open && last && typing && !negated)
     Option.map(atom, a => {
       if (negated) excluded.push(a)
       else if (joinNext && clauses.length > 0) (clauses[clauses.length - 1] as Array<Atom>).push(a)

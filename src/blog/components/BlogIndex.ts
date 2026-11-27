@@ -1,18 +1,20 @@
 import { Component, UiSchema } from '@effect/ui'
 import { Html, HtmlCommand, HtmlSubscription } from '@effect/ui/html'
-import { Array as Arr, Option, Result, Schema, String as Str } from 'effect'
+import { Array as Arr, Option, Result, Schema } from 'effect'
 import { AsyncResult } from 'effect/reactivity'
 
 import { POSTS } from '../posts.ts'
 import type { Found } from '../search/schema.ts'
 import { SearchPosts, SearchPostsLive } from '../search/SearchPosts.ts'
-import { AllPosts, NoMatch, Register, ResultCount, type Row, SearchBar } from './PostList.ts'
+import { AllPosts, NoMatch, Register, ResultCount, type Row, SearchBar } from './Register.ts'
 
 // NOTE: /blog's register, with a full-text search over every post (see
 // src/blog/search/). An empty search shows every post, newest first; a
 // search shows what it found, best first, with the matching part of each.
 // `/` jumps to the search box. The page loads this module on its own (see
 // BlogPage.ts), so the search and its query code stay off every other page.
+// Until a search has answered, or if it fails, every post shows, so the
+// register is never blank.
 
 const SearchInput = Html.ref('BlogIndex.search', 'input')
 
@@ -30,14 +32,18 @@ const rowsOf = (found: ReadonlyArray<Found>): ReadonlyArray<Row> =>
     ),
   )
 
-export const BlogIndexNoDeps = Html.component({
+// A search is only a search with a letter or digit in it: a query of just
+// punctuation or spaces finds no words, so it shows every post.
+const searchable = (query: string): boolean => /[\p{L}\p{N}]/u.test(query)
+
+const BlogIndexNoDeps = Html.component({
   name: 'BlogIndex',
   model: Schema.Struct({ query: Schema.String }),
   message: Message,
   queries: {
     found: {
       query: SearchPosts,
-      args: ({ model }) => (Str.trim(model.query) === '' ? undefined : { query: model.query }),
+      args: ({ model }) => (searchable(model.query) ? { query: model.query } : undefined),
     },
   },
 }).make({
@@ -48,7 +54,7 @@ export const BlogIndexNoDeps = Html.component({
   },
   subscriptions: () => [HtmlSubscription.shortcuts([{ key: '/', message: Message.PressedSlash() }])],
   view: (h, model) => {
-    const searching = Str.trim(model.query) !== ''
+    const searching = searchable(model.query)
     // While a search runs, the last results stay up.
     const rows = Option.map(
       AsyncResult.match(h.queries.found, {
@@ -66,7 +72,7 @@ export const BlogIndexNoDeps = Html.component({
       !searching
         ? AllPosts(h)
         : Option.match(rows, {
-            onNone: () => null,
+            onNone: () => AllPosts(h),
             onSome: list => (list.length === 0 ? NoMatch(h) : Register(h, list)),
           }),
     )

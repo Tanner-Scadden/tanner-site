@@ -15,15 +15,11 @@
 // Nothing here knows about the rest of the grove. `grove.ts` says where the
 // ground is and which trees reach for which.
 
-import { Array as Arr, Number as Num } from 'effect'
+import { Array as Arr } from 'effect'
+
+import { clamp01, random, smooth } from '../../animation/kit.ts'
 
 type Point = readonly [number, number]
-
-const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
-const smooth = (t: number): number => {
-  const u = clamp01(t)
-  return u * u * (3 - 2 * u)
-}
 
 // ---------------------------------------------------------------------------
 // A tree's own roots
@@ -124,7 +120,14 @@ export const rootSystemOf = (next: () => number, spec: RootSpec): RootSystem => 
     let turn = (next() - 0.5) * 0.3
     const forks: Array<{ at: number; side: number }> = []
     if (root.order < ORDERS) {
-      const n = root.order === 0 ? 2 + Math.floor(next() * 2) : root.order === 1 ? 1 + Math.floor(next() * 2) : next() < 0.5 ? 1 : 0
+      const n =
+        root.order === 0
+          ? 2 + Math.floor(next() * 2)
+          : root.order === 1
+            ? 1 + Math.floor(next() * 2)
+            : next() < 0.5
+              ? 1
+              : 0
       let side = next() < 0.5 ? -1 : 1
       for (let k = 0; k < n; k++) {
         forks.push({ at: 0.18 + (0.7 * (k + next())) / n, side })
@@ -233,19 +236,8 @@ export const REACH_RATE = 0.11
 const BOND = 2.5
 const GOLD_SPREAD = 0.05
 
-// The same small seeded generator as the grove's, so a pair's roots wander
-// the same way every frame without being stored.
-const random = (seed: number) => {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
+// A pair's roots wander from their own seed, so they wander the same way
+// every frame without being stored.
 // A smooth wander that starts and ends at 0: a random walk of turns, with
 // its drift taken out so it lands where it should (a Brownian bridge).
 const bridgeOf = (next: () => number, n: number): ReadonlyArray<number> => {
@@ -290,12 +282,14 @@ export const reachLengthOf = (distance: number): number => distance + OVERLAP
 
 // How strong a tie is that's held this long: it shows over BOND seconds,
 // then keeps strengthening, more slowly, for as long as it holds.
-export const bondOf = (held: number): number => (held <= 0 ? 0 : clamp01(0.75 * smooth(held / BOND) + 0.25 * (1 - Math.exp(-held / 8))))
+export const bondOf = (held: number): number =>
+  held <= 0 ? 0 : clamp01(0.75 * smooth(held / BOND) + 0.25 * (1 - Math.exp(-held / 8)))
 
 export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
   if (reach.length <= 0) return []
   const { x, ground, dir, distance: half } = reach
-  // How deep this pair meets, shared by both.
+  // How deep this pair meets, shared by both. Drawn from the pair's seed,
+  // so its roots wander the same way every frame without being stored.
   const shared = random(reach.seed)
   const meet = MEET.min + shared() * MEET.spread
   // How many times they wrap around each other, and where they start.
@@ -351,7 +345,11 @@ export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
     // all the way: it's the tie that's gold, not the trees.
     const away = Math.abs(half - along)
     const reachBack = Math.min(0.05 + reach.held * GOLD_SPREAD, Math.max(half * 0.75, OVERLAP))
-    return bondOf(reach.held) * smooth((reachBack - away) / Math.min(0.08, reachBack)) * (1 - 0.45 * Math.min(1, away / Math.max(half, OVERLAP)))
+    return (
+      bondOf(reach.held) *
+      smooth((reachBack - away) / Math.min(0.08, reachBack)) *
+      (1 - 0.45 * Math.min(1, away / Math.max(half, OVERLAP)))
+    )
   }
   const width = 0.0062
   const taper = (along: number) => width * (1 - 0.45 * Math.min(1, along / (half + OVERLAP)))

@@ -24,6 +24,7 @@
 
 import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
+import { clamp01, random } from '../../animation/kit.ts'
 import { REACH_RATE, type RootSystem, drawReach, drawRoots, reachLengthOf, rootSystemOf } from './roots.ts'
 
 // The world is a box this wide and tall around the middle of the canvas,
@@ -69,33 +70,20 @@ const LATE_FLIGHTS = [1.4, 1.5, 2.4, 2.4] as const
 const SAPLING_GROW = 3.2
 // How long a leaf takes to open, a blossom to brighten before its seed
 // lets go, and a landing ring to spread.
-export const LEAF_OPEN = 0.4
-export const BLOSSOM = 0.8
-export const RING = 1.2
+const LEAF_OPEN = 0.4
+const BLOSSOM = 0.8
+const RING = 1.2
 // When everything that's going to happen in a run has happened.
-export const END = 15
+const END = 15
 // A planted seed: how long it drifts down, and how long its tree takes to
 // grow. Seconds until a planting has played out.
 const PLANT_FLIGHT = 1.8
 const PLANT_GROW = 3
 export const PLANT_SETTLE = PLANT_FLIGHT + REST + PLANT_GROW
 
-// Mulberry32: a small seeded generator, so a run replays from its seed.
-const random = (seed: number) => {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
 type Point = readonly [number, number]
 
-export const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
-export const easeInOut = (t: number): number => (1 - Math.cos(Math.PI * clamp01(t))) / 2
+const easeInOut = (t: number): number => (1 - Math.cos(Math.PI * clamp01(t))) / 2
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 // ---------------------------------------------------------------------------
@@ -677,7 +665,8 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     const reachOf = (t: Tree) => {
       const distance = Math.abs(meetX - t.x)
       const raw = Num.clamp((time - reachingFrom(t)) * REACH_RATE, { minimum: 0, maximum: reachLengthOf(distance) })
-      return { x: t.x, dir: Math.sign(meetX - t.x) || 1, distance, raw, arrives: reachingFrom(t) + distance / REACH_RATE }
+      const arrives = reachingFrom(t) + distance / REACH_RATE
+      return { x: t.x, dir: Math.sign(meetX - t.x) || 1, distance, raw, arrives }
     }
     const mine = reachOf(tree)
     const theirs = reachOf(them)

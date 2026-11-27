@@ -3,12 +3,11 @@
 // interactions a reader has added to it, as plain data: each change is a
 // function from one clock to the next.
 
-import { Array as Arr, Number as Num, Option, Order } from 'effect'
+import { Array as Arr, Option, Order } from 'effect'
 
 import { type Controls, FADE, HOLD } from './controls.ts'
+import { clamp01 } from './kit.ts'
 import type { Interaction, Point, Run, Scene } from './scene.ts'
-
-export const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
 
 export interface Clock {
   readonly seed: number
@@ -26,10 +25,14 @@ export interface Clock {
 
 const byTime = Order.mapInput(Order.Number, (interaction: Interaction) => interaction.time)
 
-// The clock once the reader interacts now, aimed or not.
+// Whether a run with this many interactions takes no more. The figure
+// disables INTERACT then, and a press past it changes nothing.
+export const isFull = (scene: Scene, count: number): boolean => count >= (scene.interact?.max ?? 0)
+
+// The clock once the reader interacts now, aimed or not. A full run gives
+// back the same clock.
 export const interact = (scene: Scene, clock: Clock, aim: Option.Option<Point>): Clock => {
-  const max = scene.interact?.max ?? 0
-  if (clock.interactions.length >= max) return clock
+  if (isFull(scene, clock.interactions.length)) return clock
   const settle = scene.interact?.settle ?? 0
   // Past the end, it goes in at the end, and the hold waits for it.
   const time = Math.min(clock.time, clock.run.end)

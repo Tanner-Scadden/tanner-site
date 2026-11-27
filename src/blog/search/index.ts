@@ -1,6 +1,7 @@
-import { Array as Arr, MutableHashMap, Option } from 'effect'
+import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
 
+import type { Doc as DocSchema } from './schema.ts'
 import { type Token, bare, tokenize } from './tokenize.ts'
 
 // NOTE: the inverted index: each term to its postings, which say where it
@@ -9,19 +10,15 @@ import { type Token, bare, tokenize } from './tokenize.ts'
 // the vocabulary of surface words, each pointing at the terms it was
 // indexed under, so "vouc" finds "vouching" and "sentinals" finds
 // "sentinels" before either is stemmed.
+//
+// The maps and sets here are native: building touches them once per word of
+// every post, and a search once per posting, so they're the hot path.
 
-export const FIELDS = ['title', 'summary', 'body'] as const
-export type FieldName = (typeof FIELDS)[number]
 export type FieldId = 0 | 1 | 2
 
-export interface Doc {
-  readonly id: string
-  // YYYY-MM-DD. Ties in score go to the newest.
-  readonly date: string
-  readonly title: string
-  readonly summary: string
-  readonly body: string
-}
+// A post as the index takes it. `date` is YYYY-MM-DD: ties in score go to
+// the newest.
+export type Doc = typeof DocSchema.Type
 
 export interface Field {
   readonly text: string
@@ -43,9 +40,9 @@ export interface Posting {
 
 export interface SearchIndex {
   readonly docs: ReadonlyArray<IndexedDoc>
-  readonly postings: MutableHashMap.MutableHashMap<string, ReadonlyArray<Posting>>
+  readonly postings: ReadonlyMap<string, ReadonlyArray<Posting>>
   // How many docs each term appears in, in any field.
-  readonly docCount: MutableHashMap.MutableHashMap<string, number>
+  readonly docCount: ReadonlyMap<string, number>
   // Each surface word, apostrophes dropped, and the terms it gives.
   readonly vocabulary: ReadonlyArray<readonly [string, ReadonlyArray<string>]>
   // The mean length of each field, in tokens.
@@ -53,8 +50,8 @@ export interface SearchIndex {
 }
 
 export const build = (docs: ReadonlyArray<Doc>): SearchIndex => {
-  const postings = MutableHashMap.empty<string, Array<Posting>>()
-  const docCount = MutableHashMap.empty<string, number>()
+  const postings = new Map<string, Array<Posting>>()
+  const docCount = new Map<string, number>()
   const surfaces = new Map<string, Set<string>>()
   const totals = [0, 0, 0]
 
@@ -76,18 +73,13 @@ export const build = (docs: ReadonlyArray<Doc>): SearchIndex => {
       }
       positions.forEach((at, term) => {
         const posting: Posting = { doc: d, field: f as FieldId, positions: at }
-        Option.match(MutableHashMap.get(postings, term), {
-          onNone: () => MutableHashMap.set(postings, term, [posting]),
-          onSome: list => {
-            list.push(posting)
-          },
-        })
+        const list = postings.get(term)
+        if (list === undefined) postings.set(term, [posting])
+        else list.push(posting)
         seen.add(term)
       })
     })
-    seen.forEach(term =>
-      MutableHashMap.set(docCount, term, Option.getOrElse(MutableHashMap.get(docCount, term), () => 0) + 1),
-    )
+    seen.forEach(term => docCount.set(term, (docCount.get(term) ?? 0) + 1))
     return { id: doc.id, date: doc.date, fields }
   })
 
@@ -104,5 +96,4 @@ export const build = (docs: ReadonlyArray<Doc>): SearchIndex => {
 export const postingsOf: {
   (term: string): (index: SearchIndex) => ReadonlyArray<Posting>
   (index: SearchIndex, term: string): ReadonlyArray<Posting>
-} = dual(2, (index: SearchIndex, term: string): ReadonlyArray<Posting> =>
-  Option.getOrElse(MutableHashMap.get(index.postings, term), () => []))
+} = dual(2, (index: SearchIndex, term: string): ReadonlyArray<Posting> => index.postings.get(term) ?? [])

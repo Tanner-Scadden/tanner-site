@@ -37,8 +37,6 @@ export const fonts = stylex.defineConsts({
   pixel: 'Silkscreen, monospace',
   terminal: 'VT323, monospace',
   sans: 'Inter, system-ui, sans-serif',
-  // A post's body.
-  reading: 'Archivo, system-ui, sans-serif',
 })
 
 // Archivo's widths: the display type is set wide.
@@ -50,14 +48,14 @@ export const widths = stylex.defineConsts({
   widest: '125%',
 })
 
-// A blog post's body: a deeper panel of the blueprint, with brighter ink,
-// and its code listings. Printing turns it into black on white too.
+// What a blog post draws on the sheet beyond its prose: inline code's tint,
+// the code listings (their paper, brighter ink, rules, grid and the copy
+// button's states), and an animation's alarm red. Printing turns the
+// listings into black on white too.
 export const post = stylex.defineVars({
-  paper: { default: '#0b3166', '@media print': 'transparent' },
   ink: { default: '#e9f1ff', '@media print': '#111' },
   inkDim: { default: 'rgba(220, 235, 255, 0.72)', '@media print': '#555' },
   rule: { default: 'rgba(200, 222, 255, 0.22)', '@media print': '#ccc' },
-  bright: { default: '#fff', '@media print': '#111' },
   tint: 'rgba(200, 222, 255, 0.1)',
   codePaper: { default: '#072553', '@media print': 'transparent' },
   codeGrid: { default: 'rgba(200, 222, 255, 0.06)', '@media print': 'transparent' },

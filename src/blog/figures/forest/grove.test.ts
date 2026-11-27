@@ -1,7 +1,7 @@
 import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Option } from 'effect'
 
-import { FADE, HOLD } from '../blog/animation/controls.ts'
+import { FADE, HOLD } from '../../animation/controls.ts'
 import {
   BOUNDS,
   GROUND,
@@ -339,7 +339,9 @@ describe('grove plantings', () => {
         for (const tree of before.trees) {
           const after = Arr.findFirst(now.trees, other => other.id === tree.id)
           if (Option.isNone(after) || after.value.grown < tree.grown) misses.push(`tree ${tree.id} at ${t}`)
-          if (branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id)) misses.push(`branches ${tree.id} at ${t}`)
+          if (branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id)) {
+            misses.push(`branches ${tree.id} at ${t}`)
+          }
         }
         const shapes = shapesOf(now, 800, 450, Option.some([400, 270]))
         if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)

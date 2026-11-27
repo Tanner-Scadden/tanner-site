@@ -21,7 +21,8 @@
 
 import { Array as Arr, Number as Num, Option } from 'effect'
 
-import { FADE, HOLD } from '../blog/animation/controls.ts'
+import { FADE, HOLD } from '../../animation/controls.ts'
+import { clamp01, random } from '../../animation/kit.ts'
 
 export interface GraphNode {
   // When they appear, once the link that brings them in reaches them.
@@ -64,13 +65,13 @@ export const MAX_EDGES = 150
 
 // How long a link takes to draw, and a person to appear once it reaches
 // them.
-export const GROW = 0.5
+const GROW = 0.5
 const POP = 0.35
 // When you help the first person, and how long until the next.
 const FIRST_HELP = 0.8
 const HELP_GAP = 1.3
 // How long a circle stays lit after you help the person at its middle.
-export const PULSE = 1.8
+const PULSE = 1.8
 // The network grows on its own from GROWTH_START until GROWTH_END.
 const GROWTH_START = 2.4
 const GROWTH_END = 17.8
@@ -84,23 +85,10 @@ const TAIL = 0.8
 const KEY = 1 / 20
 const STEPS = 2
 
-// Mulberry32: a small seeded generator, so a run replays from its seed.
-const random = (seed: number) => {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
 const keyOf = (a: number, b: number) => (a < b ? `${a}:${b}` : `${b}:${a}`)
 
 // How many links each person is from you, over these links, by
-// breadth-first search. `prev` is who they're reached through, so the
-// shortest way back to you can be read off it. -1 is out of reach.
+// breadth-first search. -1 is out of reach.
 export const distancesFrom = (count: number, links: ReadonlyArray<GraphEdge>) => {
   const around: Array<Array<number>> = Arr.makeBy(count, () => [])
   for (const { a, b } of links) {
@@ -108,7 +96,6 @@ export const distancesFrom = (count: number, links: ReadonlyArray<GraphEdge>) =>
     around[b]!.push(a)
   }
   const distance = new Int32Array(count).fill(-1)
-  const prev = new Int32Array(count).fill(-1)
   distance[0] = 0
   const queue = [0]
   for (let head = 0; head < queue.length; head++) {
@@ -116,11 +103,10 @@ export const distancesFrom = (count: number, links: ReadonlyArray<GraphEdge>) =>
     for (const j of around[i]!) {
       if (distance[j] !== -1) continue
       distance[j] = distance[i]! + 1
-      prev[j] = i
       queue.push(j)
     }
   }
-  return { distance, prev }
+  return { distance }
 }
 
 // ---------------------------------------------------------------------------
@@ -391,7 +377,7 @@ const simulate = (
       forces.fx.fill(0)
       forces.fy.fill(0)
       repel(forces, active, LIVE)
-      pull(forces, links, edge => LIVE * Num.clamp((t - edge.born) / GROW, { minimum: 0, maximum: 1 }))
+      pull(forces, links, edge => LIVE * clamp01((t - edge.born) / GROW))
       for (const i of active) {
         forces.fx[i]! += (home.x[i]! - forces.x[i]!) * ANCHOR
         forces.fy[i]! += (home.y[i]! - forces.y[i]!) * ANCHOR
@@ -492,7 +478,6 @@ export interface Frame {
 }
 
 const ease = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
-const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
 const lerp = (a: readonly [number, number], b: readonly [number, number], t: number): readonly [number, number] => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
@@ -525,7 +510,8 @@ const DRIFT = 1.4
 const PULL = 0.1
 // Seconds until a tear has played out.
 export const TEAR_SETTLE = RIPPLE + DRIFT
-// The most bad interactions a run takes: one per person you could help.
+// The most bad interactions a run takes: one per person you could help,
+// and one more with nobody left.
 export const MAX_TEARS = 8
 
 export const tornAt = (tear: Tear): number => tear.start + RIPPLE

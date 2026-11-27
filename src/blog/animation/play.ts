@@ -17,12 +17,15 @@
 // hold waits until it's played out, and under reduced motion it goes in
 // `interact.settle` before the still frame. Restart, a new variant or the
 // next seed clears them. Clicking the drawing does the same, aimed there.
+// Once the run has `interact.max` of them, a press or a click changes
+// nothing, and the figure hears how many there are so it can say so.
 
 import { Effect, Latch, Option, Ref, Stream, String as Str } from 'effect'
 
 import { nextFrame } from '../../blueprint/webgpu/renderer.ts'
-import { type Clock, clamp01, follow, interact, opacityAt, startClock, tick } from './clock.ts'
+import { type Clock, follow, interact, opacityAt, startClock, tick } from './clock.ts'
 import { type Controls, type Report, SLIDER_STEPS } from './controls.ts'
+import { clamp01 } from './kit.ts'
 import type { Point, Scene } from './scene.ts'
 import { painterFor } from './webgpu/painters.ts'
 
@@ -77,7 +80,7 @@ const wakeOnResize = (canvas: HTMLCanvasElement, wake: Latch.Latch) =>
   )
 
 // Clicking the drawing interacts, aimed where it was clicked, and tells the
-// figure so it plays on.
+// figure so it plays on. A click on a full run changes nothing.
 const aimOnClick = (
   scene: Scene,
   canvas: HTMLCanvasElement,
@@ -93,7 +96,11 @@ const aimOnClick = (
           clamp01(event.offsetX / Math.max(1, rect.width)),
           clamp01(event.offsetY / Math.max(1, rect.height)),
         ]
-        yield* Ref.update(clock, now => interact(scene, now, Option.some(aim)))
+        const grew = yield* Ref.modify(clock, now => {
+          const next = interact(scene, now, Option.some(aim))
+          return [next.interactions.length > now.interactions.length, next]
+        })
+        if (!grew) return
         yield* Latch.open(wake)
         yield* report({ _tag: 'Aimed' })
       }),
@@ -123,7 +130,7 @@ export const playScene = (
   Effect.gen(function* () {
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const painter = yield* painterFor(canvas, scene.maxLines, scene.maxDots)
-    yield* report({ _tag: 'Started', renderer: painter.renderer, still })
+    yield* report({ _tag: 'Started', drawable: true, still })
 
     const figure = canvas.closest('figure')
     const slider = Option.fromNullishOr(figure?.querySelector<HTMLInputElement>('input[type="range"]'))
@@ -157,6 +164,7 @@ export const playScene = (
 
     const visible = yield* onScreen(canvas)
     let last = yield* nextFrame
+    let counted = 0
     while (true) {
       yield* visible.await
       yield* Latch.close(wake)
@@ -167,6 +175,10 @@ export const playScene = (
       const now = yield* Ref.updateAndGet(clock, c => (c.playing ? tick(scene, c, seconds) : c))
       const at = yield* Ref.get(pointer)
       draw(now, at)
+      if (now.interactions.length !== counted) {
+        counted = now.interactions.length
+        yield* report({ _tag: 'Counted', interactions: counted })
+      }
       if (!now.playing) yield* wake.await
     }
   })

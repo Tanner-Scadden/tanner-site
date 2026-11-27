@@ -20,14 +20,15 @@
 
 import { Array as Arr, Option } from 'effect'
 
-import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
+import { GOLD, LINE, type Projection, RED, type Rgb, WARM, mix, rgba } from '../../animation/kit.ts'
+import type { Dot, Line, Point, Rgba, Shapes } from '../../animation/scene.ts'
 import {
   BOUNDS,
   BUCKET,
   FLOOR,
   type Frame,
   INNER_BASE,
-  MAX_FLARES,
+  MAX_KICKS,
   PEOPLE,
   RIPPLE_FOR,
   SPRAY,
@@ -37,14 +38,6 @@ import {
   posed,
   surfaceAt,
 } from './bucket.ts'
-
-type Rgb = readonly [number, number, number]
-
-// The sheet's line colour, its gold, a warm white, and the post's red.
-const LINE: Rgb = [0.86, 0.92, 1]
-const GOLD: Rgb = [1, 0.82, 0.4]
-const WARM: Rgb = [1, 0.94, 0.8]
-const ALARM: Rgb = [1, 0.42, 0.38]
 
 // The floor runs this far either side, hatched this often underneath.
 const FLOOR_HALF = 1.5
@@ -64,20 +57,13 @@ const MAX_DROPS = 8
 // centreline, the high-water mark, the water's body and surface, a streak
 // per drop, the neighbour links, and a puddle per kick.
 export const MAX_LINES =
-  1 + HATCHES + 6 + RIM_ARC + CENTRELINE + HIGH_WATER + 3 + BODY + SURFACE + MAX_DROPS + (PEOPLE - 1) + MAX_FLARES * 2
+  1 + HATCHES + 6 + RIM_ARC + CENTRELINE + HIGH_WATER + 3 + BODY + SURFACE + MAX_DROPS + (PEOPLE - 1) + MAX_KICKS * 2
 // Everyone, a giving ring and a kick ring each, every flash and strike
 // ring, every drop and its splash rings, every bead, and the picked ring.
-export const MAX_DOTS = PEOPLE * 3 + MAX_FLARES * 2 + MAX_DROPS * 3 + MAX_FLARES * SPRAY + 1
-
-const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], Math.min(1, Math.max(0, alpha))]
-const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
-  a[0] + (b[0] - a[0]) * t,
-  a[1] + (b[1] - a[1]) * t,
-  a[2] + (b[2] - a[2]) * t,
-]
+export const MAX_DOTS = PEOPLE * 3 + MAX_KICKS * 2 + MAX_DROPS * 3 + MAX_KICKS * SPRAY + 1
 
 // Scale and centre the world box into a canvas this big.
-export const projection = (width: number, height: number) => {
+export const projection: Projection = (width, height) => {
   const scale = Math.min(width / (BOUNDS.x * 2 + 0.2), height / (BOUNDS.y * 2 + 0.2))
   return {
     scale,
@@ -144,7 +130,7 @@ export const shapesOf = (
   // The bucket: walls, base, and a doubled lip at the rim. Tinted red
   // while it's over.
   const over = Math.min(1, frame.angle / 0.25)
-  const ink = mix(LINE, mix(LINE, ALARM, 0.55), over)
+  const ink = mix(LINE, mix(LINE, RED, 0.55), over)
   const outline = rgba(ink, 0.85 * g)
   const { base, rim, baseHalf, rimHalf } = BUCKET
   const lip = rim + 0.03
@@ -213,7 +199,7 @@ export const shapesOf = (
 
   // The high-water mark, once some of it's been lost: dashed across at the
   // most it held, and a small level triangle on the wall.
-  const lost = Math.min(1, Math.max(0, (frame.peak - frame.fill - 0.5) / 2)) * (1 - over)
+  const lost = Math.min(1, Math.max(0, (frame.peak - frame.water.amount - 0.5) / 2)) * (1 - over)
   const peakY = levelOf(frame.peak)
   const peakHalf = halfAt(peakY) + BUCKET.wall
   const highWater =
@@ -254,12 +240,12 @@ export const shapesOf = (
   const puddles = Arr.flatMap(frame.puddles, (puddle): ReadonlyArray<Line> => {
     if (Math.abs(puddle.to - puddle.from) < 0.005) return []
     return [
-      line(px([puddle.from, FLOOR - 0.008]), px([puddle.to, FLOOR - 0.008]), 3, rgba(ALARM, 0.55 + 0.3 * puddle.fresh)),
+      line(px([puddle.from, FLOOR - 0.008]), px([puddle.to, FLOOR - 0.008]), 3, rgba(RED, 0.55 + 0.3 * puddle.fresh)),
       line(
         px([puddle.from + (puddle.to - puddle.from) * 0.15, FLOOR - 0.022]),
         px([puddle.from + (puddle.to - puddle.from) * 0.7, FLOOR - 0.022]),
         1,
-        rgba(ALARM, 0.25 + 0.35 * puddle.fresh),
+        rgba(RED, 0.25 + 0.35 * puddle.fresh),
       ),
     ]
   })
@@ -272,12 +258,12 @@ export const shapesOf = (
       strike.from[0] + (strike.to[0] - strike.from[0]) * strike.reach,
       strike.from[1] + (strike.to[1] - strike.from[1]) * strike.reach,
     ]
-    return [line(px(strike.from), px(to), 2, rgba(ALARM, 0.8 * strike.strength))]
+    return [line(px(strike.from), px(to), 2, rgba(RED, 0.8 * strike.strength))]
   })
   const impacts = Arr.flatMap(frame.strikes, (strike): ReadonlyArray<Dot> => {
     if (strike.reach < 1 || strike.strength <= 0) return []
     const [x, y] = px(strike.to)
-    return [{ x, y, radius: 4 + 14 * (1 - strike.strength), glow: 0, ring: 2, color: rgba(ALARM, strike.strength) }]
+    return [{ x, y, radius: 4 + 14 * (1 - strike.strength), glow: 0, ring: 2, color: rgba(RED, strike.strength) }]
   })
 
   const flashes = Arr.map(frame.flashes, (flash): Dot => {
@@ -288,11 +274,11 @@ export const shapesOf = (
       radius: 8 + scale * (0.2 + 0.15 * flash.share) * easeOut(flash.progress),
       glow: 0,
       ring: 2.5,
-      color: rgba(ALARM, 0.9 * (1 - flash.progress) ** 1.5),
+      color: rgba(RED, 0.9 * (1 - flash.progress) ** 1.5),
     }
   })
 
-  const colourOf = (giving: number, heat: number): Rgb => mix(mix(WARM, GOLD, 0.5 + 0.5 * giving), ALARM, heat)
+  const colourOf = (giving: number, heat: number): Rgb => mix(mix(WARM, GOLD, 0.5 + 0.5 * giving), RED, heat)
   const people = Arr.map(frame.people, (person): Dot => {
     const [x, y] = px([person.x, person.y])
     return {
@@ -314,7 +300,7 @@ export const shapesOf = (
   const marked = Arr.flatMap(frame.people, (person): ReadonlyArray<Dot> => {
     if (person.heat <= 0) return []
     const [x, y] = px([person.x, person.y])
-    return [{ x, y, radius: 11, glow: 0, ring: 1.5, color: faded(rgba(ALARM, person.heat), mine(person.id)) }]
+    return [{ x, y, radius: 11, glow: 0, ring: 1.5, color: faded(rgba(RED, person.heat), mine(person.id)) }]
   })
 
   const drops = Arr.map(frame.drops, (drop): Dot => {
@@ -329,7 +315,7 @@ export const shapesOf = (
       radius: bead.flying ? bead.radius : bead.radius * 0.8,
       glow: bead.flying ? 5 : 0,
       ring: 0,
-      color: rgba(ALARM, bead.flying ? 0.95 : 0.6),
+      color: rgba(RED, bead.flying ? 0.95 : 0.6),
     }
   })
 

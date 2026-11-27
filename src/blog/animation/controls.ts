@@ -19,17 +19,23 @@ export const Controls = Schema.Struct({
 })
 export type Controls = typeof Controls.Type
 
-// What the figure learns once the drawing starts: what it draws with, or
-// `none` when the canvas can't be drawn on at all.
+// What the figure learns once the drawing starts: whether the canvas can
+// be drawn on at all, and whether it's still for reduced motion.
 export const Started = Schema.Struct({
-  renderer: Schema.Literals(['webgpu', 'canvas', 'none']),
+  drawable: Schema.Boolean,
   still: Schema.Boolean,
 })
 export type Started = typeof Started.Type
 
-// What the drawing tells the figure: that it's started, or that the reader
-// clicked the drawing to aim an interaction, so the figure plays to show it.
-export const Report = Schema.Union([Schema.TaggedStruct('Started', Started.fields), Schema.TaggedStruct('Aimed', {})])
+// What the drawing tells the figure: that it's started, that a click on
+// the drawing added an interaction, so the figure plays to show it, and
+// how many interactions the run has whenever that changes, so INTERACT
+// goes once it's full.
+export const Report = Schema.Union([
+  Schema.TaggedStruct('Started', Started.fields),
+  Schema.TaggedStruct('Aimed', {}),
+  Schema.TaggedStruct('Counted', { interactions: Schema.Finite }),
+])
 export type Report = typeof Report.Type
 
 export const SLIDER_STEPS = 1000

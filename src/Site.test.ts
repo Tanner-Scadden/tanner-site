@@ -44,6 +44,20 @@ const drainWhileUnmounting = Layer.effectDiscard(
   }),
 )
 
+// The blog search loads its in-page engine with `import()` (see
+// SearchPosts.ts), and `settle` gives a Promise only a few macrotasks to come
+// back, which Vite's module runner can take longer than. So a step that
+// waits on a search tries again, a macrotask apart, for a while.
+const macrotask = Effect.callback<void>(resume => {
+  // The test runs on TestClock, so an Effect sleep would never wake.
+  // @effect-diagnostics-next-line globalTimersInEffect:off
+  const id = setTimeout(() => resume(Effect.void), 5)
+  return Effect.sync(() => clearTimeout(id))
+})
+
+const eventually = <A, E, R>(step: Effect.Effect<A, E, R>, tries = 100): Effect.Effect<A, E, R> =>
+  tries <= 1 ? step : Effect.catchCause(step, () => Effect.andThen(macrotask, eventually(step, tries - 1)))
+
 const playLayer = (url: string) =>
   Layer.mergeAll(
     Router.memory({ routes: SiteRoute, url }),
@@ -161,7 +175,10 @@ it.layer(playLayer('/blog'), { buildPerTest: true })('Site at /blog', it => {
       yield* play.type(HtmlLocator.label('Search posts'), 'calling')
       yield* play.expect(Locator.text(firstPost.title)).toExist()
       yield* play.type(HtmlLocator.label('Search posts'), 'zzzz nothing')
-      yield* play.expect(Locator.text(BLOG.noMatch)).toExist()
+      yield* eventually(play.expect(Locator.text(BLOG.noMatch)).toExist())
+      // Punctuation alone isn't a search: every post shows.
+      yield* play.type(HtmlLocator.label('Search posts'), '!?')
+      yield* play.expect(Locator.text(firstPost.title)).toExist()
     }).pipe(Effect.scoped),
   )
 })

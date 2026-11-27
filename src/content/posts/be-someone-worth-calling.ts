@@ -1,15 +1,15 @@
 import type { Post } from '#domain/Post'
 
-import { ForestFigure } from '../../forest/scene.ts'
-import { NetworkFigure } from '../../network/scene.ts'
-import { TeamFigure } from '../../team/scene.ts'
+import { ForestFigure } from '../../blog/figures/forest/scene.ts'
+import { NetworkFigure } from '../../blog/figures/network/scene.ts'
+import { TeamFigure } from '../../blog/figures/team/scene.ts'
 
 export const beSomeoneWorthCalling: Post = {
   slug: 'be-someone-worth-calling',
   title: 'Be Someone Worth Calling',
   date: '2026-11-27',
   summary:
-    'The best turns in your career will come from people vouching for you in rooms you’re not in.',
+    'The best opportunities in life will come from people vouching for you in rooms you’re not in.',
   body: h => [
     h.p('My call to join Sentinels came after I’d thought I was done playing.'),
     h.p(
@@ -100,7 +100,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Be picky about who and what you spend your time with.'),
-      ' Surround yourself with people who have high standards and the same level of ambition. Like Arnold says in ',
+      ' Surround yourself with people who have high standards and the same level of ambition. Like Arnold Schwarzenegger says in ',
       h.a.attr('href', 'https://beusefulbook.com/').children(h.em('Be Useful')),
       ', nobody is self-made.',
     ),

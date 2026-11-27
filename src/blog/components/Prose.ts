@@ -48,7 +48,8 @@ export const Note = <M>(h: Html.H<M>, label: string, ...children: View.Children<
   )
 
 // A code listing, highlighted, with a copy button. The tab shows `file` if
-// given, else the language.
+// given, else the language. A screen reader still reads the tab, but the
+// search leaves it out (see search/text.ts), along with the button.
 export const Code = <M>(
   h: Html.H<M>,
   { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file?: string },
@@ -61,7 +62,7 @@ const Listing = <M>(
 ) =>
   sx(h.figure, prose.block, styles.code).children(
     sx(h.figcaption, styles.tab).children(
-      h.span(file ?? LANG_NAMES[lang]),
+      h.span(file ?? LANG_NAMES[lang]).attr('data-search', 'skip'),
       sx(h.button, base.button, styles.copy, stylex.defaultMarker())
         .attrs({ type: 'button', 'aria-label': 'Copy code' })
         .onMount(CopyCode({ code }))

@@ -1,9 +1,11 @@
-import { Array as Arr, MutableHashMap, Number as Num, Option, Order, String as Str } from 'effect'
+import { Array as Arr, Number as Num, Order, String as Str } from 'effect'
 import { dual } from 'effect/Function'
 
 import { distance, editsFor } from './fuzzy.ts'
 import { type FieldId, type SearchIndex, postingsOf } from './index.ts'
 import { type Atom, type Query, isEmpty, parse } from './query.ts'
+import type { Found } from './schema.ts'
+import { snippetOf } from './snippet.ts'
 import { bare, termOf } from './tokenize.ts'
 
 // NOTE: running a query against the index. Each atom resolves to the terms
@@ -11,14 +13,17 @@ import { bare, termOf } from './tokenize.ts'
 // prefix completion and less again for a typo match, so exact hits always
 // rank above near ones. Scores are BM25, summed across fields with a boost
 // for each: a hit in the title counts three times one in the body.
+//
+// The per-doc tallies are native maps and sets: every posting of every
+// expansion passes through them on each keystroke.
 
-export const K1 = 1.2
-export const B = 0.75
-export const BOOSTS: readonly [number, number, number] = [3, 2, 1]
+const K1 = 1.2
+const B = 0.75
+const BOOSTS: readonly [number, number, number] = [3, 2, 1]
 
 // What a match through a prefix or a typo is worth, next to an exact one.
-export const PREFIX_WEIGHT = 0.8
-export const TYPO_WEIGHTS: Readonly<Record<number, number>> = { 1: 0.5, 2: 0.3 }
+const PREFIX_WEIGHT = 0.8
+const TYPO_WEIGHTS: Readonly<Record<number, number>> = { 1: 0.5, 2: 0.3 }
 
 // Prefix matching starts at two letters, so one doesn't match everything.
 const MIN_PREFIX = 2
@@ -55,8 +60,7 @@ const idf = (index: SearchIndex, n: number): number => {
 const saturate = (index: SearchIndex, field: FieldId, tf: number, length: number): number =>
   (tf * (K1 + 1)) / (tf + K1 * (1 - B + (B * length) / index.averageLength[field]))
 
-const docsWith = (index: SearchIndex, term: string): number =>
-  Option.getOrElse(MutableHashMap.get(index.docCount, term), () => 0)
+const docsWith = (index: SearchIndex, term: string): number => index.docCount.get(term) ?? 0
 
 // The terms a word stands for. The word's own term if the index has it;
 // for the word being typed, every word it begins too; and only if neither
@@ -103,7 +107,10 @@ const scoreTerm = (index: SearchIndex, term: string, weight: number): Map<number
     const score = w * BOOSTS[posting.field] * saturate(index, posting.field, posting.positions.length, length)
     const hits = Arr.map(posting.positions, position => ({ field: posting.field, position }))
     const was = out.get(posting.doc)
-    out.set(posting.doc, was === undefined ? { score, hits } : { score: was.score + score, hits: [...was.hits, ...hits] })
+    out.set(
+      posting.doc,
+      was === undefined ? { score, hits } : { score: was.score + score, hits: [...was.hits, ...hits] },
+    )
   }
   return out
 }
@@ -124,19 +131,22 @@ const scoreWord = (index: SearchIndex, word: string, prefix: boolean): Map<numbe
 }
 
 // A phrase: its words at consecutive positions in one field. It scores as
-// one term whose frequency is how often the whole phrase appears.
-const scorePhrase = (index: SearchIndex, words: ReadonlyArray<string>): Map<number, Match> => {
-  const terms = Arr.map(words, termOf)
-  const lists = Arr.map(terms, term => postingsOf(index, term))
+// one term whose frequency is how often the whole phrase appears. While the
+// phrase is being typed, its last word is a prefix, so "safety ne matches
+// "safety net" already.
+const scorePhrase = (index: SearchIndex, words: ReadonlyArray<string>, prefix: boolean): Map<number, Match> => {
+  const last = words.length - 1
+  const termsOf = (word: string, i: number): ReadonlyArray<string> =>
+    prefix && i === last ? Arr.map(expand(index, word, true), e => e.term) : [termOf(word)]
+  const lists = Arr.map(words, (word, i) => Arr.flatMap(termsOf(word, i), term => postingsOf(index, term)))
   const found = new Map<number, Array<{ field: FieldId; starts: Array<number> }>>()
   for (const first of lists[0] ?? []) {
-    const rest = Arr.map(lists.slice(1), list =>
-      Arr.findFirst(list, p => p.doc === first.doc && p.field === first.field).pipe(
-        Option.map(p => new Set(p.positions)),
-      ),
-    )
-    if (!Arr.every(rest, Option.isSome)) continue
-    const sets = Arr.map(rest, set => Option.getOrThrow(set))
+    // Where each later word sits in this field, across all its terms.
+    const sets = Arr.map(lists.slice(1), list => {
+      const inField = Arr.filter(list, p => p.doc === first.doc && p.field === first.field)
+      return new Set(Arr.flatMap(inField, p => p.positions))
+    })
+    if (Arr.some(sets, set => set.size === 0)) continue
     const starts = Arr.filter(first.positions, at => Arr.every(sets, (set, i) => set.has(at + i + 1)))
     if (starts.length === 0) continue
     const list = found.get(first.doc) ?? []
@@ -151,7 +161,7 @@ const scorePhrase = (index: SearchIndex, words: ReadonlyArray<string>): Map<numb
     for (const { field, starts } of fields) {
       const length = index.docs[doc]!.fields[field].tokens.length
       score += w * BOOSTS[field] * saturate(index, field, starts.length, length)
-      for (const start of starts) for (let i = 0; i < terms.length; i++) hits.push({ field, position: start + i })
+      for (const start of starts) for (let i = 0; i < words.length; i++) hits.push({ field, position: start + i })
     }
     out.set(doc, { score, hits })
   })
@@ -159,7 +169,7 @@ const scorePhrase = (index: SearchIndex, words: ReadonlyArray<string>): Map<numb
 }
 
 const scoreAtom = (index: SearchIndex, atom: Atom): Map<number, Match> =>
-  atom._tag === 'Word' ? scoreWord(index, atom.word, atom.prefix) : scorePhrase(index, atom.words)
+  atom._tag === 'Word' ? scoreWord(index, atom.word, atom.prefix) : scorePhrase(index, atom.words, atom.prefix)
 
 // Highest score first, then the newest.
 const byRank: Order.Order<Result> = Order.combine(
@@ -177,13 +187,18 @@ export const run: {
 
   // With nothing to find, only things to leave out, every other doc matches.
   let matched: Map<number, Match> | undefined =
-    query.clauses.length === 0 ? new Map(Arr.map(index.docs, (_, d) => [d, { score: 0, hits: [] }] as const)) : undefined
+    query.clauses.length === 0
+      ? new Map(Arr.map(index.docs, (_, d) => [d, { score: 0, hits: [] }] as const))
+      : undefined
   for (const clause of query.clauses) {
     const any = new Map<number, Match>()
     for (const atom of clause) {
       scoreAtom(index, atom).forEach((match, doc) => {
         const was = any.get(doc)
-        any.set(doc, was === undefined ? match : { score: was.score + match.score, hits: [...was.hits, ...match.hits] })
+        any.set(
+          doc,
+          was === undefined ? match : { score: was.score + match.score, hits: [...was.hits, ...match.hits] },
+        )
       })
     }
     if (matched === undefined) matched = any
@@ -201,7 +216,12 @@ export const run: {
 
   const results = Arr.map(
     Arr.filter(Array.from(matched ?? []), ([doc]) => !excluded.has(doc)),
-    ([doc, match]): Result => ({ id: index.docs[doc]!.id, date: index.docs[doc]!.date, score: match.score, hits: match.hits }),
+    ([doc, match]): Result => ({
+      id: index.docs[doc]!.id,
+      date: index.docs[doc]!.date,
+      score: match.score,
+      hits: match.hits,
+    }),
   )
   return Arr.sort(results, byRank)
 })
@@ -210,3 +230,11 @@ export const search: {
   (input: string): (index: SearchIndex) => ReadonlyArray<Result>
   (index: SearchIndex, input: string): ReadonlyArray<Result>
 } = dual(2, (index: SearchIndex, input: string): ReadonlyArray<Result> => run(index, parse(input)))
+
+// A search over an index, as the page shows it: the matching posts, best
+// first, each with its snippet. The worker and the in-page fallback both run
+// this.
+export const searchIndex =
+  (index: SearchIndex) =>
+  (query: string): ReadonlyArray<Found> =>
+    Arr.map(search(index, query), result => ({ id: result.id, snippet: snippetOf(index, result) }))

@@ -1,7 +1,7 @@
 import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Option } from 'effect'
 
-import { type Clock, follow, interact, opacityAt, startClock, tick } from './clock.ts'
+import { type Clock, follow, interact, isFull, opacityAt, startClock, tick } from './clock.ts'
 import { type Controls, FADE, HOLD } from './controls.ts'
 import type { Interaction, Scene } from './scene.ts'
 
@@ -85,5 +85,19 @@ describe('animation clock', () => {
     assert.strictEqual(clock.interactions.length, 3)
     const { interact: _, ...plain } = scene
     assert.strictEqual(interact(plain, startClock(plain, controls, false), Option.none()).interactions.length, 0)
+  })
+
+  it('is full at `max`, and a press on a full run changes nothing', () => {
+    assert.isFalse(isFull(scene, 2))
+    assert.isTrue(isFull(scene, 3))
+    const { interact: _, ...plain } = scene
+    assert.isTrue(isFull(plain, 0))
+    const full = Arr.reduce(Arr.range(1, 3), startClock(scene, controls, false), c =>
+      interact(scene, c, Option.none()),
+    )
+    assert.strictEqual(interact(scene, full, Option.some([0.5, 0.5])), full)
+    // Paused, the dropped press leaves it paused where it was.
+    const paused = { ...full, playing: false, time: 4 }
+    assert.strictEqual(interact(scene, paused, Option.none()), paused)
   })
 })

@@ -3,17 +3,17 @@ import { Array as Arr, Option } from 'effect'
 
 import {
   BOUNDS,
-  FLARE,
+  KICK_AT,
   KICK_SETTLE,
   KICK_SHARE,
-  MAX_FLARES,
+  MAX_KICKS,
   buildTimeline,
   dropsOf,
   fillAt,
-  flaresOf,
+  kicksOf,
   frameAt,
   peakAt,
-  withFlares,
+  withKicks,
 } from './bucket.ts'
 import { MAX_DOTS, MAX_LINES, shapesOf } from './shapes.ts'
 
@@ -47,7 +47,7 @@ describe('team bucket', () => {
 
   it('stays inside its bounds and its buffer sizes', () => {
     for (const seed of SEEDS) {
-      const timeline = withFlares(buildTimeline(seed), [3, 4.2, 6, 10.5, 12, 13])
+      const timeline = withKicks(buildTimeline(seed), [3, 4.2, 6, 10.5, 12, 13])
       for (const t of moments(0, timeline.end + 1)) {
         const frame = frameAt(timeline, t)
         for (const [x, y] of pointsOf(frame)) {
@@ -77,28 +77,28 @@ describe('team bucket', () => {
   it('only rises before the kick, a drop at a time', () => {
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
-      const fill = Arr.map(moments(0, FLARE), t => fillAt(timeline, t))
+      const fill = Arr.map(moments(0, KICK_AT), t => fillAt(timeline, t))
       const steps = Arr.map(Arr.zip(fill, Arr.drop(fill, 1)), ([a, b]) => b - a)
       assert.isTrue(Arr.every(steps, step => step >= -1e-9), `seed ${seed}`)
       // Never more than one drop's water in a tenth of a second.
       assert.isAtMost(Math.max(...steps), 1 + 1e-9, `seed ${seed}`)
-      assert.isAtLeast(fillAt(timeline, FLARE), 12, `seed ${seed}`)
+      assert.isAtLeast(fillAt(timeline, KICK_AT), 12, `seed ${seed}`)
     }
   })
 
   it('spills about half at the kick, and rocks back upright', () => {
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
-      const before = fillAt(timeline, FLARE)
-      const after = fillAt(timeline, FLARE + 1)
+      const before = fillAt(timeline, KICK_AT)
+      const after = fillAt(timeline, KICK_AT + 1)
       const lost = 1 - after / before
       assert.isAtLeast(lost, 0.4, `seed ${seed}`)
       assert.isAtMost(lost, 0.6, `seed ${seed}`)
       // Most of it's gone within about half a second.
-      assert.isBelow(fillAt(timeline, FLARE + 0.6), before * (1 - KICK_SHARE * 0.9), `seed ${seed}`)
+      assert.isBelow(fillAt(timeline, KICK_AT + 0.6), before * (1 - KICK_SHARE * 0.9), `seed ${seed}`)
       // It lurches, then stands again well before the end.
-      assert.isAbove(frameAt(timeline, FLARE + 0.25).angle, 0.3, `seed ${seed}`)
-      assert.strictEqual(frameAt(timeline, FLARE + 2.5).angle, 0, `seed ${seed}`)
+      assert.isAbove(frameAt(timeline, KICK_AT + 0.25).angle, 0.3, `seed ${seed}`)
+      assert.strictEqual(frameAt(timeline, KICK_AT + 2.5).angle, 0, `seed ${seed}`)
     }
   })
 
@@ -112,10 +112,10 @@ describe('team bucket', () => {
       assert.strictEqual(frameAt(timeline, timeline.end).angle, 0, `seed ${seed}`)
       // The drops after the kick are few and far between, and none from
       // whoever kicked.
-      const after = Arr.filter(dropsOf(timeline), drop => drop.start > FLARE)
+      const after = Arr.filter(dropsOf(timeline), drop => drop.start > KICK_AT)
       assert.isAtMost(after.length, 3, `seed ${seed}`)
       assert.isTrue(
-        Arr.every(after, drop => drop.from !== timeline.flarer),
+        Arr.every(after, drop => drop.from !== timeline.kicker),
         `seed ${seed}`,
       )
     }
@@ -156,20 +156,20 @@ describe('team bucket', () => {
       assert.isAbove(frame.water.amount, 4, `seed ${seed}`)
       assert.strictEqual(frame.water.ripples.length, 0, `seed ${seed}`)
       assert.isBelow(Math.abs(frame.water.slope), 1e-6, `seed ${seed}`)
-      assert.isAbove(frame.peak - frame.fill, 4, `seed ${seed}`)
+      assert.isAbove(frame.peak - frame.water.amount, 4, `seed ${seed}`)
       // The spill on the floor, and nothing in the air.
       assert.isAtLeast(frame.beads.length, 10, `seed ${seed}`)
       assert.isTrue(Arr.every(frame.beads, bead => !bead.flying), `seed ${seed}`)
       assert.isAbove(Math.abs(frame.puddles[0]!.to - frame.puddles[0]!.from), 0.3, `seed ${seed}`)
       assert.strictEqual(frame.drops.length, 0, `seed ${seed}`)
       // Whoever kicked, still marked.
-      assert.isAbove(frame.people[timeline.flarer]!.heat, 0.5, `seed ${seed}`)
+      assert.isAbove(frame.people[timeline.kicker]!.heat, 0.5, `seed ${seed}`)
     }
   })
 
   it('settles each kick within KICK_SETTLE', () => {
     for (const seed of [2, 5]) {
-      const timeline = withFlares(buildTimeline(seed), [4])
+      const timeline = withKicks(buildTimeline(seed), [4])
       const settled = frameAt(timeline, 4 + KICK_SETTLE)
       assert.strictEqual(settled.angle, 0, `seed ${seed}`)
       // Only the drops still move the water, as they would with no kick.
@@ -184,16 +184,16 @@ describe('team bucket', () => {
 
   it('takes extra kicks at any time', () => {
     const timeline = buildTimeline(3)
-    const shaken = withFlares(timeline, [5])
-    assert.strictEqual(flaresOf(shaken).length, 2)
+    const shaken = withKicks(timeline, [5])
+    assert.strictEqual(kicksOf(shaken).length, 2)
     // A bad moment spills its share of what's there, and it builds again.
     const lost = fillAt(timeline, 6) - fillAt(shaken, 6)
     assert.approximately(lost, fillAt(timeline, 5) * 0.5, 1)
-    assert.isBelow(fillAt(shaken, FLARE), fillAt(timeline, FLARE))
+    assert.isBelow(fillAt(shaken, KICK_AT), fillAt(timeline, KICK_AT))
     assert.isAbove(frameAt(shaken, 5.25).angle, 0.2)
-    const third = withFlares(timeline, [5], 0.3)
+    const third = withKicks(timeline, [5], 0.3)
     assert.approximately(fillAt(timeline, 6) - fillAt(third, 6), fillAt(timeline, 5) * 0.3, 1)
     // And never more than the run can draw.
-    assert.strictEqual(flaresOf(withFlares(timeline, Arr.range(1, 20))).length, MAX_FLARES)
+    assert.strictEqual(kicksOf(withKicks(timeline, Arr.range(1, 20))).length, MAX_KICKS)
   })
 })

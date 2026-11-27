@@ -3,6 +3,7 @@ import { HtmlScene } from '@effect/ui/html/testing'
 import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Effect, Option, Schema } from 'effect'
 
+import { Code, Note } from '../components/Prose.ts'
 import { POSTS } from '../posts.ts'
 import { distance } from './fuzzy.ts'
 import { type Doc, build } from './index.ts'
@@ -12,7 +13,10 @@ import { expand, search } from './search.ts'
 import { type Snippet, snippetOf } from './snippet.ts'
 import { stem } from './stem.ts'
 import { plainText } from './text.ts'
-import { fold, terms, tokenize } from './tokenize.ts'
+import { fold, tokenize } from './tokenize.ts'
+
+// Just the terms of some text.
+const terms = (text: string): ReadonlyArray<string> => Arr.map(tokenize(text), token => token.term)
 
 const doc = (id: string, fields: Partial<Doc> = {}): Doc => ({
   id,
@@ -135,7 +139,7 @@ describe('parse', () => {
         { _tag: 'Word', word: 'arena', prefix: false },
         { _tag: 'Word', word: 'league', prefix: false },
       ],
-      [{ _tag: 'Phrase', words: ['safety', 'net'] }],
+      [{ _tag: 'Phrase', words: ['safety', 'net'], prefix: false }],
     ])
     assert.deepStrictEqual(query.excluded, [{ _tag: 'Word', word: 'worlds', prefix: false }])
   })
@@ -145,8 +149,21 @@ describe('parse', () => {
     assert.deepStrictEqual(parse('be vouc ').clauses[1], [{ _tag: 'Word', word: 'vouc', prefix: false }])
   })
 
-  it('runs an unclosed quote to the end', () => {
-    assert.deepStrictEqual(parse('"safety ne').clauses, [[{ _tag: 'Phrase', words: ['safety', 'ne'] }]])
+  it('runs an unclosed quote to the end, its last word a prefix while typed', () => {
+    assert.deepStrictEqual(parse('"safety ne').clauses, [[{ _tag: 'Phrase', words: ['safety', 'ne'], prefix: true }]])
+    assert.deepStrictEqual(parse('"safety net"').clauses, [
+      [{ _tag: 'Phrase', words: ['safety', 'net'], prefix: false }],
+    ])
+    assert.deepStrictEqual(parse('"safety ne ').clauses, [
+      [{ _tag: 'Phrase', words: ['safety', 'ne'], prefix: false }],
+    ])
+  })
+
+  it('reads curly double quotes as quotes', () => {
+    const phrase = { _tag: 'Phrase', words: ['safety', 'net'], prefix: false } as const
+    assert.deepStrictEqual(parse('“safety net”').clauses, [[phrase]])
+    assert.deepStrictEqual(parse('arena -“safety net” ').excluded, [phrase])
+    assert.deepStrictEqual(parse('arena -“safety net” ').clauses, [[{ _tag: 'Word', word: 'arena', prefix: false }]])
   })
 })
 
@@ -193,12 +210,22 @@ describe('the query language', () => {
 
   it('matches a quoted phrase only in order', () => {
     assert.deepStrictEqual(ids(index, '"safety net"'), ['net'])
+    assert.deepStrictEqual(ids(index, '“safety net”'), ['net'])
     assert.deepStrictEqual(ids(index, '"net safety"'), [])
+  })
+
+  it('completes the last word of a phrase being typed', () => {
+    assert.deepStrictEqual(ids(index, '"safety ne'), ['net'])
+    assert.deepStrictEqual(ids(index, '“safety ne'), ['net'])
+    // Closed, or with a space after, it's whole words.
+    assert.deepStrictEqual(ids(index, '"safety ne"'), [])
+    assert.deepStrictEqual(ids(index, '"safety ne '), [])
   })
 
   it('leaves out excluded words and phrases', () => {
     assert.deepStrictEqual(ids(index, 'safety -see '), ['apart'])
     assert.deepStrictEqual(ids(index, 'safety -"safety net" '), ['apart'])
+    assert.deepStrictEqual(ids(index, 'safety -“safety net” '), ['apart'])
     // Only exclusions: everything else.
     assert.deepStrictEqual(ids(index, '-safety '), ['arena'])
   })
@@ -287,6 +314,25 @@ describe('body text', () => {
     })
     Effect.runSync(Effect.scoped(HtmlScene.make(Probe, {})))
     assert.strictEqual(read, 'Title\nOne two.\na\nb')
+  })
+
+  it('keeps a note’s label off its first word, and leaves out a listing’s chrome', () => {
+    let read = ''
+    const Probe = Html.component({ name: 'Probe', model: Schema.Struct({}), message: Schema.Never }).make({
+      init: () => ({}),
+      update: $ => $.model,
+      view: h => {
+        read = plainText([
+          Note(h, 'ASIDE', h.p('First words.')),
+          Code(h, { code: 'const x = 1', lang: 'ts' }),
+          Code(h, { code: 'echo hi', lang: 'bash', file: 'run.sh' }),
+          h.p('After.', h.span('hidden').attr('aria-hidden', 'true')),
+        ])
+        return h.p('read')
+      },
+    })
+    Effect.runSync(Effect.scoped(HtmlScene.make(Probe, {})))
+    assert.strictEqual(read, 'ASIDE\nFirst words.\nAfter.')
   })
 })
 

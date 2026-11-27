@@ -71,15 +71,20 @@ From `src/blog/components/Prose.ts`:
 
 ## Animated figures
 
-`src/blog/animation/` is a kit for animated diagrams. `src/network/` is
-the worked example.
+`src/blog/animation/` is a kit for animated diagrams, and the figures
+live in `src/blog/figures/`. `src/blog/figures/network/` is the worked
+example.
 
 - A `Scene` (`scene.ts`) only answers "what's on screen at time t", as
   lines, dots and rings in CSS px. So any moment can be scrubbed to, and
   the same answer paints on WebGPU or a 2D canvas.
 - `makeAnimation(name, scene)` (`Animation.ts`) wraps a scene in a figure
-  with play/pause, restart, a scrubber, the time and a caption. Drop the
-  result into a body: `NetworkFigure(h, { key: 'network' })`.
+  with play/pause, restart, a scrubber, the time, an INTERACT button when
+  the scene takes interactions, and a caption. An empty caption hides the
+  caption. Drop the result into a body:
+  `NetworkFigure(h, { key: 'network' })`.
+- Shared helpers are in `kit.ts`: the seeded `random`, `clamp01`,
+  `smooth`, the sheet's colours with `rgba` and `mix`, and `worldOfAim`.
 - Build the timeline once, from a seed, up front, then answer each frame
   from it.
 - Keep motion calm. People and things should appear where they'll stay,
@@ -87,7 +92,7 @@ the worked example.
 - Reduced motion shows only the last frame, so it has to read on its own.
 - Use the blueprint palette from `src/styles/tokens.stylex.ts`: the gold
   (`blueprint.hi`) for what matters, and line, dim and faint for the rest.
-- Test it like `src/network/graph.test.ts`:
+- Test it like `src/blog/figures/network/graph.test.ts`:
   - the same seed gives the same run
   - it stays inside its bounds and buffer sizes
   - it tells the story you meant
@@ -101,7 +106,8 @@ time. The figure still tells its own story; the button adds to it.
 - Give the scene `interact: { hint, settle, max }`. `hint` says what a
   press does, for the tooltip and screen readers ("Plant another seed").
   `settle` is how many seconds it takes to play out. `max` is the most a
-  run takes, so the buffers still hold.
+  run takes, so the buffers still hold. Once a run has `max`, the button
+  is disabled and a click on the drawing changes nothing.
 - The kit records each press as the clock time it happened, and passes
   them all, in order, as the last argument to `shapesAt(time, width,
   height, pointer, interactions)`. Show only the ones up to `time`, so
@@ -110,22 +116,24 @@ time. The figure still tells its own story; the button adds to it.
 - Work out what they do once per array with `rememberLast`, then answer
   frames from that, so each frame stays pure and cheap. The figures fold
   them into the timeline: `tearsOf` (network), `plantedIn` (forest),
-  `withFlares` (team).
+  `withKicks` (team).
 - Clicking the drawing interacts too, aimed there. `aim` is a 0 to 1
   fraction of the canvas, which is always 16:9, so convert it with the
   scene's projection at any 16:9 size. A press of the button has no aim,
   so the scene picks a sensible target.
 - Pressing while paused applies at the paused time and plays on. Past the
   end, it goes in at the end, and the hold waits `settle` seconds for it
-  to play out before the next run. Draw frames past `end` the same way
-  as before it, so it can. Under reduced
-  motion the figure stays still: the press goes in `settle` seconds
-  before the still frame, which repaints with it done.
+  to play out before the next run. Keep `shapesAt` answering past `end`,
+  so a late press can play out. Under reduced motion the figure stays
+  still: the press goes in `settle` seconds before the still frame, which
+  repaints with it done.
 - Decide whether it's a good or a bad interaction, and draw it that way.
   Bad ones use the post's red (`post.alarm`, `#ff6b61`), and only for the
   harm itself.
 - Test that a press shows nothing before its time, that it does what you
-  meant after, and that the bounds and buffer sizes hold at `max` presses.
+  meant after, and that the bounds and buffer sizes hold at `max` presses,
+  spread out and all at the same moment, in a `scene.test.ts` beside the
+  scene, like each figure's.
 
 ## Before it goes up
 

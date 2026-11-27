@@ -103,9 +103,9 @@ const OUTER = 2.4
 const INNER = 1.6
 const THIN = 0.8
 const ARC_STEPS = 10
-// The library's bookcases: how far off the wall they stand, how deep they
-// are, how tall they stand, and how thick their boards are. Each holds two
-// shelves of books.
+// The library's bookcase: how far off the wall it stands, how deep it is,
+// how tall it stands, and how thick its boards are. It holds two shelves of
+// books.
 const SHELF_OFF = 2.5
 const SHELF_DEPTH = 5
 const CASE_RISE = 0.9
@@ -113,7 +113,7 @@ const BOARD = 0.03
 const KICK = BOARD * 2
 const SHELVES = 2
 // The walls the renderer has room for.
-export const MAX_WALLS = 128
+export const MAX_WALLS = 192
 
 const pt = (x: number, y: number): Point => ({ x, y })
 
@@ -163,7 +163,7 @@ interface Book {
   readonly gold?: number
 }
 const gap = (w: number): Book => ({ w, rise: 0 })
-// The bottom shelf, then the top, for each bookcase.
+// The bottom shelf, then the top, of the bookcase.
 const BACK_SHELVES: ReadonlyArray<ReadonlyArray<Book>> = [
   [
     { w: 2, rise: 0.8 },
@@ -198,12 +198,16 @@ const BACK_SHELVES: ReadonlyArray<ReadonlyArray<Book>> = [
 ]
 // The sliver between two books, in shares of the shelf.
 const BETWEEN = 0.35
+// How far into the case a book's spine stands, and where its pages end,
+// so each book is a box with depth, not a flat panel.
+const SPINE = SHELF_OFF + SHELF_DEPTH * 0.92
+const PAGES = SHELF_OFF + SHELF_DEPTH * 0.2
 
 // A bookcase along a wall, from `from` to `to`, standing `SHELF_DEPTH` into
 // the room along `into`. On the floor, its outline; standing up, its two
 // ends, a board under each shelf and one on top, and on each shelf a row of
-// books, each a short panel facing the room, so once the house rises they
-// read as spines of different heights.
+// books, each a spine facing the room and two covers running back, so once
+// the house rises they read as books of different heights and real depth.
 const bookcase = (
   from: Point,
   to: Point,
@@ -224,17 +228,17 @@ const bookcase = (
     const starts = Arr.scan(books, BETWEEN / units, (at, b) => at + (b.w + BETWEEN) / units)
     // A gap stands nothing.
     return Arr.flatMap(books, (b, i): ReadonlyArray<Wall> => {
-      const at = starts[i] ?? 0
-      return b.rise <= 0
-        ? []
-        : [
-            wall(
-              off(along(at), SHELF_OFF + SHELF_DEPTH * 0.7),
-              off(along(at + b.w / units), SHELF_OFF + SHELF_DEPTH * 0.7),
-              THIN,
-              { gold: b.gold ?? 0, alpha: 0.85, rise: b.rise * room, base: floor },
-            ),
-          ]
+      if (b.rise <= 0) return []
+      const left = along(starts[i] ?? 0)
+      const right = along((starts[i] ?? 0) + b.w / units)
+      const look = { gold: b.gold ?? 0, rise: b.rise * room, base: floor }
+      return [
+        // The spine, out near the front of the shelf.
+        wall(off(left, SPINE), off(right, SPINE), THIN, { ...look, alpha: 0.85 }),
+        // Its two covers, running back toward the wall.
+        wall(off(left, PAGES), off(left, SPINE), THIN, { ...look, alpha: 0.55 }),
+        wall(off(right, PAGES), off(right, SPINE), THIN, { ...look, alpha: 0.55 }),
+      ]
     })
   }
   const front = (base: number, rise: number) =>

@@ -15,7 +15,8 @@
 
 import { Array as Arr, Option } from 'effect'
 
-import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
+import { GOLD, LINE, type Projection, RED, WARM, mix, rgba } from '../../animation/kit.ts'
+import type { Dot, Line, Point, Rgba, Shapes } from '../../animation/scene.ts'
 import {
   BOUNDS,
   type Frame,
@@ -25,15 +26,6 @@ import {
   MAX_NODES,
   MAX_TEARS,
 } from './graph.ts'
-
-type Rgb = readonly [number, number, number]
-
-// The sheet's line colour, its gold, and a warm white.
-const LINE: Rgb = [0.86, 0.92, 1]
-const GOLD: Rgb = [1, 0.82, 0.4]
-const WARM: Rgb = [1, 0.94, 0.8]
-// The post's red, #ff6b61.
-const RED: Rgb = [1, 0.42, 0.38]
 
 // The most a frame draws: every link, and everyone, plus rings, sparks
 // and the picked ring. Each bad interaction adds its ripple, the two torn
@@ -45,13 +37,6 @@ export const MAX_DOTS = MAX_NODES + 16 + MAX_TEARS * 3
 const CUT = 0.28
 const cutKeep = (cut: number) => 1 - (1 - CUT) * cut
 const kept = ([r, g, b, a]: Rgba, cut: number): Rgba => [r, g, b, a * cutKeep(cut)]
-
-const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], alpha]
-const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
-  a[0] + (b[0] - a[0]) * t,
-  a[1] + (b[1] - a[1]) * t,
-  a[2] + (b[2] - a[2]) * t,
-]
 
 const edgeStyle = (edge: FrameEdge): { readonly width: number; readonly color: Rgba } => {
   switch (edge.kind) {
@@ -85,9 +70,12 @@ const dotStyle = (dot: FrameDot): { readonly radius: number; readonly glow: numb
 }
 
 // Scale and centre the world box into a canvas this big.
-export const projection = (width: number, height: number) => {
+export const projection: Projection = (width, height) => {
   const scale = Math.min(width / (BOUNDS.x * 2 + 0.2), height / (BOUNDS.y * 2 + 0.2))
-  return ([x, y]: Point): Point => [width / 2 + x * scale, height / 2 + y * scale]
+  return {
+    scale,
+    px: ([x, y]: Point): Point => [width / 2 + x * scale, height / 2 + y * scale],
+  }
 }
 
 // How close, in px, the pointer has to be to pick someone out.
@@ -118,7 +106,7 @@ export const shapesOf = (
   height: number,
   pointer: Option.Option<Point> = Option.none(),
 ): Shapes => {
-  const px = projection(width, height)
+  const { px } = projection(width, height)
   const picked = pickedBy(frame, px, pointer)
   const near = Option.match(picked, {
     onNone: () => new Set<number>(),

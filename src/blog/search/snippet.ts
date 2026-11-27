@@ -2,26 +2,20 @@ import { Array as Arr, Option, String as Str } from 'effect'
 import { dual } from 'effect/Function'
 
 import type { Field, FieldId, SearchIndex } from './index.ts'
-import type { Token } from './tokenize.ts'
+import type { Part as PartSchema, Snippet as SnippetSchema } from './schema.ts'
 import type { Hit, Result } from './search.ts'
+import type { Token } from './tokenize.ts'
 
 // NOTE: the snippet under a result: the stretch of the body with the most
 // matched words in it, cut at word boundaries, with those words marked. A
 // post that matches only in its summary gets its summary back, marked
 // instead; one that matches only in its title gets no snippet.
 
-export interface Part {
-  readonly text: string
-  readonly marked: boolean
-}
-
-export interface Snippet {
-  readonly field: 'summary' | 'body'
-  readonly parts: ReadonlyArray<Part>
-}
+export type Part = typeof PartSchema.Type
+export type Snippet = typeof SnippetSchema.Type
 
 // How many words a snippet shows, and how many lead into the first match.
-export const WINDOW = 26
+const WINDOW = 26
 const LEAD = 5
 
 const OPEN = '… '
@@ -127,6 +121,8 @@ export const snippetOf: {
       })
     }
     const inSummary = positionsIn(result.hits, 1)
-    return inSummary.size > 0 ? Option.some({ field: 'summary' as const, parts: mark(fields[1], inSummary) }) : Option.none()
+    return inSummary.size > 0
+      ? Option.some({ field: 'summary' as const, parts: mark(fields[1], inSummary) })
+      : Option.none()
   })
 })
