@@ -23,7 +23,15 @@ const greetDevtools = Effect.sync(() => {
   )
 })
 
+// NOTE: marks the root before the first paint when the browser has WebGPU,
+// so the GPU drawings can keep their CSS stand-ins out of sight while the
+// GPU starts, instead of showing them and then taking them away.
+const markWebGpu = Effect.sync(() => {
+  if ('gpu' in navigator) document.documentElement.dataset['webgpu'] = ''
+})
+
 const main = Effect.gen(function* () {
+  yield* markWebGpu
   yield* greetDevtools
   const found = yield* readFoundEggs
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches

@@ -89,14 +89,20 @@ a.house-room:focus-visible { outline: 2px dashed var(--hi); outline-offset: -4px
 .house-room.locked { grid-column: 3; color: var(--hi) }
 .house-room.locked small { color: var(--hi); font-size: 8px }
 /* while WebGPU draws the plan, the CSS walls step aside and the labels
-   wait for the pens */
+   wait for the pens. In a browser with WebGPU (main.ts marks the root) they
+   are already aside from the first paint, while the GPU starts up, so the
+   plan never shows and then vanishes. If the GPU can't start, the drawing
+   marks the house "off" and the CSS plan comes back. */
+:root[data-webgpu] .house:not([data-gpu]) .plan, :root[data-webgpu] .house:not([data-gpu]) .house-room,
 .house[data-gpu="on"] .plan, .house[data-gpu="on"] .house-room { border-color: transparent }
 /* the renderer tips the plan into 3D with the walls, from its own corner */
 .house[data-gpu="on"] .plan { transform-origin: 0 0; will-change: transform }
-.house[data-gpu="on"] .plan::after { display: none }
-.house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] .sheet-no { transition: opacity .6s ease-out; opacity: 0 }
-.house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] .sheet-no { opacity: 1 }
-@media (prefers-reduced-motion: reduce) { .house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] .sheet-no { transition: none } }
+:root[data-webgpu] .house:not([data-gpu]) .plan::after, .house[data-gpu="on"] .plan::after { display: none }
+:root[data-webgpu] .house:not([data-gpu]) .house-room > *, :root[data-webgpu] .house:not([data-gpu]) .sheet-no,
+.house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] .sheet-no { opacity: 0 }
+/* they only fade in, once the walls are drafted, never out */
+.house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] .sheet-no { transition: opacity .6s ease-out; opacity: 1 }
+@media (prefers-reduced-motion: reduce) { .house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] .sheet-no { transition: none } }
 .hero .thesis:focus-visible { outline: 2px dashed var(--hi); outline-offset: 4px }
 
 .job { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding: 30px 0; border-bottom: 1px dashed var(--faint) }
