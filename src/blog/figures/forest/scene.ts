@@ -40,6 +40,8 @@ export const forestScene: Scene = {
   maxDots: MAX_DOTS,
   // A hopeful one: plant another seed.
   interact: { hint: 'Plant another seed', settle: PLANT_SETTLE, max: MAX_PLANTS },
+  // The grove stays grown.
+  once: true,
 }
 
 export const ForestFigure = makeAnimation('ForestFigure', forestScene)

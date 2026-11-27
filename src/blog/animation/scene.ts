@@ -91,6 +91,9 @@ export interface Scene {
   // Readers can add to it with the INTERACT button. The run's frames have
   // to stay inside the buffers with `interact.max` interactions in them.
   readonly interact?: Interact
+  // Plays once and rests on its last frame, rather than fading into a new
+  // run. Play from there replays it from the start.
+  readonly once?: boolean
 }
 
 // `f`, remembering its last answer, so passing the same input again (by

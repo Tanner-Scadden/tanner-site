@@ -100,4 +100,46 @@ describe('animation clock', () => {
     const paused = { ...full, playing: false, time: 4 }
     assert.strictEqual(interact(scene, paused, Option.none()), paused)
   })
+
+  describe('a scene that plays once', () => {
+    const once: Scene = { ...scene, once: true }
+    const run = (clock: Clock, seconds: number) =>
+      Arr.reduce(Arr.range(1, Math.round(seconds / 0.1)), clock, c => tick(once, c, 0.1))
+
+    it('stops on its last frame, and stays there', () => {
+      const ended = run(startClock(once, controls, false), 30)
+      assert.isFalse(ended.playing)
+      assert.strictEqual(ended.time, 10)
+      assert.strictEqual(ended.seed, 1)
+      assert.strictEqual(opacityAt(once, ended), 1)
+    })
+
+    it('replays from the start when played again', () => {
+      const ended = run(startClock(once, controls, false), 30)
+      const paused = follow(once, ended, { ...controls, playing: false })
+      const replayed = follow(once, paused, controls)
+      assert.isTrue(replayed.playing)
+      assert.strictEqual(replayed.time, 0)
+    })
+
+    it('plays an interaction at the end out, then stops again', () => {
+      const ended = run(startClock(once, controls, false), 30)
+      const paused = follow(once, ended, { ...controls, playing: false })
+      const pressed = press(paused, controls)
+      assert.isTrue(pressed.playing)
+      assert.strictEqual(pressed.time, 10)
+      const settled = run(pressed, 5)
+      assert.isFalse(settled.playing)
+      assert.strictEqual(settled.time, 12)
+      assert.strictEqual(settled.interactions.length, 1)
+    })
+
+    it('plays on from wherever it was scrubbed back to', () => {
+      const ended = run(startClock(once, controls, false), 30)
+      const scrubbed = follow(once, ended, { ...controls, playing: false, seek: 0.5, seeks: 1 })
+      const played = follow(once, scrubbed, { ...controls, seek: 0.5, seeks: 1 })
+      assert.strictEqual(played.time, 5)
+      assert.isTrue(played.playing)
+    })
+  })
 })

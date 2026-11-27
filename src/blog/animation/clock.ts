@@ -44,11 +44,20 @@ export const follow = (scene: Scene, clock: Clock, controls: Controls): Clock =>
   const kept = !changed ? clock.time : controls.playing ? 0 : clamp01(clock.time / clock.run.end) * run.end
   const time = controls.seeks !== clock.seeks ? controls.seek * run.end : kept
   const cleared = changed || controls.restarts !== clock.restarts
+  // Play on a run that played once and rests at its end starts it over.
+  const replay =
+    scene.once === true &&
+    controls.playing &&
+    !clock.playing &&
+    !changed &&
+    controls.seeks === clock.seeks &&
+    controls.interacts === clock.interacts &&
+    clock.time >= doneAt(scene, clock)
   const next: Clock = {
     ...clock,
     variant: controls.variant,
     run,
-    time,
+    time: replay ? 0 : time,
     playing: controls.playing,
     seeks: controls.seeks,
     restarts: controls.restarts,
@@ -66,9 +75,14 @@ export const doneAt = (scene: Scene, clock: Clock): number =>
   )
 
 // The clock `seconds` later. A finished run holds, fades, and the next
-// seed starts afresh.
+// seed starts afresh, unless the scene plays once: then it stops on its
+// last frame.
 export const tick = (scene: Scene, clock: Clock, seconds: number): Clock => {
   const time = clock.time + seconds
+  if (scene.once === true) {
+    const done = doneAt(scene, clock)
+    return time < done ? { ...clock, time } : { ...clock, time: Math.max(clock.time, done), playing: false }
+  }
   if (time <= doneAt(scene, clock) + HOLD + FADE) return { ...clock, time }
   const seed = clock.seed + 1
   return { ...clock, seed, run: scene.run(clock.variant, seed), time: 0, interactions: [] }

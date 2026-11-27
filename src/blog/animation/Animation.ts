@@ -42,6 +42,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     Aimed: {},
     // How many interactions the run has now.
     Counted: { interactions: Schema.Finite },
+    // A scene that plays once has stopped on its last frame.
+    Ended: {},
     MovedSlider: { value: Schema.String },
     Started: Started.fields,
   })
@@ -98,6 +100,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
             }),
       Aimed: $ => $.evolve({ playing: playing => playing || !$.model.still }),
       Counted: ($, { interactions }) => $.evolve({ interactions: () => interactions }),
+      Ended: $ => $.evolve({ playing: () => false }),
       MovedSlider: ($, { value }) =>
         $.evolve({
           seek: () => Option.getOrElse(Num.parse(value), () => 0) / SLIDER_STEPS,
@@ -126,7 +129,9 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                     ? Message.Aimed()
                     : report._tag === 'Counted'
                       ? Message.Counted({ interactions: report.interactions })
-                      : Message.Started({ drawable: report.drawable, still: report.still }),
+                      : report._tag === 'Ended'
+                        ? Message.Ended()
+                        : Message.Started({ drawable: report.drawable, still: report.still }),
                 ),
               ),
             ),

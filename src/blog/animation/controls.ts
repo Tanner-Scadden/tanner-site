@@ -31,6 +31,7 @@ export const Report = Schema.Union([
   Schema.TaggedStruct('Started', Started.fields),
   Schema.TaggedStruct('Aimed', {}),
   Schema.TaggedStruct('Counted', { interactions: Schema.Finite }),
+  Schema.TaggedStruct('Ended', {}),
 ])
 export type Report = typeof Report.Type
 

@@ -150,13 +150,18 @@ export const playScene = (
       // Seconds since the last frame, capped so a hidden tab doesn't jump.
       const seconds = Math.min(Math.max((frame - last) / 1000, 0), 0.1)
       last = frame
-      const now = yield* Ref.updateAndGet(clock, c => (c.playing ? tick(scene, c, seconds) : c))
+      const [ended, now] = yield* Ref.modify(clock, c => {
+        const next = c.playing ? tick(scene, c, seconds) : c
+        return [[c.playing && !next.playing, next] as const, next]
+      })
       const at = yield* Ref.get(pointer)
       draw(now, at)
       if (now.interactions.length !== counted) {
         counted = now.interactions.length
         yield* report({ _tag: 'Counted', interactions: counted })
       }
+      // A scene that plays once has stopped on its last frame.
+      if (ended) yield* report({ _tag: 'Ended' })
       if (!now.playing) yield* wake.await
     }
   })
