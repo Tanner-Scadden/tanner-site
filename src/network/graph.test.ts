@@ -1,15 +1,33 @@
 import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Option } from 'effect'
 
-import { BOUNDS, HOP, MAX_EDGES, MAX_NODES, arrivalOf, buildTimeline, frameAt, positionAt } from './graph.ts'
-import { projection, shapesOf } from './shapes.ts'
+import {
+  BOUNDS,
+  CALL_HOP,
+  MAX_CALLS,
+  MAX_EDGES,
+  MAX_NODES,
+  arrivalOf,
+  buildTimeline,
+  distancesFrom,
+  frameAt,
+  positionAt,
+} from './graph.ts'
+import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
 
 const SEEDS = Arr.range(1, 12)
 
+const linked = (edges: ReadonlyArray<{ readonly a: number; readonly b: number }>, a: number, b: number) =>
+  Arr.some(edges, edge => (edge.a === a && edge.b === b) || (edge.a === b && edge.b === a))
+
 describe('network timeline', () => {
   it('replays the same run from the same seed', () => {
-    assert.deepStrictEqual(buildTimeline(7).edges, buildTimeline(7).edges)
-    assert.notDeepEqual(buildTimeline(7).edges, buildTimeline(8).edges)
+    const a = buildTimeline(7)
+    const b = buildTimeline(7)
+    assert.deepStrictEqual(a.edges, b.edges)
+    assert.deepStrictEqual(a.calls, b.calls)
+    assert.deepStrictEqual(a.layout, b.layout)
+    assert.notDeepEqual(a.edges, buildTimeline(8).edges)
   })
 
   it('stays inside its bounds and its buffer sizes', () => {
@@ -17,11 +35,17 @@ describe('network timeline', () => {
       const timeline = buildTimeline(seed)
       assert.isAtMost(timeline.nodes.length, MAX_NODES)
       assert.isAtMost(timeline.edges.length, MAX_EDGES)
+      assert.isAtMost(timeline.calls.length, MAX_CALLS)
       for (const key of timeline.layout) {
         for (let i = 0; i < key.length; i += 2) {
           assert.isAtMost(Math.abs(key[i]!), BOUNDS.x)
           assert.isAtMost(Math.abs(key[i + 1]!), BOUNDS.y)
         }
+      }
+      for (let t = 0; t <= timeline.end + 4; t += 0.1) {
+        const shapes = shapesOf(frameAt(timeline, t), 800, 450, Option.some([400, 225]))
+        assert.isAtMost(shapes.lines.length, MAX_LINES, `seed ${seed} at ${t}`)
+        assert.isAtMost(shapes.dots.length, MAX_DOTS, `seed ${seed} at ${t}`)
       }
     }
   })
@@ -32,8 +56,10 @@ describe('network timeline', () => {
       const keys = new Set<string>()
       for (const edge of edges) {
         assert.notStrictEqual(edge.a, edge.b)
+        // A link starts from someone who's there, and the person it brings
+        // in appears as it reaches them.
         assert.isAtMost(nodes[edge.a]!.born, edge.born)
-        assert.isAtMost(nodes[edge.b]!.born, edge.born)
+        assert.isAtMost(nodes[edge.b]!.born, edge.born + 0.5)
         const key = edge.a < edge.b ? `${edge.a}:${edge.b}` : `${edge.b}:${edge.a}`
         assert.isFalse(keys.has(key))
         keys.add(key)
@@ -41,30 +67,72 @@ describe('network timeline', () => {
     }
   })
 
-  it('you only ever walk a link that is whole, starting from the middle', () => {
+  it('everyone you help brings their own people', () => {
     for (const seed of SEEDS) {
-      const { edges, hops } = buildTimeline(seed)
-      assert.strictEqual(hops[0]!.from, 0)
-      for (const [i, hop] of hops.entries()) {
-        if (hop.from === hop.to) continue
-        const walkable = Arr.some(
-          edges,
-          edge =>
-            edge.born <= hop.start &&
-            ((edge.a === hop.from && edge.b === hop.to) || (edge.a === hop.to && edge.b === hop.from)),
-        )
-        assert.isTrue(walkable, `seed ${seed}, hop ${i}`)
+      const { nodes, helps } = buildTimeline(seed)
+      assert.isAtLeast(helps.length, 5)
+      for (const help of helps) {
+        const theirs = Arr.filter(nodes, (node, i) => i !== help.person && node.circle === help.person)
+        assert.isAtLeast(theirs.length, 2, `seed ${seed}, person ${help.person}`)
       }
     }
   })
 
-  it('grows on its own, beyond the people you meet', () => {
+  it('grows on its own, and reaches far beyond the people you helped', () => {
     for (const seed of SEEDS) {
-      const { edges } = buildTimeline(seed)
+      const { nodes, edges, helps, jump } = buildTimeline(seed)
       assert.isTrue(
         Arr.some(edges, edge => !edge.yours),
         `seed ${seed}`,
       )
+      // Most of the network isn't anyone you helped yourself.
+      assert.isAtLeast(nodes.length, helps.length * 6, `seed ${seed}`)
+      // And it keeps growing right up to the jump.
+      const late = Arr.filter(nodes, node => node.born > jump - 4 && node.born <= jump)
+      assert.isAbove(late.length, 0, `seed ${seed}`)
+      // Some people only know you through two or more people.
+      const { distance } = distancesFrom(nodes.length, edges)
+      assert.isTrue(
+        Arr.some(Arr.fromIterable(distance), d => d >= 3),
+        `seed ${seed}`,
+      )
+    }
+  })
+
+  it('nothing new happens once you jump, except the calls', () => {
+    for (const seed of SEEDS) {
+      const { nodes, edges, jump, calls } = buildTimeline(seed)
+      for (const node of nodes) assert.isBelow(node.born, jump, `seed ${seed}`)
+      for (const edge of edges) assert.isBelow(edge.born, jump, `seed ${seed}`)
+      for (const call of calls) assert.isAbove(call.start, jump, `seed ${seed}`)
+    }
+  })
+
+  it('calls come back after you jump, most from people you never helped yourself', () => {
+    for (const seed of SEEDS) {
+      const { edges, calls, helps, end } = buildTimeline(seed)
+      assert.isAtLeast(calls.length, 4, `seed ${seed}`)
+      const helped = new Set(Arr.map(helps, help => help.person))
+      // The first is someone you helped, the way the first contract came.
+      assert.isTrue(helped.has(Arr.headNonEmpty(calls[0]!.path)), `seed ${seed}`)
+      // The rest are a hop or more past them, and never linked to you.
+      const beyond = Arr.filter(calls, call => !linked(edges, 0, Arr.headNonEmpty(call.path)))
+      assert.isAtLeast(beyond.length, calls.length - 1, `seed ${seed}`)
+      assert.isTrue(
+        Arr.some(beyond, call => call.path.length >= 4),
+        `seed ${seed}`,
+      )
+      // Every call comes in along a different person you helped.
+      const through = Arr.map(calls, call => call.path[call.path.length - 2] ?? 0)
+      assert.strictEqual(new Set(through).size, calls.length, `seed ${seed}`)
+      for (const call of calls) {
+        // Every call travels real links, ends with you, and lands in time.
+        assert.strictEqual(call.path[call.path.length - 1], 0)
+        for (let s = 0; s < call.path.length - 1; s++) {
+          assert.isTrue(linked(edges, call.path[s]!, call.path[s + 1]!), `seed ${seed}`)
+        }
+        assert.isAtMost(arrivalOf(call), end)
+      }
     }
   })
 
@@ -90,6 +158,14 @@ describe('network timeline', () => {
     const [x, y] = positionAt(timeline, 1, timeline.end)
     assert.isAbove(Math.hypot(x, y), 0.1)
   })
+
+  it('builds quickly', () => {
+    for (const seed of SEEDS) {
+      const start = performance.now()
+      buildTimeline(seed)
+      assert.isBelow(performance.now() - start, 250, `seed ${seed}`)
+    }
+  })
 })
 
 describe('network frames', () => {
@@ -102,7 +178,52 @@ describe('network frames', () => {
       Arr.map(frame.dots, dot => dot.kind),
       ['you'],
     )
-    assert.deepStrictEqual(frame.walker, [0, 0])
+  })
+
+  it('lights up the person you help, and the people they bring', () => {
+    const first = timeline.helps[0]!
+    const person = timeline.nodes[first.person]!
+    const before = frameAt(timeline, first.start)
+    assert.isUndefined(before.dots[first.person])
+    // Your help travels out to them.
+    assert.strictEqual(frameAt(timeline, first.start + 0.2).sparks.length, 1)
+    const after = frameAt(timeline, person.born + 0.4)
+    assert.strictEqual(after.dots[first.person]?.kind, 'met')
+    assert.isAbove(after.dots[first.person]!.lit, 0)
+    assert.isAbove(after.rings.length, 0)
+    const later = frameAt(timeline, timeline.jump)
+    for (const [i, node] of timeline.nodes.entries()) {
+      if (node.circle === first.person && i !== first.person) {
+        assert.include(['circle', 'stranger'], later.dots[i]!.kind)
+      }
+    }
+  })
+
+  it('goes quiet and sends a ring out when you jump', () => {
+    assert.strictEqual(frameAt(timeline, timeline.jump - 0.1).quiet, 0)
+    const jumped = frameAt(timeline, timeline.jump + 0.3)
+    assert.isAbove(jumped.quiet, 0)
+    assert.isTrue(Arr.some(jumped.rings, ring => ring.big))
+  })
+
+  it('carries each call back to you, and keeps its path in the last frame', () => {
+    const call = timeline.calls[1]!
+    const midway = frameAt(timeline, call.start + CALL_HOP * 0.5)
+    assert.isTrue(midway.dots[Arr.headNonEmpty(call.path)]!.caller)
+    assert.isAbove(midway.sparks.length, 0)
+    assert.strictEqual(frameAt(timeline, arrivalOf(call) - 0.01).answered, 1)
+    assert.strictEqual(frameAt(timeline, arrivalOf(call)).answered, 2)
+
+    // The last frame, which is all reduced motion shows, still says who
+    // called and how each call found you.
+    const last = frameAt(timeline, timeline.end)
+    assert.strictEqual(last.answered, timeline.calls.length)
+    assert.strictEqual(last.sparks.length, 0)
+    assert.strictEqual(last.quiet, 1)
+    const hops = Arr.reduce(timeline.calls, 0, (sum, c) => sum + c.path.length - 1)
+    assert.strictEqual(last.trails.length, hops)
+    const callers = Arr.filter(last.dots, dot => dot.caller)
+    assert.strictEqual(callers.length, timeline.calls.length)
   })
 
   it('ends with everyone drawn in full', () => {
@@ -110,25 +231,6 @@ describe('network frames', () => {
     assert.strictEqual(frame.dots.length, timeline.nodes.length)
     assert.strictEqual(frame.edges.length, timeline.edges.length)
     assert.isTrue(Arr.every(frame.dots, dot => dot.grown === 1))
-  })
-
-  it('marks the people you reach as met, and lights up their circle', () => {
-    const first = timeline.hops[0]!
-    const before = frameAt(timeline, first.start)
-    const after = frameAt(timeline, arrivalOf(first) + 0.3)
-    assert.notStrictEqual(before.dots[first.to]?.kind, 'met')
-    assert.strictEqual(after.dots[first.to]?.kind, 'met')
-    assert.isAbove(after.dots[first.to]!.lit, 0)
-    assert.strictEqual(after.rings.length, 1)
-    // Their own people are part of your wider network once you've met them.
-    const theirs = Arr.filter(timeline.nodes, (node, i) => i !== first.to && node.circle === first.to)
-    assert.isAbove(theirs.length, 0)
-    const later = frameAt(timeline, timeline.end)
-    for (const [i, node] of timeline.nodes.entries()) {
-      if (node.circle === first.to && i !== first.to) {
-        assert.include(['met', 'circle'], later.dots[i]!.kind)
-      }
-    }
   })
 
   it('picks out whoever the pointer is over, with their links', () => {
@@ -142,18 +244,23 @@ describe('network frames', () => {
     assert.deepStrictEqual(shapesOf(frame, 800, 450, Option.some([-100, -100])), plain)
   })
 
-  it('draws one dot per person, a ring per arrival, plus you walking', () => {
-    const time = arrivalOf(timeline.hops[3]!) + 0.2
-    const frame = frameAt(timeline, time)
-    const shapes = shapesOf(frame, 800, 450)
-    assert.strictEqual(shapes.dots.length, frame.dots.length + frame.rings.length + 1)
-    assert.strictEqual(shapes.lines.length, frame.edges.length)
-    for (const dot of shapes.dots) {
-      assert.isTrue(dot.x >= 0 && dot.x <= 800 && dot.y >= 0 && dot.y <= 450)
-    }
+  it('pointing at a caller keeps their whole call lit', () => {
+    const frame = frameAt(timeline, timeline.end)
+    const call = timeline.calls[1]!
+    const caller = frame.dots[Arr.headNonEmpty(call.path)]!
+    const [x, y] = projection(800, 450)([caller.x, caller.y])
+    const picked = shapesOf(frame, 800, 450, Option.some([x, y]))
+    const trails = Arr.takeRight(picked.lines, frame.trails.length)
+    const theirs = Arr.filter(frame.trails, trail => trail.caller === caller.id).length
+    assert.strictEqual(Arr.filter(trails, line => line.color[3] > 0.9).length, theirs)
   })
 
-  it('a hop is never longer than its slot', () => {
-    for (const hop of timeline.hops) assert.isAtMost(arrivalOf(hop) - hop.start, HOP)
+  it('draws every shape on the canvas', () => {
+    for (const time of [1, 8, timeline.jump + 0.5, timeline.calls[2]!.start + 0.3, timeline.end]) {
+      const shapes = shapesOf(frameAt(timeline, time), 800, 450)
+      for (const dot of shapes.dots) {
+        assert.isTrue(dot.x >= 0 && dot.x <= 800 && dot.y >= 0 && dot.y <= 450)
+      }
+    }
   })
 })

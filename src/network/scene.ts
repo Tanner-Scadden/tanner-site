@@ -3,15 +3,18 @@
 
 import { makeAnimation } from '../blog/animation/Animation.ts'
 import type { Scene } from '../blog/animation/scene.ts'
-import { MAX_EDGES, MAX_NODES, buildTimeline, frameAt } from './graph.ts'
-import { shapesOf } from './shapes.ts'
+import { buildTimeline, frameAt } from './graph.ts'
+import { MAX_DOTS, MAX_LINES, shapesOf } from './shapes.ts'
 
 export const networkScene: Scene = {
   variants: [
     {
       id: 'good',
       label: 'HIGH IMPACT',
-      caption: "Network over time as you have high impact on people's lives",
+      // The second sentence names the late beat, since the canvas has no
+      // words of its own.
+      caption:
+        "Network over time as you have high impact on people's lives. When you jump, the calls come back through it.",
       tone: 'hi',
     },
   ],
@@ -22,9 +25,8 @@ export const networkScene: Scene = {
       shapesAt: (time, width, height, pointer) => shapesOf(frameAt(timeline, time), width, height, pointer),
     }
   },
-  // Dots: everyone, their rings, the picked person's ring, and you walking.
-  maxLines: MAX_EDGES,
-  maxDots: MAX_NODES * 2 + 2,
+  maxLines: MAX_LINES,
+  maxDots: MAX_DOTS,
 }
 
 export const NetworkFigure = makeAnimation('NetworkFigure', networkScene)
