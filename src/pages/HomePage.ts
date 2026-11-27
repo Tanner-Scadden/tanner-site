@@ -157,6 +157,7 @@ const Work = <M>(h: Html.H<M>, still: boolean) =>
         ...Arr.map(WORK, job =>
           h.div
             .class('job')
+            .attrs(job.wave === undefined ? {} : { 'data-wave': job.wave })
             .children(
               h.div
                 .class('meta')

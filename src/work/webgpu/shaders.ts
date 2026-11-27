@@ -47,12 +47,16 @@ fn paint(color: vec3f, alpha: f32) -> vec4f {
 const RISE = 14.0;
 const RIPPLE = 15.0;
 const SWELL = 2.2;
-const CREST = vec3f(255.0, 232.0, 176.0) / 255.0;
 
 // How strong the wave is, a given number of px back from its front, 0 to 1.
 fn swell(behind: f32, len: f32) -> f32 {
   if (behind < 0.0 || behind > len) { return 0.0; }
   return smoothstep(0.0, RISE, behind) * pow(1.0 - behind / len, 1.6);
+}
+
+// The crest is the wave's colour lifted toward white.
+fn crest(color: vec3f) -> vec3f {
+  return mix(color, vec3f(1.0), 0.35);
 }
 
 // How far the wave pushes the line off its rest, in px.
@@ -67,8 +71,8 @@ const QUAD = array<vec2f, 6>(
 `
 
 // NOTE: rect.xy, rect.zw (size); hover, out, ping, entry; then the wave:
-// start, front, length, on.
-export const BOX_FLOATS = 12
+// start, front, length, on; then its colour (rgb, unused).
+export const BOX_FLOATS = 16
 
 export const BOXES = /* wgsl */ `
 ${COMMON}
@@ -80,6 +84,8 @@ struct Box {
   // How far along the job's path the wave reaches this box, where its front
   // is, how long it is (all px), and 1 while there's a wave.
   wave: vec4f,
+  // The wave's colour: gold, or the job's own.
+  color: vec4f,
 }
 
 @group(0) @binding(1) var<storage, read> boxes: array<Box>;
@@ -156,13 +162,15 @@ fn fs(in: Out) -> @location(0) vec4f {
 
   let base = mix(INK, HIGHLIGHT, gold);
   let baseAlpha = mix(0.9, 1.0, gold);
-  let ink = mix(base, CREST, strength);
+  let tint = b.color.rgb;
+  let ink = mix(base, crest(tint), strength);
   var color = paint(ink, line(dd, 1.0 + strength * 0.8) * max(baseAlpha, strength));
 
-  // Light round the crest, a moment's glow once the wave closes on RESULT,
-  // and a hint of it under the pointer.
-  let glow = exp(-(dd * dd) / 30.0) * (strength * 0.55 + ping * 0.45 + hover * 0.12);
-  color = over(paint(HIGHLIGHT, glow), color);
+  // Light round the crest, and a moment's glow once the wave closes on
+  // RESULT, both in the wave's colour; and a hint of gold under the pointer.
+  let wash = exp(-(dd * dd) / 30.0);
+  color = over(paint(tint, wash * (strength * 0.55 + ping * 0.45)), color);
+  color = over(paint(HIGHLIGHT, wash * hover * 0.12), color);
 
   // Hover: faint drafting hatch inside, and crop marks at the corners.
   if (hover > 0.0) {
@@ -186,8 +194,9 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: from.xy, to.xy, then the wave as for a box: start, front, length, on.
-export const GAP_FLOATS = 8
+// NOTE: from.xy, to.xy, then the wave as for a box: start, front, length,
+// on; then its colour (rgb, unused).
+export const GAP_FLOATS = 12
 
 export const GAPS = /* wgsl */ `
 ${COMMON}
@@ -195,6 +204,7 @@ ${COMMON}
 struct Gap {
   path: vec4f,
   wave: vec4f,
+  color: vec4f,
 }
 
 @group(0) @binding(1) var<storage, read> gaps: array<Gap>;
@@ -242,9 +252,9 @@ fn fs(in: Out) -> @location(0) vec4f {
   let strength = swell(behind, g.wave.z) * onArrow;
   let dd = abs(across - ripple(behind, strength));
 
-  var color = paint(CREST, line(dd, 1.0 + strength * 0.8) * strength);
+  var color = paint(crest(g.color.rgb), line(dd, 1.0 + strength * 0.8) * strength);
   let glow = exp(-(dd * dd) / 30.0) * strength * 0.55;
-  color = over(paint(HIGHLIGHT, glow), color);
+  color = over(paint(g.color.rgb, glow), color);
   return color;
 }
 `

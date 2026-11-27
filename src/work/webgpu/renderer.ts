@@ -5,7 +5,7 @@
 // layout is read from the DOM, the timing rules live in ./work, and the loop
 // sleeps whenever nothing is drawing, so a resting list costs nothing.
 
-import { Data, Effect, Queue, Ref, type Scope, Stream } from 'effect'
+import { Data, Effect, Option, Queue, Ref, type Scope, Stream } from 'effect'
 
 import {
   type GpuUnavailable,
@@ -40,6 +40,29 @@ const MAX_PIXEL_RATIO = 2
 const GAPS = STEPS - 1
 // The wave's length along the path, in px, at most.
 const WAVE_PX = 120
+// The site's gold, for a job without its own wave colour.
+const GOLD: Rgb = [1, 209 / 255, 102 / 255]
+
+type Rgb = readonly [number, number, number]
+
+// A `#rrggbb` colour as 0 to 1 channels, if it is one.
+const parseHex = (hex: string): Option.Option<Rgb> => {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim())
+  return match === null
+    ? Option.none()
+    : Option.some([
+        parseInt(match[1]!, 16) / 255,
+        parseInt(match[2]!, 16) / 255,
+        parseInt(match[3]!, 16) / 255,
+      ])
+}
+
+// A job can ask for its own wave colour with `data-wave`.
+const waveColor = (job: HTMLElement): Rgb =>
+  Option.fromNullishOr(job.dataset['wave']).pipe(
+    Option.flatMap(parseHex),
+    Option.getOrElse(() => GOLD),
+  )
 
 interface Rect {
   readonly x: number
@@ -64,6 +87,7 @@ interface Row {
   readonly boxStarts: ReadonlyArray<number>
   readonly gapStarts: ReadonlyArray<number>
   readonly length: number
+  readonly color: Rgb
 }
 
 // Where every box and arrow sits, in CSS px from the canvas's corner.
@@ -82,7 +106,7 @@ const gapBetween = (a: Rect, b: Rect): Segment =>
         to: [b.x + b.w / 2, b.y],
       }
 
-const rowOf = (boxes: ReadonlyArray<Rect>): Row => {
+const rowOf = (boxes: ReadonlyArray<Rect>, color: Rgb): Row => {
   const gaps = boxes.slice(1).map((box, i) => gapBetween(boxes[i]!, box))
   const stacked = boxes.length > 1 && boxes[1]!.x < boxes[0]!.x + boxes[0]!.w - 1
   const boxStarts: Array<number> = []
@@ -96,7 +120,7 @@ const rowOf = (boxes: ReadonlyArray<Rect>): Row => {
     gapStarts.push(at)
     at += Math.hypot(gap.to[0] - gap.from[0], gap.to[1] - gap.from[1])
   })
-  return { boxes, gaps, stacked, boxStarts, gapStarts, length: at }
+  return { boxes, gaps, stacked, boxStarts, gapStarts, length: at, color }
 }
 
 const measure = (
@@ -110,6 +134,7 @@ const measure = (
         const r = el.getBoundingClientRect()
         return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
       }).slice(0, STEPS),
+      waveColor(job),
     ),
   )
 }
@@ -233,13 +258,15 @@ const render = (
             front,
             length,
             on,
+            ...row.color,
+            0,
           ],
           (j * STEPS + b) * BOX_FLOATS,
         )
       })
       row.gaps.forEach((gap, g) => {
         gpu.gapData.set(
-          [...gap.from, ...gap.to, row.gapStarts[g] ?? 0, front, length, on],
+          [...gap.from, ...gap.to, row.gapStarts[g] ?? 0, front, length, on, ...row.color, 0],
           (j * GAPS + g) * GAP_FLOATS,
         )
       })
