@@ -43,6 +43,10 @@ Read this before you write or edit one.
    only show under `bun run dev`, and a build never ships their words.
 3. Move it to `PUBLISHED` when it's ready. Order doesn't matter; the blog
    sorts by date, newest first.
+4. Give it a share card, so a link to it shows the post and not just the
+   site. The `blog-share-card` skill makes one from the post's own figure
+   (`bun run card <slug>`) and sets `image` on the `Post`. Without one it
+   shares the site's card.
 
 ## What a body can use
 

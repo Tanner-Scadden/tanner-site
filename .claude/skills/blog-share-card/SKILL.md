@@ -1,0 +1,86 @@
+---
+name: blog-share-card
+description: "Use when a blog post on this site needs its share card (the og:image / twitter:image shown when a link is posted): when the author asks for an OG image, social card, share image or link preview for a post, or a post is about to go up without one. Renders a 1200×630 card of the post's title and summary beside one of its own figures at a moment that tells the post's story, and wires it into the post."
+---
+
+# Blog share card
+
+A post's share card is what people see before they click. It should look
+like the site (the blueprint, Archivo and Space Mono, the gold) and show
+the post's idea at a glance, using the post's own figure rather than new
+art. `card.ts`, next to this file, does the rendering. Your job is to pick
+the moment and wire the card in.
+
+## 1. Pick the moment with the author
+
+A figure's best frame for a card is rarely its first one. Look at the
+post's figures and what each one is saying, then offer two or three
+moments through the AskUserQuestion UI. For example:
+
+- the finished run (`--seek 1`), when the end state is the point
+- the end state after one INTERACT (`--interact 1 --wait <settle in ms>`),
+  when the post is about what one action does. Be Someone Worth Calling
+  uses the network after one bad interaction, with the torn branch dimmed
+  and pulled away
+- a moment mid-interaction (`--wait` shorter than the settle), when the
+  break itself is the story. It's more dramatic, but it can read as
+  unfinished at thumbnail size
+- no figure (`--figure 0`), when the post has none, or none reads small
+
+Use the post's real title and summary: the script reads them from the
+page, so there's no new copy to write or approve.
+
+## 2. Render it
+
+Start the dev server if it isn't running (`bun run dev --port 5199`), then:
+
+```sh
+bun run card <slug> --figure 2 --interact 1 --wait 2600
+```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `--figure` | Which figure, counting from 1 in page order. `0` gives a card with no art. | `1` |
+| `--seek` | Where to scrub to first, from 0 to 1. | `1` |
+| `--interact` | How many times to press INTERACT. | `0` |
+| `--aim x,y` | Click the drawing there instead of pressing the button, as fractions of its width and height. | none |
+| `--wait` | Milliseconds to let it play before the shot. | `2600` |
+| `--out` | Where to write the card. | `public/og/<slug>.png` |
+| `--url` | The dev server. | `http://localhost:5199` |
+
+The script logs the post's figures by what their INTERACT does, so you can
+check `--figure` points at the right one. It needs Google Chrome installed,
+since it drives Chrome through `playwright-core`.
+
+Open the PNG and look at it before showing anyone. Check that:
+
+- the title doesn't cover the figure's focal point
+- the moment reads at small sizes: squint, or view it at 400px wide
+- nothing from the page leaked in, such as the paper grid or controls
+
+Re-render with different flags until it's right, then show the author the
+image.
+
+## 3. Wire it in
+
+Set `image` on the post:
+
+```ts
+image: {
+  path: '/og/<slug>.png',
+  alt: '<Title>: <what the card shows, in plain words>.',
+},
+```
+
+The alt text should describe the picture, not repeat the summary. The
+build puts the card in `og:image`, `twitter:image`, both alt tags and the
+JSON-LD. A test fails if the file isn't in `public/og/` or the alt is
+empty.
+
+## 4. Ship it
+
+Follow the repo's rules: no em dashes in the alt text, curly apostrophes,
+and no notes or scratch files committed. Run `bun run typecheck`,
+`bun run lint`, `bun run test` and `bun run build`. Check that
+`dist/blog/<slug>.html` names the card, then commit the PNG and the post
+change together.

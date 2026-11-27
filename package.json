@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "typecheck": "effect-tsgo tsrs --noEmit",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "card": "bun .claude/skills/blog-share-card/card.ts"
   },
   "dependencies": {
     "@effect/platform-browser": "4.1.4",
@@ -33,6 +34,7 @@
     "@webgpu/types": "^0.1.74",
     "eslint": "9",
     "happy-dom": "^21.0.4",
+    "playwright-core": "1.65.1",
     "tsrs": "0.23.0-ts7.1.0-beta",
     "typescript": "7.0.2",
     "unplugin": "^2.3.11",
