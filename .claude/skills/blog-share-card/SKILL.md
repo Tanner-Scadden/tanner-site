@@ -1,6 +1,6 @@
 ---
 name: blog-share-card
-description: "Use when a blog post on this site needs its share card (the og:image / twitter:image shown when a link is posted): when the author asks for an OG image, social card, share image or link preview for a post, or a post is about to go up without one. Also when the site's own card is stale, say after the home page's copy or house changes. Renders a 1200×630 card of the post's title and summary beside one of its own figures at a moment that tells the post's story, and wires it in."
+description: "Use when a blog post on this site needs its share card (the og:image / twitter:image shown when a link is posted): when the author asks for an OG image, social card, share image or link preview for a post, or a post is about to go up without one. Also when the site's own card is stale, say after the home page's copy or house changes. Renders a 2400×1260 card of the post's title and summary beside one of its own figures at a moment that tells the post's story, and wires it in."
 ---
 
 # Blog share card

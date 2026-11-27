@@ -1,4 +1,4 @@
-// Renders a share card, 1200 by 630, on the blueprint: a post's title and
+// Renders a share card, 2400 by 1260, on the blueprint: a post's title and
 // summary beside one of its figures at a chosen moment, or the site's own
 // card beside the house. Run against the dev server, so the drawing is the
 // real one, by the real painter:
@@ -103,7 +103,9 @@ const render = (url: string, out: string, contents: (page: Page) => Effect.Effec
       const page = yield* use(() => b.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 2 }))
       yield* use(() => page.goto(url, { waitUntil: 'networkidle' }))
       const card = yield* contents(page)
-      const sheet = yield* use(() => b.newPage({ viewport: { width: 1200, height: 630 } }))
+      // Laid out at 1200 by 630 and shot at 2x, so the small type stays sharp
+      // when a phone shows the card wider than 1200 device pixels.
+      const sheet = yield* use(() => b.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 2 }))
       yield* use(() => sheet.setContent(cardHtml(card), { waitUntil: 'networkidle' }))
       yield* use(() => sheet.evaluate(() => document.fonts.ready))
       const png = yield* use(() => sheet.locator('.card').screenshot())
@@ -229,7 +231,7 @@ const home = Command.make(
 ).pipe(Command.withDescription('The site’s card: the name, the line up top, and the house'))
 
 Command.make('card').pipe(
-  Command.withDescription('Render a 1200×630 share card from the dev server'),
+  Command.withDescription('Render a 2400×1260 share card from the dev server'),
   Command.withSubcommands([post, home]),
   Command.run({ version: '1.0.0' }),
   Effect.provide(BunServices.layer),
