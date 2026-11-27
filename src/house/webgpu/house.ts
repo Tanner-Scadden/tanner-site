@@ -4,9 +4,10 @@
 //
 // The plan is drafted once: pens trace every wall one after another, then
 // the front door swings in. Once it's drawn, Teddy and Rain move in through
-// the front door. Teddy wanders the Outside Work room and comes over to the
-// pointer whenever it's on the house; Rain mostly naps, and bolts when Teddy
-// gets too close. With motion reduced the plan is simply there, and the
+// the front door. Teddy wanders the Outside Work room, chases the pointer
+// whenever it's on the house, and play-bows and barks once he catches it.
+// Rain ignores it and does her own thing: mostly naps, sometimes sits up to
+// watch it, and bolts when Teddy gets too close. With motion reduced the plan is simply there, and the
 // pets sit still.
 
 import { Array as Arr } from 'effect'
@@ -210,6 +211,13 @@ export interface Pet {
   // picks the walking frame.
   readonly moving: boolean
   readonly gait: number
+  // The alert pose: Teddy's play bow, or Rain sitting up to watch.
+  readonly alert: boolean
+  // Rain only: whether this rest she'd rather watch the pointer than nap.
+  readonly curious: boolean
+  // Teddy only: when he last barked, and when he'll bark next.
+  readonly barkAt: number
+  readonly nextBark: number
   // Distance walked since the last paw print.
   readonly stride: number
   // Paw prints that haven't faded yet, oldest first.
@@ -254,6 +262,10 @@ const RAIN_RUN = 120
 // Teddy sits this close to the pointer, and Rain bolts at this distance.
 const HEEL = 12
 const PERSONAL_SPACE = 24
+// How long a bark shows, and how often Rain watches instead of napping.
+export const BARK_MS = 450
+const CURIOUS = 0.45
+const PLAY_SLACK = 8
 const ARRIVED = 0.5
 const LONGEST_STEP_S = 0.05
 
@@ -290,6 +302,10 @@ const pet = (name: PetName, at: Point, target: Point, speed: number): Pet => ({
   facing: 1,
   moving: false,
   gait: 0,
+  alert: false,
+  curious: false,
+  barkAt: Number.NEGATIVE_INFINITY,
+  nextBark: 0,
   stride: 0,
   prints: [],
 })
@@ -343,8 +359,18 @@ const walk = (p: Pet, dt: number, now: number): Pet => {
 // resting pose (Teddy sits, Rain curls up).
 export const WALK_FRAMES = 4
 export const REST_FRAME = WALK_FRAMES
+export const ALERT_FRAME = WALK_FRAMES + 1
 export const frameOf = (p: Pet): number =>
-  p.moving ? Math.floor(p.gait / FRAME_EVERY) % WALK_FRAMES : REST_FRAME
+  p.moving ? Math.floor(p.gait / FRAME_EVERY) % WALK_FRAMES : p.alert ? ALERT_FRAME : REST_FRAME
+
+// 0 to 1 through a bark that's showing, or null when Teddy is quiet.
+export const barkOf: {
+  (now: number): (p: Pet) => number | null
+  (p: Pet, now: number): number | null
+} = dual(2, (p: Pet, now: number): number | null => {
+  const t = (now - p.barkAt) / BARK_MS
+  return t >= 0 && t < 1 ? t : null
+})
 
 // 1 for a fresh print, down to 0 as it fades.
 export const printAlpha: {
@@ -354,29 +380,41 @@ export const printAlpha: {
 
 const arrived = (p: Pet): boolean => distance(p.at, p.target) <= ARRIVED
 
-// What Teddy wants: the pointer if it's on the house, otherwise somewhere in
-// the yard after a short sit.
+// What Teddy wants: to chase the pointer if it's on the house, and once he
+// catches it, to play-bow and bark at it. Otherwise somewhere in the yard
+// after a short sit.
 const teddyPlans = (seed: number, p: Pet, tick: PetTick): readonly [number, Pet] => {
   if (tick.pointer !== null) {
     const to = clampTo(tick.pointer, tick.plan.inside)
     const d = distance(p.at, to)
-    // Close enough: sit and look at it.
-    const target = d <= HEEL ? p.at : pt(to.x - ((to.x - p.at.x) / d) * HEEL, to.y - ((to.y - p.at.y) / d) * HEEL)
-    // Sitting, he turns to look at it.
-    const facing = d <= HEEL && Math.abs(to.x - p.at.x) > 1 ? Math.sign(to.x - p.at.x) : p.facing
-    return [seed, { ...p, target, facing, speed: TEDDY_RUN, restUntil: 0 }]
+    // Once he's playing, a little pointer wiggle doesn't get him up again.
+    if (d > (p.alert ? HEEL + PLAY_SLACK : HEEL + 1)) {
+      const target = pt(to.x - ((to.x - p.at.x) / d) * HEEL, to.y - ((to.y - p.at.y) / d) * HEEL)
+      return [seed, { ...p, target, speed: TEDDY_RUN, restUntil: 0, alert: false }]
+    }
+    // Caught it: down into a play bow, facing it, barking now and then. The
+    // first bark comes right away.
+    const facing = Math.abs(to.x - p.at.x) > 1 ? Math.sign(to.x - p.at.x) : p.facing
+    const caught = { ...p, target: p.at, facing, restUntil: 0, alert: true }
+    const nextBark = p.alert ? p.nextBark : tick.now + 120
+    if (tick.now < nextBark) return [seed, { ...caught, nextBark }]
+    const [s, wait] = randomBetween(seed, 700, 1800)
+    return [s, { ...caught, barkAt: tick.now, nextBark: tick.now + wait }]
   }
-  if (!arrived(p)) return [seed, p.speed === TEDDY_WALK ? p : { ...p, speed: TEDDY_WALK }]
-  if (p.restUntil === 0) {
+  const calm = p.alert ? { ...p, alert: false } : p
+  if (!arrived(calm)) return [seed, calm.speed === TEDDY_WALK ? calm : { ...calm, speed: TEDDY_WALK }]
+  if (calm.restUntil === 0) {
     const [s, rest] = randomBetween(seed, 600, 2200)
-    return [s, { ...p, restUntil: tick.now + rest }]
+    return [s, { ...calm, restUntil: tick.now + rest }]
   }
-  if (tick.now < p.restUntil) return [seed, p]
+  if (tick.now < calm.restUntil) return [seed, calm]
   const [s, target] = randomIn(seed, tick.plan.yard)
-  return [s, { ...p, target, speed: TEDDY_WALK, restUntil: 0 }]
+  return [s, { ...calm, target, speed: TEDDY_WALK, restUntil: 0 }]
 }
 
-// What Rain wants: a long nap, a short stroll, and to be far from Teddy.
+// What Rain wants: her own thing. A long rest, a short stroll, and to be far
+// from Teddy. She never follows the pointer, but on some rests she sits up
+// and watches it instead of napping.
 const rainPlans = (
   seed: number,
   p: Pet,
@@ -388,16 +426,25 @@ const rainPlans = (
     const yard = tick.plan.yard
     const x = teddy.at.x < yard.x + yard.w / 2 ? yard.x + yard.w : yard.x
     const [s, y] = randomBetween(seed, yard.y, yard.y + yard.h)
-    return [s, { ...p, target: pt(x, y), speed: RAIN_RUN, fleeing: true, restUntil: 0 }]
+    return [s, { ...p, target: pt(x, y), speed: RAIN_RUN, fleeing: true, restUntil: 0, alert: false }]
   }
-  if (!arrived(p)) return [seed, p]
+  if (!arrived(p)) return [seed, p.alert ? { ...p, alert: false } : p]
   if (p.restUntil === 0) {
-    const [s, nap] = randomBetween(seed, 2500, 7000)
-    return [s, { ...p, fleeing: false, speed: RAIN_WALK, restUntil: tick.now + nap }]
+    const [s1, nap] = randomBetween(seed, 2500, 7000)
+    const [s2, roll] = next(s1)
+    return [s2, { ...p, fleeing: false, speed: RAIN_WALK, restUntil: tick.now + nap, curious: roll < CURIOUS }]
   }
-  if (tick.now < p.restUntil) return [seed, p]
+  if (tick.now < p.restUntil) {
+    // Watching: sitting up and turned toward the pointer, while it's here.
+    const watching = p.curious && tick.pointer !== null
+    const facing =
+      watching && tick.pointer !== null && Math.abs(tick.pointer.x - p.at.x) > 2
+        ? Math.sign(tick.pointer.x - p.at.x)
+        : p.facing
+    return [seed, watching === p.alert && facing === p.facing ? p : { ...p, alert: watching, facing }]
+  }
   const [s, target] = randomIn(seed, tick.plan.yard)
-  return [s, { ...p, target, speed: RAIN_WALK, restUntil: 0 }]
+  return [s, { ...p, target, speed: RAIN_WALK, restUntil: 0, alert: false }]
 }
 
 export const stepPets: {
