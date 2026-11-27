@@ -159,16 +159,17 @@ export const rootSystemOf = (next: () => number, spec: RootSpec): RootSystem => 
 }
 
 // How far out along its roots a tree's growth front is, `age` seconds after
-// it sprouts: quick at first, then slowing, but never quite stopping, so
-// the roots keep going right to the end. A seed's root comes before its
-// shoot, so they start as soon as it sprouts.
-const ROOT_TIME = 5.5
+// it sprouts: quick at first, then slowing, until it's all out at
+// ROOT_GROW. A seed's root comes before its shoot, so they start as soon as
+// it sprouts.
+export const ROOT_GROW = 5
+const easeOut = (u: number): number => 1 - (1 - clamp01(u)) ** 3
 export const rootFrontOf = (system: RootSystem, age: number): number =>
-  age <= 0 ? 0 : system.reach * (1 - Math.exp(-age / ROOT_TIME))
+  age <= 0 ? 0 : system.reach * easeOut(age / ROOT_GROW)
 
-// How thick roots are, `age` seconds in: thin at first, filling out as the
-// tree gets established.
-const maturityOf = (age: number): number => 0.3 + 0.7 * (1 - Math.exp(-Math.max(0, age) / 6))
+// How thick roots are, `age` seconds in: thin at first, filled out by the
+// time they're all grown.
+const maturityOf = (age: number): number => 0.3 + 0.7 * easeOut(age / ROOT_GROW)
 
 export interface DrawnRoot {
   readonly from: Point
@@ -213,11 +214,16 @@ const ROOTLETS = 2
 // Each rootlet off a reaching root is drawn in this many pieces.
 const ROOTLET_STEPS = 2
 export const REACH_LINES = APPROACH_STEPS + TWIST_STEPS + ROOTLETS * ROOTLET_STEPS
-export const REACH_RATE = 0.11
-// How long a new tie takes to show, and how fast the gold spreads back
-// along both roots toward the trunks once they've met.
-const BOND = 2.5
-const GOLD_SPREAD = 0.05
+// How fast a reaching root grows, and the longest it takes to get to the
+// meeting point: one with further to go grows faster.
+const REACH_RATE = 0.11
+export const REACH_MAX = 2.2
+export const reachRateOf = (distance: number): number => Math.max(REACH_RATE, distance / REACH_MAX)
+// How long the run on past the meeting point can take.
+export const OVERLAP_MAX = OVERLAP / REACH_RATE
+// How long a new tie takes to show in full, gold spread back along both
+// roots toward the trunks.
+export const BOND = 2.5
 
 // A pair's roots wander from their own seed, so they wander the same way
 // every frame without being stored.
@@ -263,10 +269,9 @@ export interface DrawnReach extends DrawnRoot {
 // then runs on past it, twisting around its partner.
 export const reachLengthOf = (distance: number): number => distance + OVERLAP
 
-// How strong a tie is that's held this long: it shows over BOND seconds,
-// then keeps strengthening, more slowly, for as long as it holds.
-export const bondOf = (held: number): number =>
-  held <= 0 ? 0 : clamp01(0.75 * smooth(held / BOND) + 0.25 * (1 - Math.exp(-held / 8)))
+// How strong a tie is that's held this long: it strengthens over BOND
+// seconds, then holds.
+export const bondOf = (held: number): number => (held <= 0 ? 0 : smooth(held / BOND))
 
 export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
   if (reach.length <= 0) return []
@@ -327,7 +332,7 @@ export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
     // Gold starts at the knot and spreads back toward the trunk, but never
     // all the way: it's the tie that's gold, not the trees.
     const away = Math.abs(half - along)
-    const reachBack = Math.min(0.05 + reach.held * GOLD_SPREAD, Math.max(half * 0.75, OVERLAP))
+    const reachBack = 0.05 + (Math.max(half * 0.75, OVERLAP) - 0.05) * smooth(reach.held / BOND)
     return (
       bondOf(reach.held) *
       smooth((reachBack - away) / Math.min(0.08, reachBack)) *

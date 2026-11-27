@@ -187,12 +187,15 @@ describe('grove frames', () => {
     assert.isAtLeast(Arr.filter(mid.seeds, s => s.flying).length, 2)
   })
 
-  it('ends with a grove, and a seed or two still in the air', () => {
+  it('ends with the whole grove grown, and nothing still to come', () => {
     const last = frameAt(timeline, timeline.end)
-    assert.isAtLeast(last.trees.length, 1 + GROVE)
-    const full = Arr.filter(last.trees, tree => tree.grown === 1)
-    assert.strictEqual(full.length, 1 + GROVE)
-    assert.isAtLeast(Arr.filter(last.seeds, s => s.flying).length, 1)
+    assert.strictEqual(last.trees.length, timeline.trees.length)
+    assert.isTrue(Arr.every(last.trees, tree => tree.grown === 1))
+    assert.deepStrictEqual(last.seeds, [])
+    assert.deepStrictEqual(last.rings, [])
+    // Underground, nothing changes after the end: roots and ties are done.
+    const under = (time: number) => Arr.filter(frameAt(timeline, time).branches, branch => branch.root)
+    assert.deepStrictEqual(under(timeline.end), under(timeline.end + 10))
     // The grove spans the sheet.
     const left = Arr.reduce(last.trees, 0, (m, tree) => Math.min(m, tree.left))
     const right = Arr.reduce(last.trees, 0, (m, tree) => Math.max(m, tree.right))
@@ -276,10 +279,9 @@ describe('grove frames', () => {
       const bonded = new Set(Arr.map(Arr.filter(end, b => b.root && b.bond > 0.5), b => b.tree))
       // The first tree and the grove all stand long enough to have met.
       for (const id of Arr.range(0, GROVE)) assert.isTrue(bonded.has(id), `seed ${seed} tree ${id}`)
-      // The tie strengthens the longer it holds.
-      const strongest = (t: number) =>
-        Arr.reduce(frameAt(timeline, t).branches, 0, (m, b) => Math.max(m, b.root ? b.bond : 0))
-      assert.isAbove(strongest(timeline.end), strongest(timeline.end - 4))
+      // The ties strengthen the longer they hold, right up to the end.
+      const gold = (t: number) => Arr.reduce(frameAt(timeline, t).branches, 0, (sum, b) => sum + (b.root ? b.bond : 0))
+      assert.isBelow(gold(timeline.end - 2), gold(timeline.end))
     }
   })
 })

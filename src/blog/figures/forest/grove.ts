@@ -1,7 +1,18 @@
 import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
 import { clamp01, random } from '../../animation/kit.ts'
-import { REACH_RATE, type RootSystem, drawReach, drawRoots, reachLengthOf, rootSystemOf } from './roots.ts'
+import {
+  BOND,
+  OVERLAP_MAX,
+  REACH_MAX,
+  ROOT_GROW,
+  type RootSystem,
+  drawReach,
+  drawRoots,
+  reachLengthOf,
+  reachRateOf,
+  rootSystemOf,
+} from './roots.ts'
 
 // The world is a box this wide and tall around the middle of the canvas,
 // in world units, with y pointing down like the canvas.
@@ -40,22 +51,19 @@ const FIRST_RELEASE = 6.5
 const RELEASE_GAP = 0.25
 const FLIGHT = { min: 1.6, spread: 0.4 } as const
 const GROVE_GROW = { min: 2.8, spread: 0.4 } as const
-// The grove's own seeds, so the last frame still has something coming.
-const LATE_RELEASES = [12.2, 12.6, 13.6, 14] as const
-const LATE_FLIGHTS = [1.4, 1.5, 2.4, 2.4] as const
+// The grove's own seeds, filling the gaps it leaves.
+const LATE_RELEASES = [12.2, 12.5, 12.9, 13.2] as const
+const LATE_FLIGHTS = [1.4, 1.5, 1.7, 1.8] as const
 const SAPLING_GROW = 3.2
 // How long a leaf takes to open, a blossom to brighten before its seed
 // lets go, and a landing ring to spread.
 const LEAF_OPEN = 0.4
 const BLOSSOM = 0.8
 const RING = 1.2
-// When everything that's going to happen in a run has happened.
-const END = 15
 // A planted seed: how long it drifts down, and how long its tree takes to
-// grow. Seconds until a planting has played out.
+// grow.
 const PLANT_FLIGHT = 1.8
 const PLANT_GROW = 3
-export const PLANT_SETTLE = PLANT_FLIGHT + REST + PLANT_GROW
 
 type Point = readonly [number, number]
 
@@ -118,7 +126,8 @@ export interface Flight {
 }
 
 export interface Timeline {
-  // One per seed, in the same order: seed k grows into tree k.
+  // One per seed, in the same order: seed k grows into tree k. It ends
+  // once every tree, root and tie has finished growing.
   readonly trees: ReadonlyArray<Tree>
   readonly flights: ReadonlyArray<Flight>
   readonly end: number
@@ -435,7 +444,7 @@ export const buildTimeline = (seed: number): Timeline => {
     trees.push(tree)
   }
 
-  return { trees, flights, end: END }
+  return { trees, flights, end: settledAt(trees, flights) }
 }
 
 // ---------------------------------------------------------------------------
@@ -553,7 +562,8 @@ const SEED_FADE = 0.6
 // Each tree reaches a root toward its nearest older neighbour from a third
 // of the way through its growth, and the neighbour reaches back. Where they
 // meet they knot together, and the tie strengthens for as long as it holds.
-const reachingFrom = (tree: Tree) => tree.sprout + tree.grow * 0.35
+const REACH_FROM = 0.35
+const reachingFrom = (tree: Tree) => tree.sprout + tree.grow * REACH_FROM
 // Trees closer than this meet off to one side.
 const MEET_GAP = 0.2
 
@@ -567,6 +577,49 @@ const neighbourOf = (trees: ReadonlyArray<Tree>, id: number): number => {
   }
   return best
 }
+
+// Where two trees' roots meet: halfway between, or off to the side, toward
+// the middle of the sheet, if they stand so close there's no room between
+// them.
+const meetingOf = (tree: Tree, them: Tree): number => {
+  const middle = (tree.x + them.x) / 2
+  return Math.abs(them.x - tree.x) < MEET_GAP ? middle - (Math.sign(middle) || 1) * MEET_GAP * 0.6 : middle
+}
+
+// How far a tree's root toward the meeting point has grown at `time`, and
+// when it gets there.
+const reachAt = (tree: Tree, meetX: number, time: number) => {
+  const distance = Math.abs(meetX - tree.x)
+  const rate = reachRateOf(distance)
+  const raw = Num.clamp((time - reachingFrom(tree)) * rate, { minimum: 0, maximum: reachLengthOf(distance) })
+  const arrives = reachingFrom(tree) + distance / rate
+  return { x: tree.x, dir: Math.sign(meetX - tree.x) || 1, distance, raw, arrives }
+}
+
+// When the last of a run has finished: every seed down and its landing
+// ring gone, every tree, leaf and root grown, and every tie knotted.
+const settledAt = (trees: ReadonlyArray<Tree>, flights: ReadonlyArray<Flight>): number => {
+  const landed = Arr.map(flights, flight => landingOf(flight) + RING)
+  const grown = Arr.map(trees, tree =>
+    Math.max(
+      tree.sprout + tree.grow,
+      tree.sprout + ROOT_GROW,
+      ...Arr.map(tree.leaves, leaf => leaf.born + LEAF_OPEN),
+    ),
+  )
+  const tied = Arr.map(trees, (tree, id) => {
+    const other = neighbourOf(trees, id)
+    if (other < 0) return 0
+    const meetX = meetingOf(tree, trees[other]!)
+    const met = Math.max(reachAt(tree, meetX, 0).arrives, reachAt(trees[other]!, meetX, 0).arrives)
+    return met + Math.max(BOND, OVERLAP_MAX)
+  })
+  return Math.max(...landed, ...grown, ...tied)
+}
+
+// Seconds until a planting has played out, however far its tree reaches.
+export const PLANT_SETTLE =
+  PLANT_FLIGHT + REST + Math.max(PLANT_GROW, ROOT_GROW, PLANT_GROW * REACH_FROM + REACH_MAX + Math.max(BOND, OVERLAP_MAX))
 
 export const frameAt = (timeline: Timeline, time: number): Frame => {
   const { trees, flights } = timeline
@@ -633,17 +686,8 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     const other = neighbourOf(trees, id)
     if (other < 0) continue
     const them = trees[other]!
-    // They meet halfway between, or off to the side, toward the middle of
-    // the sheet, if they stand so close there's no room between them.
-    const gap = them.x - tree.x
-    const middle = (tree.x + them.x) / 2
-    const meetX = Math.abs(gap) < MEET_GAP ? middle - (Math.sign(middle) || 1) * MEET_GAP * 0.6 : middle
-    const reachOf = (t: Tree) => {
-      const distance = Math.abs(meetX - t.x)
-      const raw = Num.clamp((time - reachingFrom(t)) * REACH_RATE, { minimum: 0, maximum: reachLengthOf(distance) })
-      const arrives = reachingFrom(t) + distance / REACH_RATE
-      return { x: t.x, dir: Math.sign(meetX - t.x) || 1, distance, raw, arrives }
-    }
+    const meetX = meetingOf(tree, them)
+    const reachOf = (t: Tree) => reachAt(t, meetX, time)
     const mine = reachOf(tree)
     const theirs = reachOf(them)
     // Neither runs on past the meeting point until the other's got there,
