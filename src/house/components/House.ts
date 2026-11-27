@@ -47,7 +47,7 @@ export const House = <M>(h: Html.H<M>, still: boolean, played: M, blogOpen: bool
               .children(sx(h.b, styles.name, styles.pencilled).children(HOUSE.rooms.library.name)),
         Room(h, 'work', '#work'),
         Room(h, 'oss', '#oss'),
-        Room(h, 'outside', '#outside'),
+        Room(h, 'outside', '#personal-life'),
         sx(h.div, styles.room, styles.locked)
           .attrs({ 'data-room': 'locked', 'aria-hidden': 'true' })
           .children(

@@ -188,7 +188,7 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
       BLOG_OPEN && sx(h.a, base.link, sheet.navLink).attr('href', '#blog').children('BLOG'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#work').children('WORK'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#oss').children('OPEN SOURCE'),
-      sx(h.a, base.link, sheet.navLink).attr('href', '#outside').children(PERSONAL_LIFE),
+      sx(h.a, base.link, sheet.navLink).attr('href', '#personal-life').children(PERSONAL_LIFE),
     ),
     EggCounter(h, eggs),
   )
@@ -255,7 +255,7 @@ const OpenSource = <M>(h: Html.H<M>) =>
   )
 
 const Outside = <M>(h: Html.H<M>) =>
-  Section(h, 'outside').children(
+  Section(h, 'personal-life').children(
     Callout(h, 4, PERSONAL_LIFE),
     sx(h.p, sheet.prose).children(
       'I’ve always played games, and for a few years I ',
