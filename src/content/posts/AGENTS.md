@@ -1,0 +1,99 @@
+# Writing a blog post
+
+Each post is a sheet in set B, numbered from the oldest: B-01, B-02...
+Read this before you write or edit one.
+
+## Before any prose
+
+- Run the `blog-brainstorm` skill first. Agree on the angle and a brief
+  with the author before you draft anything. Briefs live in
+  `docs/posts/<date>-<slug>-brief.md`.
+
+## The voice
+
+- It's the author's post. Keep their voice: plain, direct, first person,
+  short sentences. When they send you a paragraph, tighten it and fix the
+  grammar. Don't rewrite it into yours.
+- No em dashes anywhere in the copy.
+- Use curly quotes and apostrophes (’ “ ”), never `\'` escapes.
+- Don't name private people (teammates, coworkers, friends) unless the
+  author says to. Public figures, books and companies are fine.
+- When you quote a book or a post, keep it short and credit it: the title
+  and the author.
+
+## Adding a post
+
+1. Write it in `src/content/posts/<slug>.ts` as a `Post` (see
+   `src/domain/Post.ts`):
+
+   ```ts
+   import type { Post } from '#domain/Post'
+
+   export const myPost: Post = {
+     slug: 'my-post', // the URL: /blog/my-post
+     title: 'My post',
+     date: '2026-11-27', // YYYY-MM-DD, the day it goes up
+     summary: 'One or two sentences for the index.',
+     body: h => [h.p('Hello.')],
+   }
+   ```
+
+2. Add it to `WRITING` in `src/content/blog.ts` while you write it. Drafts
+   only show under `bun run dev`, and a build never ships their words.
+3. Move it to `PUBLISHED` when it's ready. Order doesn't matter; the blog
+   sorts by date, newest first.
+
+## What a body can use
+
+The body gets an `h` whose plain tags already carry the post's styles (see
+`proseTags` in `src/blog/components/Prose.ts`), so you never style
+anything yourself.
+
+- Text:
+  - paragraphs are `h.p(...)`
+  - section headings are `h.h2`, and smaller ones `h.h3`
+  - `h.strong` is bold, set in gold, so use it for lead-ins like the
+    habits list
+  - `h.em` is italic, for titles and light emphasis
+  - `h.code` is inline code
+- Links: `h.a.attr('href', url).children('text')`.
+- Lists: `h.ul` or `h.ol`, with an `h.li` for each item. Keep items short.
+- Quotes: `h.blockquote(h.p('…'), h.p(h.em('Source')))`.
+- A rule: `h.hr`.
+
+From `src/blog/components/Prose.ts`:
+
+- `Note(h, 'NOTE', h.p('…'))`: an aside, boxed with a label.
+- `Code(h, { lang: 'ts', code, file? })`: a highlighted listing with a
+  copy button. The tab shows `file` if given, else the language.
+- `Figure(h, { src: '/blog/name.png', alt, caption? })`: an image. Put the
+  file in `public/blog/`.
+
+## Animated figures
+
+`src/blog/animation/` is a kit for animated diagrams. `src/network/` is
+the worked example.
+
+- A `Scene` (`scene.ts`) only answers "what's on screen at time t", as
+  lines, dots and rings in CSS px. So any moment can be scrubbed to, and
+  the same answer paints on WebGPU or a 2D canvas.
+- `makeAnimation(name, scene)` (`Animation.ts`) wraps a scene in a figure
+  with play/pause, restart, a scrubber, the time and a caption. Drop the
+  result into a body: `NetworkFigure(h, { key: 'network' })`.
+- Build the timeline once, from a seed, up front, then answer each frame
+  from it.
+- Keep motion calm. People and things should appear where they'll stay,
+  not get shoved around.
+- Reduced motion shows only the last frame, so it has to read on its own.
+- Use the blueprint palette from `src/styles/tokens.stylex.ts`: the gold
+  (`blueprint.hi`) for what matters, and line, dim and faint for the rest.
+- Test it like `src/network/graph.test.ts`:
+  - the same seed gives the same run
+  - it stays inside its bounds and buffer sizes
+  - it tells the story you meant
+
+## Before it goes up
+
+Run `bun run typecheck`, `bun run lint`, `bun run test` and
+`bun run build`, then look at the post under `bun run dev`. Check it at
+phone width too.

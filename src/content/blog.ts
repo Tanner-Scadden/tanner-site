@@ -1,18 +1,20 @@
-// NOTE: the blog's copy, and the list of every post. To add a post, write it
-// in content/posts/ (copy style-guide.ts) and add it to DRAFTS while you
-// work on it, then move it to PUBLISHED. Order doesn't matter; the blog sorts
-// by date.
+// NOTE: the blog's copy, and the list of every post. To add a post, see
+// content/posts/AGENTS.md: write it in content/posts/, add it to WRITING while
+// you work on it, then move it to PUBLISHED. Order doesn't matter; the blog
+// sorts by date.
 
 import type { Post } from '#domain/Post'
 
 import { beSomeoneWorthCalling } from './posts/be-someone-worth-calling.ts'
-import { styleGuide } from './posts/style-guide.ts'
 
 export const PUBLISHED: ReadonlyArray<Post> = [beSomeoneWorthCalling]
 
-// Drafts show under `bun run dev` only. A build swaps the list for an empty
-// one, so a draft's words never ship.
-export const DRAFTS: ReadonlyArray<Post> = import.meta.env.DEV ? [styleGuide] : []
+// Posts being written. Put them in WRITING: they show under `bun run dev`
+// only, and a build swaps the list for an empty one, so a draft's words
+// never ship.
+const WRITING: ReadonlyArray<Post> = []
+
+export const DRAFTS: ReadonlyArray<Post> = import.meta.env.DEV ? WRITING : []
 
 export const BLOG = {
   title: 'Blog',
