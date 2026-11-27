@@ -17,7 +17,8 @@
   "dependencies": {
     "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@193d2fb",
     "effect": "4.1.4",
-    "effect-machine": "0.32.1"
+    "effect-machine": "0.32.1",
+    "shiki": "4.6.0"
   },
   "devDependencies": {
     "@effect/tsgo": "0.67.5",

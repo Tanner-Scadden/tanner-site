@@ -13,12 +13,14 @@ import {
   WELCOME,
   WORK,
 } from '#content/home'
+import { Label } from '#components/Label'
 
 import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import { HouseDrawing } from '../house/mounts/HouseDrawing.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
-import { SiteRoute, href, restRoute } from '../routes.ts'
+import { BLOG_OPEN } from '../blog/posts.ts'
+import { SiteRoute, blogRoute, href, restRoute } from '../routes.ts'
 import { WorkDrawing } from '../work/mounts/WorkDrawing.ts'
 
 // NOTE: the front page, at /. The thesis and the WebGPU credit are the two
@@ -50,17 +52,6 @@ export const HomePage = <M>(
 const pressed = <M>(message: M) => ({ key }: { readonly key: string }) =>
   key === 'Enter' || key === ' ' ? message : undefined
 
-// NOTE: a section heading drawn like a drawing callout: a numbered bubble,
-// the title, and a leader line out to the sheet edge.
-const Label = <M>(h: Html.H<M>, n: number, text: string) =>
-  h.h2
-    .class('label')
-    .children(
-      h.i.attr('aria-hidden', 'true').children(String(n)),
-      text,
-      h.span.class('rule').attr('aria-hidden', 'true'),
-    )
-
 const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   h.div
     .class('top')
@@ -70,6 +61,7 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
         h.a.attr('href', '#work').children('WORK'),
         h.a.attr('href', '#oss').children('OPEN SOURCE'),
         h.a.attr('href', '#outside').children(PERSONAL_LIFE),
+        BLOG_OPEN && h.a.attr('href', href(blogRoute)).children('BLOG'),
       ),
       EggCounter(h, eggs),
     )
