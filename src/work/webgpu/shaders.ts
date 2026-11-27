@@ -42,22 +42,44 @@ fn paint(color: vec3f, alpha: f32) -> vec4f {
   return vec4f(color * a, a);
 }
 
+// The wave: a crest of light with a ripple in it, rising over its first
+// RISE px and dying away over the rest of its length.
+const RISE = 14.0;
+const RIPPLE = 15.0;
+const SWELL = 2.2;
+const CREST = vec3f(255.0, 232.0, 176.0) / 255.0;
+
+// How strong the wave is, a given number of px back from its front, 0 to 1.
+fn swell(behind: f32, len: f32) -> f32 {
+  if (behind < 0.0 || behind > len) { return 0.0; }
+  return smoothstep(0.0, RISE, behind) * pow(1.0 - behind / len, 1.6);
+}
+
+// How far the wave pushes the line off its rest, in px.
+fn ripple(behind: f32, strength: f32) -> f32 {
+  return SWELL * strength * sin(behind * 6.2831853 / RIPPLE);
+}
+
 const QUAD = array<vec2f, 6>(
   vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0),
   vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0),
 );
 `
 
-// NOTE: rect.xy, rect.zw (size), then reveal, hover, out, ping.
-export const BOX_FLOATS = 8
+// NOTE: rect.xy, rect.zw (size); hover, out, ping, entry; then the wave:
+// start, front, length, on.
+export const BOX_FLOATS = 12
 
 export const BOXES = /* wgsl */ `
 ${COMMON}
 
 struct Box {
   rect: vec4f,
-  // reveal, hover, out (the RESULT box is gold), ping
+  // hover, out (the RESULT box is gold), ping, entry (0 left, 1 top)
   anim: vec4f,
+  // How far along the job's path the wave reaches this box, where its front
+  // is, how long it is (all px), and 1 while there's a wave.
+  wave: vec4f,
 }
 
 @group(0) @binding(1) var<storage, read> boxes: array<Box>;
@@ -79,8 +101,8 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
   let b = boxes[i];
   var out: Out;
   out.i = i;
-  // A box that hasn't started drawing covers nothing.
-  if (b.anim.x <= 0.0 && b.anim.y <= 0.0) {
+  // A box that isn't laid out covers nothing.
+  if (b.rect.z <= 0.0) {
     out.position = vec4f(2.0, 2.0, 0.0, 1.0);
     out.p = vec2f(0.0);
     return out;
@@ -94,10 +116,9 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
 @fragment
 fn fs(in: Out) -> @location(0) vec4f {
   let b = boxes[in.i];
-  let reveal = b.anim.x;
-  let hover = b.anim.y;
-  let gold = b.anim.z;
-  let ping = b.anim.w;
+  let hover = b.anim.x;
+  let gold = b.anim.y;
+  let ping = b.anim.z;
   let p = in.p;
 
   // The CSS border is the box's outer 1px, so its middle is half a px in.
@@ -107,8 +128,8 @@ fn fs(in: Out) -> @location(0) vec4f {
   let h = hi.y - lo.y;
   let perimeter = 2.0 * (w + h);
 
-  // The nearest edge, and how far round the outline (clockwise from the
-  // top-left corner) the nearest point on it is.
+  // How far round the outline (clockwise from the top-left corner) the
+  // nearest point on it is.
   let top = segment(p, lo, vec2f(hi.x, lo.y));
   let right = segment(p, vec2f(hi.x, lo.y), hi);
   let bottom = segment(p, hi, vec2f(lo.x, hi.y));
@@ -119,32 +140,28 @@ fn fs(in: Out) -> @location(0) vec4f {
   if (bottom.x < d) { d = bottom.x; s = w + h + bottom.y; }
   if (left.x < d) { d = left.x; s = 2.0 * w + h + left.y; }
 
-  // Two pens leave the top-left corner in opposite directions and meet at
-  // the bottom-right, so each draws half the outline.
-  let head = reveal * perimeter * 0.5;
-  // How far behind each pen this point is: negative until that pen passes.
-  let one = head - s;
-  let two = head - (perimeter - s);
-  let drawn = select(0.0, 1.0, max(one, two) >= 0.0);
-  // Distance back to the nearest pen that has passed, and to the nearest tip.
-  let behind = select(select(two, one, one >= 0.0), min(one, two), one >= 0.0 && two >= 0.0);
-  let toTip = min(abs(one), abs(two));
-  let drawing = select(0.0, 1.0, reveal < 1.0);
+  // Signed distance to the outline: negative inside.
+  let centre = (lo + hi) * 0.5;
+  let q = abs(p - centre) - (hi - lo) * 0.5;
+  let sd = length(max(q, vec2f(0.0))) + min(max(q.x, q.y), 0.0);
+
+  // The wave comes in at the middle of one side, splits both ways round the
+  // box, and meets itself again opposite, where the next arrow leaves.
+  let entry = select(perimeter - h * 0.5, w * 0.5, b.anim.w > 0.5);
+  let gone = abs(s - entry);
+  let local = min(gone, perimeter - gone);
+  let behind = b.wave.y - (b.wave.x + local);
+  let strength = swell(behind, b.wave.z) * b.wave.w;
+  let dd = abs(sd - ripple(behind, strength));
 
   let base = mix(INK, HIGHLIGHT, gold);
   let baseAlpha = mix(0.9, 1.0, gold);
-  // Fresh ink is warm, and cools to the line color behind the pen.
-  let fresh = exp(-max(behind, 0.0) / 70.0) * drawing;
-  let ink = mix(base, HIGHLIGHT, fresh);
+  let ink = mix(base, CREST, strength);
+  var color = paint(ink, line(dd, 1.0 + strength * 0.8) * max(baseAlpha, strength));
 
-  var color = paint(ink, line(d, 1.0) * drawn * baseAlpha);
-
-  // A soft glow at each pen's tip while it draws.
-  let tip = exp(-(toTip * toTip) / 90.0) * exp(-(d * d) / 18.0) * drawing;
-  color = over(paint(HIGHLIGHT, tip * 0.9), color);
-
-  // The spark just landed: the outline glows for a moment.
-  let glow = exp(-(d * d) / 40.0) * (ping * 0.45 + hover * 0.12) * drawn;
+  // Light round the crest, a moment's glow once the wave closes on RESULT,
+  // and a hint of it under the pointer.
+  let glow = exp(-(dd * dd) / 30.0) * (strength * 0.55 + ping * 0.45 + hover * 0.12);
   color = over(paint(HIGHLIGHT, glow), color);
 
   // Hover: faint drafting hatch inside, and crop marks at the corners.
@@ -156,12 +173,11 @@ fn fs(in: Out) -> @location(0) vec4f {
     color = over(paint(base, hatch), color);
 
     // Fold every corner onto the top-left one.
-    let centre = (lo + hi) * 0.5;
-    let q = centre - abs(p - centre);
+    let folded = centre - abs(p - centre);
     let corner = lo - TICK_GAP;
     let len = TICK_LEN * hover;
-    let across = segment(q, corner, corner + vec2f(len, 0.0)).x;
-    let down = segment(q, corner, corner + vec2f(0.0, len)).x;
+    let across = segment(folded, corner, corner + vec2f(len, 0.0)).x;
+    let down = segment(folded, corner, corner + vec2f(0.0, len)).x;
     let tick = line(min(across, down), 1.0) * hover * select(0.0, 1.0, len > 0.5);
     color = over(paint(base, tick * 0.8), color);
   }
@@ -170,22 +186,20 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: from.xy, to.xy, then t (0 to 1 travelling, past 1 fading), unused.
-export const SPARK_FLOATS = 8
+// NOTE: from.xy, to.xy, then the wave as for a box: start, front, length, on.
+export const GAP_FLOATS = 8
 
-export const SPARKS = /* wgsl */ `
+export const GAPS = /* wgsl */ `
 ${COMMON}
 
-struct Spark {
+struct Gap {
   path: vec4f,
-  anim: vec4f,
+  wave: vec4f,
 }
 
-@group(0) @binding(1) var<storage, read> sparks: array<Spark>;
+@group(0) @binding(1) var<storage, read> gaps: array<Gap>;
 
 const MARGIN = 10.0;
-const TRAIL = 22.0;
-const TAIL = 0.4;
 
 struct Out {
   @builtin(position) position: vec4f,
@@ -195,42 +209,42 @@ struct Out {
 
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
-  let s = sparks[i];
+  let g = gaps[i];
   var out: Out;
   out.i = i;
-  if (s.anim.x < 0.0) {
+  if (g.wave.w <= 0.0) {
     out.position = vec4f(2.0, 2.0, 0.0, 1.0);
     out.p = vec2f(0.0);
     return out;
   }
-  let lo = min(s.path.xy, s.path.zw) - MARGIN;
-  let hi = max(s.path.xy, s.path.zw) + MARGIN;
+  let lo = min(g.path.xy, g.path.zw) - MARGIN;
+  let hi = max(g.path.xy, g.path.zw) + MARGIN;
   let p = mix(lo, hi, QUAD[v]);
   out.position = toClip(p);
   out.p = p;
   return out;
 }
 
+// Only the wave crosses an arrow: the arrow itself is the page's glyph.
 @fragment
 fn fs(in: Out) -> @location(0) vec4f {
-  let s = sparks[in.i];
-  let a = s.path.xy;
-  let b = s.path.zw;
-  let t = s.anim.x;
-  let len = length(b - a);
-  let fade = 1.0 - smoothstep(1.0, 1.0 + TAIL, t);
+  let g = gaps[in.i];
+  let a = g.path.xy;
+  let b = g.path.zw;
+  let len = max(length(b - a), 1e-4);
+  let dir = (b - a) / len;
+  let normal = vec2f(-dir.y, dir.x);
+  let along = dot(in.p - a, dir);
+  let across = dot(in.p - a, normal);
+  let onArrow = select(0.0, 1.0, along >= 0.0 && along <= len);
 
-  let head = min(t, 1.0) * len;
-  let along = segment(in.p, a, b);
-  // The trail: brightest at the spark, gone TRAIL px behind it.
-  let behind = head - along.y;
-  let trail = select(0.0, pow(1.0 - behind / TRAIL, 2.0), behind >= 0.0 && behind <= TRAIL);
-  var color = paint(HIGHLIGHT, line(along.x, 1.5) * trail * 0.9 * fade);
+  let behind = g.wave.y - (g.wave.x + along);
+  let strength = swell(behind, g.wave.z) * onArrow;
+  let dd = abs(across - ripple(behind, strength));
 
-  let tip = a + (b - a) * (head / max(len, 1e-4));
-  let r = length(in.p - tip);
-  let spot = exp(-(r * r) / 8.0) * fade;
-  color = over(paint(mix(HIGHLIGHT, vec3f(1.0), 0.5), spot), color);
+  var color = paint(CREST, line(dd, 1.0 + strength * 0.8) * strength);
+  let glow = exp(-(dd * dd) / 30.0) * strength * 0.55;
+  color = over(paint(HIGHLIGHT, glow), color);
   return color;
 }
 `
