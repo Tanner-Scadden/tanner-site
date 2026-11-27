@@ -42,7 +42,7 @@ export const beSomeoneWorthCalling: Post = {
     h.p(
       'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them, and the whole team gets slower and less fun. Don’t be that person, and don’t hire them.',
     ),
-    h.p('People rarely remember who was right. They remember how you made them feel.'),
+    h.p('People rarely remember who was right. They’ll long remember how you made them feel.'),
 
     h.h2('Trust what you’ve built'),
     h.p('Being worth calling matters most when you take a risk.'),
