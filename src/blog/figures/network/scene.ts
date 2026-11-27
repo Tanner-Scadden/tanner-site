@@ -16,7 +16,7 @@ export const networkScene: Scene = {
     {
       id: 'network',
       label: 'HIGH IMPACT',
-      caption: 'Network over time as you have high impact on people’s lives.',
+      caption: '',
       tone: 'hi',
     },
   ],
