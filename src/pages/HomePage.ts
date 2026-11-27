@@ -3,6 +3,7 @@ import * as stylex from '@stylexjs/stylex'
 import { Array as Arr } from 'effect'
 
 import { Callout, Section, sheet } from '#components/Sheet'
+import { BLOG } from '#content/blog'
 import {
   ELSEWHERE,
   GREETING,
@@ -17,7 +18,8 @@ import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import { House } from '../house/components/House.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
-import { BLOG_OPEN } from '../blog/posts.ts'
+import { PostList } from '../blog/components/PostList.ts'
+import { BLOG_OPEN, POSTS } from '../blog/posts.ts'
 import { SiteRoute, blogRoute, href, restRoute } from '../routes.ts'
 import { base } from '../styles/base.ts'
 import { sx } from '../styles/sx.ts'
@@ -59,6 +61,7 @@ const styles = stylex.create({
     outlineOffset: { default: null, ':focus-visible': 4 },
   },
   welcome: { marginTop: 18, maxWidth: 520, color: blueprint.dim },
+  allPosts: { display: 'inline-block', marginTop: 18, fontSize: 12, letterSpacing: '.14em' },
 
   // Open source, and the rest.
   two: {
@@ -161,6 +164,7 @@ export const HomePage = <M>(
   sx(h.div, sheet.sheet).children(
     TopBar(h, options.eggs),
     Hero(h, options),
+    BLOG_OPEN && BlogSection(h),
     WorkSection(h, options.still),
     OpenSource(h),
     Outside(h),
@@ -175,10 +179,10 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   sx(h.div, sheet.bar).children(
     h.span('TANNER SCADDEN'),
     sx(h.nav, sheet.nav).children(
+      BLOG_OPEN && sx(h.a, base.link, sheet.navLink).attr('href', '#blog').children('BLOG'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#work').children('WORK'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#oss').children('OPEN SOURCE'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#outside').children(PERSONAL_LIFE),
-      BLOG_OPEN && sx(h.a, base.link, sheet.navLink).attr('href', href(blogRoute)).children('BLOG'),
     ),
     EggCounter(h, eggs),
   )
@@ -210,12 +214,20 @@ const Hero = <M>(
     House(h, still, playedWithTeddy),
   )
 
+// The newest posts, first on the page.
+const BlogSection = <M>(h: Html.H<M>) =>
+  Section(h, 'blog').children(
+    Callout(h, 1, BLOG.section),
+    PostList(h, Arr.take(POSTS, BLOG.newest)),
+    sx(h.a, base.link, styles.allPosts).attr('href', href(blogRoute)).children(BLOG.all),
+  )
+
 const WorkSection = <M>(h: Html.H<M>, still: boolean) =>
-  Section(h, 'work').children(Callout(h, 1, 'SELECTED WORK'), Work(h, still))
+  Section(h, 'work').children(Callout(h, 2, 'SELECTED WORK'), Work(h, still))
 
 const OpenSource = <M>(h: Html.H<M>) =>
   Section(h, 'oss').children(
-    Callout(h, 2, 'OPEN SOURCE'),
+    Callout(h, 3, 'OPEN SOURCE'),
     sx(h.div, styles.two).children(
       sx(h.p, sheet.prose).children(
         "I love working on open source. If a tool I'm using has a bug or is missing something, I'd rather jump in and open a PR than hack around it.",
@@ -238,7 +250,7 @@ const OpenSource = <M>(h: Html.H<M>) =>
 
 const Outside = <M>(h: Html.H<M>) =>
   Section(h, 'outside').children(
-    Callout(h, 3, PERSONAL_LIFE),
+    Callout(h, 4, PERSONAL_LIFE),
     sx(h.p, sheet.prose).children(
       "I've always played games, and for a few years I ",
       sx(h.a, base.link).attr('href', href(restRoute)).children('played them professionally'),

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { Router } from '@effect/ui'
 import { BrowserHost, BrowserRouter } from '@effect/ui/html'
-import { HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
+import { HtmlLocator, HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
 import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
 import { Effect, Layer } from 'effect'
@@ -146,12 +146,25 @@ it.layer(playLayer('/blog/be-someone-worth-calling'), { buildPerTest: true })(
         yield* TestGlobalEvents.fire('document', 'keydown', { key: 'Escape' })
         yield* TestHost.settle
         assert.strictEqual(play.root.model()?.page._tag, 'Blog')
-        yield* play.expect(Locator.text(BLOG.index)).toExist()
+        yield* play.expect(Locator.text(BLOG.title)).toExist()
         yield* play.expect(Locator.text(firstPost.summary)).toExist()
       }).pipe(Effect.scoped),
     )
   },
 )
+
+it.layer(playLayer('/blog'), { buildPerTest: true })('Site at /blog', it => {
+  it.effect('the search narrows the posts by title and summary', () =>
+    Effect.gen(function* () {
+      const play = yield* HtmlPlay.make(Site, siteProps)
+      yield* play.expect(Locator.text(firstPost.title)).toExist()
+      yield* play.type(HtmlLocator.label('Search posts'), 'calling')
+      yield* play.expect(Locator.text(firstPost.title)).toExist()
+      yield* play.type(HtmlLocator.label('Search posts'), 'zzzz nothing')
+      yield* play.expect(Locator.text(BLOG.noMatch)).toExist()
+    }).pipe(Effect.scoped),
+  )
+})
 
 it.layer(playLayer('/blog/no-such-post'), { buildPerTest: true })(
   'Site at /blog/no-such-post',

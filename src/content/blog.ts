@@ -20,7 +20,11 @@ export const BLOG = {
   title: 'Blog',
   role: 'Notes from the build',
   intro: 'What I’m building, what broke, and what I learned fixing it.',
-  index: 'SHEET INDEX',
+  noMatch: 'No posts match that yet.',
+  // The section on the home page.
+  section: 'BLOG',
+  newest: 3,
+  all: 'ALL POSTS →',
   empty: 'Nothing posted yet. The first one is still on the drafting table.',
   back: '← ALL POSTS',
   newer: 'NEWER',
