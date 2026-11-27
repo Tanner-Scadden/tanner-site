@@ -97,7 +97,7 @@ export const beSomeoneWorthCalling: Post = {
       ': what would a version of you with ten times the agency do here?',
     ),
     h.p(
-      h.strong('Be picky about who you spend your time with.'),
+      h.strong('Be picky about who and what you spend your time with.'),
       ' Surround yourself with people who have high standards and the same level of ambition. Like Arnold says in ',
       h.em('Be Useful'),
       ', nobody is self-made.',
