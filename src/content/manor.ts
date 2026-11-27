@@ -1,5 +1,3 @@
-// NOTE: the Manor's copy: room names, Rattles' lines and each room's panel.
-
 import type { RoomId } from '#domain/Room'
 
 export const MUNCH_MANOR_URL = 'https://munchmanor.com'

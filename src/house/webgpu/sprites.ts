@@ -1,11 +1,3 @@
-// NOTE: Teddy and Rain, drawn as blueprint line art onto one sprite sheet
-// the GPU samples. Teddy is a cream goldendoodle with an apricot muzzle,
-// rosy-tan paws and a black nose, Rain a gray Nebelung (long blue-gray fur, a plumed tail and
-// green eyes). Both face right; the shader
-// flips them. Each has four walking frames and a resting pose.
-//
-// Coordinates are in a 64 x 48 cell with the ground at y = 44.
-
 import { ALERT_FRAME as ALERT, REST_FRAME as REST, WALK_FRAMES } from './house.ts'
 
 export const CELL_W = 64

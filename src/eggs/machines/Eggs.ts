@@ -26,8 +26,6 @@ export const eggsOf = (found: ReadonlyArray<EggId>): EggsState =>
     ? EggsState.AllFound({ found })
     : EggsState.Hunting({ found })
 
-// NOTE: finding an egg twice does nothing, and once all are found nothing
-// is left to find, so AllFound takes no events.
 export const eggsMachine = Machine.make({
   state: EggsState,
   event: EggsEvent,
@@ -57,8 +55,6 @@ export class Eggs extends Context.Service<
   Eggs,
   Actor<EggsState, EggsEvent>
 >()('tanner-site/eggs/machines/Eggs') {
-  // NOTE: the found eggs are read before mount (so the first render shows
-  // them) and saved after every committed find.
   static readonly layer = (found: ReadonlyArray<EggId>) =>
     Layer.effect(
       this,
@@ -77,6 +73,5 @@ export class Eggs extends Context.Service<
     )
 }
 
-// NOTE: the one way the other machines find an egg.
 export const findEgg = (egg: EggId) =>
   Eggs.use(eggs => eggs.send(EggsEvent.Found({ egg })))

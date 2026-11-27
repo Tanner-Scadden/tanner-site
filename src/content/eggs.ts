@@ -11,8 +11,6 @@ export const EGG_NAMES: Record<EggId, string> = {
   teddy: 'Play time',
 }
 
-// NOTE: hover hints for the EGGS counter, like a quest log. Each one points
-// at where to look without giving the egg away.
 export const EGG_HINTS: Record<EggId, string> = {
   manor: 'Every blueprint has a door. Check the bottom corner.',
   worlds: 'Read about my personal life. One phrase leads somewhere.',

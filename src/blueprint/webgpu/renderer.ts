@@ -1,9 +1,3 @@
-// NOTE: the blueprint renderer, as one scoped Effect. Every GPU object is
-// acquired with its release, so closing the scope (the canvas unmounting)
-// tears it all down in reverse order. Input arrives as Streams, the frame
-// rules live in ./frame as pure functions, and the loop is a fiber that
-// sleeps until something wakes it: a still page costs nothing.
-
 import {
   Data,
   Duration,
@@ -108,8 +102,6 @@ export const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor
 // when the window grows.
 const FIELD = extentFor(Math.max(screen.width, screen.height, 2400))
 
-// NOTE: the WebGPU toggle carries this attribute, so patient zero can start
-// right where the visitor just clicked.
 export const PENS_START = 'data-pens-start'
 
 // Where patient zero starts: on the grid line nearest the WebGPU toggle, in
@@ -143,7 +135,6 @@ const seedPens = (zero: Point) =>
       const [x, y, vx, vy] = alongX
         ? [along, line, velocity, 0]
         : [line, along, 0, velocity]
-      // NOTE: the order matches `struct Pen` in the shaders.
       data.set([x, y, vx, vy, 0, 0, HEALTHY, 0], i * PARTICLE_FLOATS)
     }
     const heading = (yield* Random.next) < 0.5 ? -1 : 1
@@ -298,7 +289,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
     const width = canvas.clientWidth
     const height = canvas.clientHeight
     const { state } = frame
-    // NOTE: the order matches `struct Frame` in the shaders.
     gpu.frameData.set([
       width,
       height,
@@ -372,10 +362,6 @@ type Input = Data.TaggedEnum<{
 }>
 const Input = Data.taggedEnum<Input>()
 
-// NOTE: the canvas hides on the Manor and Rest pages, and anything drawn
-// while hidden lands on a 1px canvas. Coming back gives it a size again, so
-// this redraws it. Without it a touch screen, which never moves a mouse,
-// showed an empty blueprint until the first scroll.
 const resized = (canvas: HTMLCanvasElement): Stream.Stream<Input> =>
   Stream.callback<Input>(queue =>
     Effect.acquireRelease(
@@ -391,8 +377,12 @@ const resized = (canvas: HTMLCanvasElement): Stream.Stream<Input> =>
 const sources = (canvas: HTMLCanvasElement): ReadonlyArray<Stream.Stream<Input>> => [
   Stream.fromEventListener<PointerEvent>(window, 'pointermove', { passive: true }).pipe(
     Stream.filter(event => event.pointerType === 'mouse'),
+    // Over a block that's interactive in its own right, like a blog
+    // animation, the sheet keeps still, as if the cursor had left.
     Stream.map(event =>
-      Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } }),
+      event.target instanceof Element && event.target.closest('[data-blueprint-quiet]') !== null
+        ? Input.Left()
+        : Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } }),
     ),
   ),
   Stream.fromEventListener(document.documentElement, 'pointerleave').pipe(
@@ -490,8 +480,6 @@ export const runBlueprint = (
     yield* Effect.forkScoped(
       Stream.runForEach(changes, next =>
         Effect.gen(function* () {
-          // NOTE: the new outbreak is in place before the settings say the
-          // pens run, so the counter never sees the old one.
           const before = yield* Ref.get(settings)
           if (next.flow && !before.flow) {
             yield* startOutbreak(gpu, canvas)

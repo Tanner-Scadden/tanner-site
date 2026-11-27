@@ -87,8 +87,6 @@ const SiteProps = Schema.Struct({
 })
 type SiteProps = typeof SiteProps.Type
 
-// NOTE: the Model is the actors' snapshot and nothing else. Every message
-// but the sync is something the user did, handed to the actors as is.
 const SiteDef = Html.component({
   name: 'Site',
   props: SiteProps,
@@ -115,8 +113,6 @@ const BLUEPRINT: RoomColor = { name: 'blueprint', color: paper.blueprint }
 const MANOR: RoomColor = { name: 'manor', color: paper.manor }
 const REST: RoomColor = { name: 'rest', color: paper.rest }
 
-// NOTE: the body carries the blueprint paper, which the document shows
-// through. The hidden pages paint over it, on <html> too.
 const roomStyle = (room: RoomColor) =>
   room === MANOR ? documentStyles.manor : room === REST ? documentStyles.rest : null
 
@@ -175,9 +171,6 @@ export const SiteNoDeps = SiteDef.make({
       ? message.snapshot
       : $.run(Dispatch.make({ input: message })),
   subscriptions: $ => [
-    // NOTE: the route comes through the root, not the Page actor reading the
-    // Router itself: the browser Router scrolls to the top (or back to the
-    // saved spot), announces the page and moves focus once the root has it.
     Router.subscription(SiteRoute, $.props.route, route =>
       SiteMessage.Navigated({ route }),
     ),
@@ -196,15 +189,11 @@ export const SiteNoDeps = SiteDef.make({
     return [
       Head.title(titleOf($.model.page)),
       HtmlHead.lang('en'),
-      // NOTE: the room's color goes on the document itself, so overscroll,
-      // the space under short pages and the mobile toolbar all match it.
       HtmlHead.htmlClass(classOf(roomStyle(room))),
       HtmlHead.bodyClass(classOf(documentStyles.body, roomStyle(room))),
       HtmlHead.meta({ name: 'theme-color', content: room.color }),
     ]
   },
-  // NOTE: the blueprint canvas, the horde and the toast sit outside the
-  // page, so they carry across pages and the GPU never restarts.
   view: (h, model) => {
     const room = roomColorOf(model.page)
     return h.div(
@@ -228,8 +217,6 @@ export const SiteNoDeps = SiteDef.make({
   },
 })
 
-// NOTE: the actors start when the Site mounts, seeded from its props, and
-// stop when it unmounts.
 export const Site = SiteNoDeps.pipe(
   Component.provide((props: SiteProps) =>
     Layer.provideMerge(Dispatch.layer, siteActors(props)),

@@ -3,3 +3,5 @@ dist
 .alchemy
 infra/node_modules
 .env
+# Post briefs from the blog-brainstorm skill. They stay on your machine.
+docs/posts/

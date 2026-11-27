@@ -3,10 +3,6 @@ import { Effect, Queue, Schema, Stream } from 'effect'
 
 import { runHouseDrawing } from '../webgpu/renderer.ts'
 
-// NOTE: the floor plan drawing, on a canvas inside the house figure. With
-// WebGPU it drafts the walls and lets Teddy and Rain in, and without it the
-// CSS walls stay, so the plan reads the same either way, just with nobody
-// home. It reports each time Teddy starts playing with someone.
 export const HouseDrawing = Mount.makeStream(
   'HouseDrawing',
   { args: { still: Schema.Boolean } },

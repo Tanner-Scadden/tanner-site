@@ -1,8 +1,5 @@
 import { Context, Effect, Layer, Queue, Stream } from 'effect'
 
-// NOTE: what the horde needs from the browser: how wide the window is, so it
-// can start just past the right edge, and a stream of frame deltas in
-// milliseconds to walk by.
 export class Viewport extends Context.Service<
   Viewport,
   {

@@ -9,8 +9,6 @@ import { SiteRoute } from './routes.ts'
 import { Site } from './Site.ts'
 import './styles/reset.css'
 
-// NOTE: the devtools egg starts as plain console output on purpose: styled
-// text in the console, where Effect's logger would add its own prefix.
 const greetDevtools = Effect.sync(() => {
   // @effect-diagnostics-next-line globalConsoleInEffect:off
   console.log(
@@ -27,8 +25,6 @@ const main = Effect.gen(function* () {
   yield* greetDevtools
   const found = yield* readFoundEggs
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-  // NOTE: the first route comes from the Router; every later one arrives as
-  // a message through the root's Router subscription.
   const props = Effect.map(Router.currentRoute(SiteRoute), route => ({
     found,
     reducedMotion,

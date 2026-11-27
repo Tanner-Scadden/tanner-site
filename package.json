@@ -13,9 +13,11 @@
     "preview": "vite preview",
     "typecheck": "effect-tsgo tsrs --noEmit",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "card": "bun .claude/skills/blog-share-card/card.ts"
   },
   "dependencies": {
+    "@effect/platform-browser": "4.1.4",
     "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@193d2fb",
     "@stylexjs/stylex": "0.19.2",
     "effect": "4.1.4",
@@ -25,6 +27,7 @@
   "devDependencies": {
     "@babel/core": "7",
     "@babel/eslint-parser": "7",
+    "@effect/platform-bun": "4.1.4",
     "@effect/tsgo": "0.67.5",
     "@effect/vitest": "4.1.4",
     "@stylexjs/eslint-plugin": "0.19.2",
@@ -32,6 +35,7 @@
     "@webgpu/types": "^0.1.74",
     "eslint": "9",
     "happy-dom": "^21.0.4",
+    "playwright-core": "1.65.1",
     "tsrs": "0.23.0-ts7.1.0-beta",
     "typescript": "7.0.2",
     "unplugin": "^2.3.11",

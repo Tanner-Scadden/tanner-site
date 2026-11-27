@@ -77,8 +77,6 @@ const styles = stylex.create({
     transitionProperty: 'opacity, transform',
     transitionDuration: { default: '.2s', [media.reducedMotion]: '0s' },
   },
-  // NOTE: the pill shrinks to fit BACK as the news slides out: the news
-  // text's max-width is what eases, so the pill's width follows it.
   newsText: {
     opacity: 0,
     transform: 'translateY(6px)',
@@ -105,9 +103,6 @@ export const Toast = <M>(h: Html.H<M>, toast: ToastState) =>
     .attr('role', 'status')
     .children(toast._tag === 'Showing' ? toast.text : '')
 
-// NOTE: on a hidden page the toast never leaves. It floats at the bottom as
-// the way home, and shows the latest news (like EGG FOUND) while there is
-// some, then turns back into BACK, in the room's own colors.
 export const Dock = <M>(
   h: Html.H<M>,
   toast: ToastState,

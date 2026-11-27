@@ -20,8 +20,6 @@ export const ToastEvent = Event({
 })
 export type ToastEvent = typeof ToastEvent.Type
 
-// NOTE: a new announcement replaces the one showing and restarts its timer,
-// so it reenters Showing instead of staying in it.
 export const toastMachine = Machine.make({
   state: ToastState,
   event: ToastEvent,

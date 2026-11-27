@@ -1,15 +1,3 @@
-// NOTE: how the floor plan stands up in 3D, as plain data in and plain data
-// out, so the camera is testable without a GPU.
-//
-// Plan space is the floor: CSS px from the canvas's corner, with z rising
-// out of the floor toward the viewer. Once the walls are drafted the plan
-// tips back into perspective and the walls rise. After that it leans toward
-// the pointer. The same matrix goes to the GPU and to the CSS room labels, so
-// the links sit exactly on the floor they name and stay clickable.
-//
-// Matrices are row-major 4x4 arrays that multiply column vectors, like CSS
-// transforms read left to right.
-
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
 

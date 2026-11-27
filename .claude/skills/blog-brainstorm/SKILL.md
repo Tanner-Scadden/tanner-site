@@ -209,7 +209,9 @@ draft the post from without going back to them:
 - **Reject ledger:** the angles not taken, why, and what would revive them
 
 Save it to `docs/posts/YYYY-MM-DD-<slug>-brief.md` and say where it is.
-Their preferences override that location.
+Their preferences override that location. Git ignores `docs/posts/`: the
+brief is a working note, so never commit it, even if asked to commit
+everything for the post.
 
 <HARD-GATE>
 No post prose gets written until they approve the brief. That includes

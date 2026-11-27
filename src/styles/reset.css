@@ -1,7 +1,3 @@
-/* NOTE: the only plain CSS on the site: a reset. It styles no component,
-   only undoes the browser's defaults, and every element's look comes from
-   its own StyleX classes. It sits in a layer, so any StyleX rule wins over
-   it whatever order the sheets load in. */
 @layer reset {
   * { box-sizing: border-box; margin: 0; padding: 0 }
   html { scroll-behavior: smooth }

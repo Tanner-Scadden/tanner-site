@@ -1,26 +1,28 @@
-// NOTE: the blog's copy, and the list of every post. To add a post, write it
-// in content/posts/ (copy style-guide.ts) and add it to DRAFTS while you
-// work on it, then move it to PUBLISHED. Order doesn't matter; the blog sorts
-// by date.
-
 import type { Post } from '#domain/Post'
 
-import { styleGuide } from './posts/style-guide.ts'
+import { beSomeoneWorthCalling } from './posts/be-someone-worth-calling.ts'
 
-export const PUBLISHED: ReadonlyArray<Post> = []
+export const PUBLISHED: ReadonlyArray<Post> = [beSomeoneWorthCalling]
 
-// Drafts show under `bun run dev` only. A build swaps the list for an empty
-// one, so a draft's words never ship.
-export const DRAFTS: ReadonlyArray<Post> = import.meta.env.DEV ? [styleGuide] : []
+// Posts being written. Put them in WRITING: they show under `bun run dev`
+// only, and a build swaps the list for an empty one, so a draft's words
+// never ship.
+const WRITING: ReadonlyArray<Post> = []
+
+export const DRAFTS: ReadonlyArray<Post> = import.meta.env.DEV ? WRITING : []
 
 export const BLOG = {
   title: 'Blog',
-  role: 'Notes from the build',
-  intro: 'What I’m building, what broke, and what I learned fixing it.',
-  index: 'SHEET INDEX',
+  intro: 'A collection of random thoughts I think might be good.',
+  noMatch: 'No posts match that yet.',
+  // The section on the home page.
+  section: 'BLOG',
+  newest: 3,
+  all: 'ALL POSTS →',
   empty: 'Nothing posted yet. The first one is still on the drafting table.',
   back: '← ALL POSTS',
+  // Under each post, linking to its file on GitHub.
+  source: 'See how this post is built ↗',
   newer: 'NEWER',
   older: 'OLDER',
-  author: 'TANNER SCADDEN',
 } as const

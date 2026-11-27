@@ -91,8 +91,6 @@ const styles = stylex.create({
   hint: { fontSize: 11, color: blueprint.line, letterSpacing: '.02em' },
 })
 
-// NOTE: the EGGS counter in the top bar. Hovering or focusing it opens the
-// quest log: found eggs by name, hidden ones as a hint.
 export const EggCounter = <M>(h: Html.H<M>, eggs: EggsState) =>
   sx(h.span, base.focus, styles.counter, eggs.found.length > 0 && styles.got, stylex.defaultMarker())
     .attrs({ tabindex: '0', 'aria-describedby': 'quest-log' })

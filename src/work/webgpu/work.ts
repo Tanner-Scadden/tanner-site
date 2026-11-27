@@ -1,13 +1,3 @@
-// NOTE: the timing rules for the Selected Work drawing, as plain data in and
-// plain data out, so when a wave leaves, where it is and when it rests is
-// testable without a GPU. The renderer only draws what these return.
-//
-// The boxes are simply there. The first time a job scrolls into view, a
-// wave runs through it: in at PROBLEM, splitting round its border, out
-// through the arrow, round APPROACH, through the next arrow and round
-// RESULT, where it closes and the box glows. Pointing at or tapping a job
-// later sends the wave again. With motion reduced nothing travels.
-
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
 

@@ -2,10 +2,6 @@ import type { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import { Array as Arr, Order, Schema, String as Str } from 'effect'
 
-// NOTE: a blog post. The body is an Effect UI view, written with the same `h`
-// as every other page. Its plain tags (p, h2, ul, blockquote, code) come
-// styled, so most posts need nothing else. See src/blog/components/Prose.ts
-// for how, and for the few extra blocks.
 export interface Post {
   // The URL: /blog/<slug>. Lowercase words joined by dashes.
   readonly slug: string
@@ -15,7 +11,17 @@ export interface Post {
   // One or two sentences for the index.
   readonly summary: string
   readonly body: <M>(h: Html.H<M>) => View.Children<M, never>
+  // Where the post's file lives in the repo, if it isn't the usual
+  // src/content/posts/<slug>.ts. The post links to it, so readers can see
+  // how it's built.
+  readonly source?: string
+  // Its card when it's shared, 1200 by 630, from public/, and what the card
+  // shows for anyone who can't see it. Without one it shares the site's.
+  readonly image?: { readonly path: string; readonly alt: string }
 }
+
+// The post's file in the repo, from the root.
+export const sourcePath = (post: Post): string => post.source ?? `src/content/posts/${post.slug}.ts`
 
 export const PostSlug = Schema.String.check(Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/))
 

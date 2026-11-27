@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { Router } from '@effect/ui'
 import { BrowserHost, BrowserRouter } from '@effect/ui/html'
-import { HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
+import { HtmlLocator, HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
 import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
 import { Effect, Layer } from 'effect'
@@ -9,7 +9,7 @@ import { Effect, Layer } from 'effect'
 import { BLOG } from '#content/blog'
 import { EGG_HINTS, EGG_NAMES } from '#content/eggs'
 import { RATTLES_SAYS } from '#content/manor'
-import { styleGuide } from '#content/posts/style-guide'
+import { beSomeoneWorthCalling as firstPost } from '#content/posts/be-someone-worth-calling'
 import type { EggId } from '#domain/Egg'
 
 import { Viewport } from './horde/services/Viewport.ts'
@@ -28,10 +28,6 @@ const siteProps = Effect.map(Router.currentRoute(SiteRoute), route => ({
   route,
 }))
 
-// NOTE: an actor stops on the scheduler it was spawned on, and TestHost's
-// only runs inside `settle`. Unmounting the Site after a test waits on its
-// actors stopping, so keep draining the scheduler for as long as the host
-// lives, or the unmount never ends.
 const drainWhileUnmounting = Layer.effectDiscard(
   Effect.gen(function* () {
     const host = yield* TestHost.TestHost
@@ -43,6 +39,20 @@ const drainWhileUnmounting = Layer.effectDiscard(
     )
   }),
 )
+
+// The blog search loads its in-page engine with `import()` (see
+// SearchPosts.ts), and `settle` gives a Promise only a few macrotasks to come
+// back, which Vite's module runner can take longer than. So a step that
+// waits on a search tries again, a macrotask apart, for a while.
+const macrotask = Effect.callback<void>(resume => {
+  // The test runs on TestClock, so an Effect sleep would never wake.
+  // @effect-diagnostics-next-line globalTimersInEffect:off
+  const id = setTimeout(() => resume(Effect.void), 5)
+  return Effect.sync(() => clearTimeout(id))
+})
+
+const eventually = <A, E, R>(step: Effect.Effect<A, E, R>, tries = 100): Effect.Effect<A, E, R> =>
+  tries <= 1 ? step : Effect.catchCause(step, () => Effect.andThen(macrotask, eventually(step, tries - 1)))
 
 const playLayer = (url: string) =>
   Layer.mergeAll(
@@ -61,7 +71,7 @@ describe('Site routes', () => {
     )
     assert.strictEqual(SiteRoute.print(restRoute), '/rest')
     assert.strictEqual(SiteRoute.print(blogRoute), '/blog')
-    assert.strictEqual(SiteRoute.print(postRoute('style-guide')), '/blog/style-guide')
+    assert.strictEqual(SiteRoute.print(postRoute(firstPost.slug)), '/blog/be-someone-worth-calling')
   })
 })
 
@@ -130,29 +140,44 @@ it.layer(playLayer('/blueprints/old'), { buildPerTest: true })(
   },
 )
 
-// NOTE: tests run in dev mode, so the style guide draft is on the blog.
-it.layer(playLayer('/blog/style-guide'), { buildPerTest: true })(
-  'Site at /blog/style-guide',
+it.layer(playLayer('/blog/be-someone-worth-calling'), { buildPerTest: true })(
+  'Site at /blog/be-someone-worth-calling',
   it => {
     it.effect('a post opens from its URL, and Escape goes up to the index', () =>
       Effect.gen(function* () {
         const play = yield* HtmlPlay.make(Site, siteProps)
-        yield* play.expect(Locator.text(styleGuide.title)).toExist()
+        yield* play.expect(Locator.text(firstPost.title)).toExist()
         yield* play.expect(Locator.text('SHEET B-01')).toExist()
         assert.strictEqual(
           play.root.head().title,
-          `${styleGuide.title} · Tanner Scadden`,
+          `${firstPost.title} · Tanner Scadden`,
         )
 
         yield* TestGlobalEvents.fire('document', 'keydown', { key: 'Escape' })
         yield* TestHost.settle
         assert.strictEqual(play.root.model()?.page._tag, 'Blog')
-        yield* play.expect(Locator.text(BLOG.index)).toExist()
-        yield* play.expect(Locator.text(styleGuide.summary)).toExist()
+        yield* play.expect(Locator.text(BLOG.title)).toExist()
+        yield* play.expect(Locator.text(firstPost.summary)).toExist()
       }).pipe(Effect.scoped),
     )
   },
 )
+
+it.layer(playLayer('/blog'), { buildPerTest: true })('Site at /blog', it => {
+  it.effect('the search narrows the posts by title and summary', () =>
+    Effect.gen(function* () {
+      const play = yield* HtmlPlay.make(Site, siteProps)
+      yield* play.expect(Locator.text(firstPost.title)).toExist()
+      yield* play.type(HtmlLocator.label('Search posts'), 'calling')
+      yield* play.expect(Locator.text(firstPost.title)).toExist()
+      yield* play.type(HtmlLocator.label('Search posts'), 'zzzz nothing')
+      yield* eventually(play.expect(Locator.text(BLOG.noMatch)).toExist())
+      // Punctuation alone isn't a search: every post shows.
+      yield* play.type(HtmlLocator.label('Search posts'), '!?')
+      yield* play.expect(Locator.text(firstPost.title)).toExist()
+    }).pipe(Effect.scoped),
+  )
+})
 
 it.layer(playLayer('/blog/no-such-post'), { buildPerTest: true })(
   'Site at /blog/no-such-post',

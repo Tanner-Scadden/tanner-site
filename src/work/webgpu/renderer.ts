@@ -1,10 +1,3 @@
-// NOTE: the Selected Work drawing, as one scoped Effect like the blueprint.
-// The canvas sits behind the job list and owns the PROBLEM, APPROACH and
-// RESULT outlines while it runs (the CSS borders step aside) and sends a
-// wave through them. The page's
-// layout is read from the DOM, the timing rules live in ./work, and the loop
-// sleeps whenever nothing is drawing, so a resting list costs nothing.
-
 import { Data, Effect, Option, Queue, Ref, type Scope, Stream } from 'effect'
 
 import {
@@ -243,7 +236,6 @@ const render = (
       const on = t === null ? 0 : 1
       const ping = pingOf(job, { now, still })
       row.boxes.forEach((rect, b) => {
-        // NOTE: the order matches `struct Box` in the shader.
         gpu.boxData.set(
           [
             rect.x,

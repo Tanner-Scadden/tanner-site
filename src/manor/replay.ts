@@ -1,9 +1,5 @@
 import { Array as Arr, String as Str } from 'effect'
 
-// NOTE: a tiny version of Munch Manor's big idea for the Workshop: four
-// survivors hold the parlour against a few waves. The run is a pure function
-// of its seed: no Math.random, no clock. Same seed, same run, same hash.
-
 // The parlour is 320x180 game pixels, cut into 20px tiles.
 export const ROOM_W = 320
 export const ROOM_H = 180
@@ -133,7 +129,6 @@ const stepAway = (from: Survivor, threat: Spot, roll: number): Survivor => {
     : { ...from, y: clamp(from.y + dy, 2, ROWS - 3) }
 }
 
-// NOTE: walkers shamble most turns; lids and brutes are slower.
 const moves = (kind: ZombieKind, turn: number, roll: number): boolean =>
   kind === 'walker' ? roll < 0.7 : turn % 2 === 0
 
@@ -248,6 +243,5 @@ export const runOf = (seed: number): Run => {
   return run
 }
 
-// NOTE: the next seed comes from the current one, so the update stays pure.
 export const nextSeed = (seed: number): number =>
   ((Math.imul(seed + 1, 2654435761) >>> 0) % 90000) + 10000

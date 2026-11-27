@@ -1,9 +1,6 @@
 import { Effect } from 'effect'
 import { type ActorRef, Machine } from 'effect-machine'
 
-// NOTE: every actor on the site is spawned inside a Layer, so its lifetime is
-// the Layer's Scope: `Machine.scoped` bridges that Scope to the actor, and the
-// actor stops when whatever provided the Layer unmounts.
 export const started = <
   S extends { readonly _tag: string },
   E extends { readonly _tag: string },

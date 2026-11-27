@@ -1,8 +1,3 @@
-// NOTE: the Selected Work drawing. Coordinates are CSS pixels from the
-// canvas's top-left. Each box and each arrow is one instanced quad a little
-// larger than itself, so a fragment only ever looks at its own shape and a
-// frame costs about as much as the boxes' area, not the whole section.
-
 const COMMON = /* wgsl */ `
 struct View {
   size: vec2f,
@@ -70,8 +65,6 @@ const QUAD = array<vec2f, 6>(
 );
 `
 
-// NOTE: rect.xy, rect.zw (size); hover, out, ping, entry; then the wave:
-// start, front, length, on; then its colour (rgb, unused).
 export const BOX_FLOATS = 16
 
 export const BOXES = /* wgsl */ `
@@ -194,8 +187,6 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: from.xy, to.xy, then the wave as for a box: start, front, length,
-// on; then its colour (rgb, unused).
 export const GAP_FLOATS = 12
 
 export const GAPS = /* wgsl */ `

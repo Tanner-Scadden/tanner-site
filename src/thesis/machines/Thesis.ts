@@ -9,8 +9,6 @@ import { type Actor, started } from '../../lib/actor.ts'
 const LAST = THESES.length - 1
 const SOLVED = Arr.lastNonEmpty(THESES)
 
-// NOTE: each click drops a few more words, down to one. One more click
-// starts over.
 export const ThesisState = State({
   Wordy: { line: Schema.Finite },
   Solved: {},

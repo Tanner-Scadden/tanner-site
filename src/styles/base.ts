@@ -2,10 +2,6 @@ import * as stylex from '@stylexjs/stylex'
 
 import { blueprint } from './tokens.stylex.ts'
 
-// NOTE: what every interactive element starts from, so each one gets its
-// look from its own classes and nothing styles it from a distance. Put a
-// base style first: the element's own styles come after and win where they
-// set the same property.
 export const base = stylex.create({
   // A link: gold, with the focus ring.
   link: {
