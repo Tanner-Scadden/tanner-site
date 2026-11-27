@@ -33,7 +33,7 @@ export const beSomeoneWorthCalling: Post = {
       'Being worth calling isn’t only about how you perform as an IC. It’s about what the team is like with you on it.',
     ),
     h.p(
-      'Team harmony takes months to build and a moment to lose. At all three worlds events I went to, we had subs come with us. The synergy we’d built all season wasn’t there, and hours of practice only made the team more disgruntled. We stopped being one team, and that showed on stage.',
+      'Team harmony can take months to build and a moment to lose. At all three worlds events I went to, we had substitute players come with us. The trust we’d worked so hard on all season was gone, and frustrating practices made it impossible to rebuild. We stopped being one team, and that showed on stage.',
     ),
     h.p(
       'I’ve broken that harmony myself. After a heated game, or in the middle of an incident, it’s easy to let your frustration slip and take it out on others. It might feel righteous in that moment, but people remember it long after.',
