@@ -132,15 +132,12 @@ export const PERSONAL_LIFE = 'PERSONAL LIFE'
 // page; D-13 stays shut, like the door at the bottom of the sheet.
 export const HOUSE = {
   sheet: 'SHEET A-1 · THE HOUSE',
-  here: 'YOU ARE HERE',
   rooms: {
     work: { name: '01 WORK' },
     oss: { name: '02 OPEN SOURCE' },
     outside: { name: `03 ${PERSONAL_LIFE}` },
     locked: { name: 'D-13', note: 'CLOSED' },
   },
-  // Only shown while WebGPU draws them.
-  pets: { teddy: 'TEDDY', rain: 'RAIN' },
 } as const
 
 export const SIGN_OFF = 'Thanks for stopping by'

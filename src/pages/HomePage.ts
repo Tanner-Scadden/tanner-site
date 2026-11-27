@@ -124,16 +124,6 @@ const House = <M>(h: Html.H<M>, still: boolean) =>
             .attrs({ 'data-room': 'locked', 'aria-hidden': 'true' })
             .children(h.b(HOUSE.rooms.locked.name), h.small(HOUSE.rooms.locked.note)),
         ),
-      h.figcaption.children(
-        h.span.class('here').children(HOUSE.here),
-        h.span
-          .class('pets')
-          .attr('aria-hidden', 'true')
-          .children(
-            h.span.class('teddy').children(HOUSE.pets.teddy),
-            h.span.class('rain').children(HOUSE.pets.rain),
-          ),
-      ),
     )
 
 const Step = <M>(h: Html.H<M>, title: string, text: string, out: boolean) =>
