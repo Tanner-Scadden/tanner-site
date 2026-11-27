@@ -12,7 +12,7 @@ export const teamScene: Scene = {
       id: 'team',
       label: 'TEAM',
       caption:
-        'Every bit of help adds a drop. One blowup tips the whole bucket, and the team starts again from almost nothing.',
+        'Trust is built in drops and lost in buckets.',
       tone: 'hi',
     },
   ],
