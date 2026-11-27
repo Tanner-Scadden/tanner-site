@@ -18,7 +18,10 @@ struct View {
   lift: f32,
   // How tall a full wall stands right now, in plan px.
   height: f32,
-  _pad: vec2f,
+  // 0 to 1: how far the walls have filled out to full weight.
+  fill: f32,
+  // 0 to 1: how much of the blueprint's lines are sketched.
+  sketch: f32,
 }
 
 @group(0) @binding(0) var<uniform> view: View;
@@ -142,6 +145,64 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
+// NOTE: x, y, w, h, then gold, filled, and two unused. Matches `struct
+// Room`.
+export const ROOM_FLOATS = 8
+
+// NOTE: each room's floor filling in once the lines are sketched: a wash
+// that sweeps across from the corner, with a warm edge where it's
+// spreading, and faint hatching in D-13. In plan space, so it lies on the
+// floor as the house tips back.
+export const ROOMS = /* wgsl */ `
+${COMMON}
+
+struct Room {
+  rect: vec4f,
+  // gold, filled, unused
+  look: vec4f,
+}
+
+@group(0) @binding(1) var<storage, read> rooms: array<Room>;
+
+const SOFT = 0.12;
+const HATCH = 7.0;
+
+@vertex
+fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
+  let r = rooms[i];
+  if (r.look.y <= 0.0 || r.rect.z <= 0.0 || r.rect.w <= 0.0) { return hidden(i); }
+  let p = mix(r.rect.xy, r.rect.xy + r.rect.zw, QUAD[v]);
+  var out: Out;
+  out.i = i;
+  out.position = project(vec3f(p, 0.0));
+  out.p = p;
+  return out;
+}
+
+@fragment
+fn fs(in: Out) -> @location(0) vec4f {
+  let r = rooms[in.i];
+  let gold = r.look.x;
+  let filled = r.look.y;
+  let rel = (in.p - r.rect.xy) / r.rect.zw;
+  // 0 at the top left corner, 1 at the bottom right.
+  let t = (rel.x + rel.y) * 0.5;
+  let front = filled * (1.0 + SOFT);
+  let wash = clamp((front - t) / SOFT, 0.0, 1.0);
+  let base = mix(INK, HIGHLIGHT, gold);
+  var color = paint(base, wash * mix(0.06, 0.04, gold));
+  // D-13 gets diagonal hatching, as a drafter marks a room that's closed.
+  let fd = fwidth(in.p.x - in.p.y);
+  let d = abs(fract((in.p.x - in.p.y) / HATCH) - 0.5) * HATCH;
+  color = over(paint(base, edge(d, 0.8, fd) * wash * gold * 0.16), color);
+  // The spreading edge glows while it moves.
+  let spreading = select(0.0, 1.0, filled < 1.0);
+  let lead = exp(-pow((t - front + SOFT * 0.5) / (SOFT * 0.6), 2.0)) * spreading;
+  color = over(paint(HIGHLIGHT, lead * 0.14), color);
+  return color;
+}
+`
+
 // NOTE: from.xy, to.xy, then width, reveal, gold, dash, alpha, rise, and
 // two unused. Matches `struct Wall`.
 export const WALL_FLOATS = 12
@@ -158,19 +219,23 @@ struct Wall {
 @group(0) @binding(1) var<storage, read> walls: array<Wall>;
 `
 
-// NOTE: every wall's line on the floor, drafted by the pen. In plan space,
-// so with the house flat it's exactly the 2D drawing, and once it tips the
+// NOTE: every wall's line on the floor. All of them are sketched at once as
+// fine, faint lines, then fill out to their full weight. In plan space, so
+// with the house flat it's exactly the 2D drawing, and once it tips the
 // lines lie on the floor in perspective.
 export const STROKES = /* wgsl */ `
 ${COMMON}
 ${WALL_STRUCT}
 
 const MARGIN = 10.0;
+// How fine and faint the sketched lines are, before they fill out.
+const SKETCH_WIDTH = 0.8;
+const SKETCH_ALPHA = 0.55;
 
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
   let w = walls[i];
-  // A wall the pen hasn't reached covers nothing.
+  // Nothing of it is sketched yet.
   if (w.look.y <= 0.0) { return hidden(i); }
   let lo = min(w.path.xy, w.path.zw) - MARGIN;
   let hi = max(w.path.xy, w.path.zw) + MARGIN;
@@ -188,11 +253,12 @@ fn fs(in: Out) -> @location(0) vec4f {
   let w = walls[in.i];
   let a = w.path.xy;
   let b = w.path.zw;
-  let width = w.look.x;
+  let full = w.look.x;
+  let width = mix(min(full, SKETCH_WIDTH), full, view.fill);
   let reveal = w.look.y;
   let gold = w.look.z;
   let dash = w.look.w;
-  let alpha = w.more.x;
+  let alpha = w.more.x * mix(SKETCH_ALPHA, 1.0, view.fill);
 
   let len = length(b - a);
   let along = segment(in.p, a, b);
@@ -209,13 +275,16 @@ fn fs(in: Out) -> @location(0) vec4f {
   let base = mix(INK, HIGHLIGHT, gold);
   // Fresh ink is warm, and cools to the line color behind the pen.
   let fresh = exp(-max(head - along.y, 0.0) / 60.0) * drawing;
-  let ink = mix(base, HIGHLIGHT, fresh);
+  // And it warms again for a moment as the wall fills out.
+  let filling = 4.0 * view.fill * (1.0 - view.fill);
+  let ink = mix(base, HIGHLIGHT, max(fresh, filling * 0.45));
   var color = paint(ink, cover(along.x, width, fw) * drawn * on * alpha);
 
-  // A soft glow at the pen's tip while it draws.
+  // A soft glow at the pen's tip while it draws, on the walls proper, not
+  // the fine marks.
   let tip = a + (b - a) * reveal;
   let r = length(in.p - tip);
-  let glow = exp(-(r * r) / 14.0) * drawing;
+  let glow = exp(-(r * r) / 14.0) * drawing * select(0.0, 1.0, full >= 1.5);
   color = over(paint(HIGHLIGHT, glow * 0.9), color);
   return color;
 }

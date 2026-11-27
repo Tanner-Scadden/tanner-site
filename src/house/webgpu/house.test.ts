@@ -1,12 +1,14 @@
 import { assert, describe, it } from '@effect/vitest'
-import { Array as Arr, Option } from 'effect'
+import { Array as Arr } from 'effect'
 
 import {
   ALERT_FRAME,
   DRAFT_MS,
+  FILL_MS,
   PRINTS,
   PRINT_LIFE,
   REST_FRAME,
+  SKETCH_MS,
   WALK_FRAMES,
   type Pets,
   type Plan,
@@ -85,22 +87,42 @@ describe('planFor', () => {
 })
 
 describe('draftOf', () => {
+  const at = (since: number) => draftOf({ since, still: false })
+
   it('draws nothing at the start and everything at the end', () => {
-    assert.isTrue(Arr.every(draftOf(plan.walls, { since: 0, still: false }), r => r === 0))
-    assert.isTrue(Arr.every(draftOf(plan.walls, { since: DRAFT_MS, still: false }), r => r === 1))
+    const start = at(0)
+    assert.strictEqual(start.sketch, 0)
+    assert.strictEqual(start.fill, 0)
+    assert.isTrue(Arr.every(start.rooms, r => r === 0))
+    const end = at(DRAFT_MS)
+    assert.strictEqual(end.sketch, 1)
+    assert.strictEqual(end.fill, 1)
+    assert.isTrue(Arr.every(end.rooms, r => r === 1))
   })
 
-  it('drafts the walls in order, one at a time', () => {
-    const half = draftOf(plan.walls, { since: DRAFT_MS / 2, still: false })
-    const partial = Arr.filter(half, r => r > 0 && r < 1)
-    assert.isAtMost(partial.length, 1)
-    // Once a wall is unfinished, every later wall is untouched.
-    const first = Option.getOrElse(Arr.findFirstIndex(half, r => r < 1), () => half.length)
-    assert.isTrue(Arr.every(half.slice(first + 1), r => r === 0))
+  it('sketches the whole blueprint before anything fills in', () => {
+    const sketching = at(SKETCH_MS / 2)
+    assert.isTrue(sketching.sketch > 0 && sketching.sketch < 1)
+    assert.strictEqual(sketching.fill, 0)
+    assert.isTrue(Arr.every(sketching.rooms, r => r === 0))
+    const sketched = at(SKETCH_MS)
+    assert.strictEqual(sketched.sketch, 1)
+    assert.strictEqual(sketched.fill, 0)
+  })
+
+  it('fills the rooms in one after another', () => {
+    const { rooms: filling } = at(SKETCH_MS + FILL_MS / 3)
+    assert.isTrue(Arr.some(filling, r => r > 0 && r < 1))
+    Arr.forEach(Arr.zip(filling, Arr.drop(filling, 1)), ([before, after]) =>
+      assert.isAtLeast(before, after),
+    )
   })
 
   it('is already drawn when motion is reduced', () => {
-    assert.isTrue(Arr.every(draftOf(plan.walls, { since: 0, still: true }), r => r === 1))
+    const still = draftOf({ since: 0, still: true })
+    assert.strictEqual(still.sketch, 1)
+    assert.strictEqual(still.fill, 1)
+    assert.isTrue(Arr.every(still.rooms, r => r === 1))
     assert.isTrue(drafted({ since: 0, still: true }))
     assert.isFalse(drafted({ since: 0, still: false }))
   })

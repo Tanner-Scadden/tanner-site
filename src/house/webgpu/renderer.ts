@@ -2,7 +2,8 @@
 // canvas sits behind the plan and owns its walls while it runs (the CSS
 // borders step aside). The rooms are measured from the DOM, the rules live
 // in ./house and the camera in ./view, and the loop only runs while the
-// house is on screen. Once the walls are drafted the house rises into 3D,
+// house is on screen. The blueprint is sketched, then its rooms and walls
+// fill in. Once they have, the house rises into 3D,
 // and the room links get the same transform, so they stay on their floors.
 
 import { Data, Effect, Queue, Ref, type Scope, Stream } from 'effect'
@@ -16,7 +17,9 @@ import {
   requestAdapter,
 } from '../../blueprint/webgpu/renderer.ts'
 import {
+  type Draft,
   PRINTS,
+  ROOMS as ROOM_ORDER,
   type Pet,
   type Print,
   type Pets,
@@ -40,6 +43,8 @@ import {
   FLOOR,
   LINES,
   PANELS,
+  ROOMS,
+  ROOM_FLOATS,
   SPRITE_FLOATS,
   STROKES,
   WALL_FLOATS,
@@ -79,6 +84,7 @@ export interface HouseSettings {
 const VIEW_FLOATS = 32
 const MAX_PIXEL_RATIO = 2
 const MAX_WALLS = 56
+const MAX_ROOMS = ROOM_ORDER.length
 // Five dots a paw print.
 const MAX_DOTS = PRINTS * 2 * 5
 const MAX_SPRITES = 2
@@ -133,6 +139,7 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })
     const wallBuffer = yield* storage(MAX_WALLS * WALL_FLOATS * 4)
+    const roomBuffer = yield* storage(MAX_ROOMS * ROOM_FLOATS * 4)
     const barkBuffer = yield* storage(MAX_BARKS * WALL_FLOATS * 4)
     const dotBuffer = yield* storage(MAX_DOTS * DOT_FLOATS * 4)
     const spriteBuffer = yield* storage(MAX_SPRITES * SPRITE_FLOATS * 4)
@@ -219,6 +226,8 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       viewData: new Float32Array(VIEW_FLOATS),
       wallBuffer,
       wallData: new Float32Array(MAX_WALLS * WALL_FLOATS),
+      roomBuffer,
+      roomData: new Float32Array(MAX_ROOMS * ROOM_FLOATS),
       barkBuffer,
       barkData: new Float32Array(MAX_BARKS * WALL_FLOATS),
       dotBuffer,
@@ -226,6 +235,7 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       spriteBuffer,
       spriteData: new Float32Array(MAX_SPRITES * SPRITE_FLOATS),
       floor: bind(pipeline(FLOOR), [buffer(viewBuffer)]),
+      rooms: bind(pipeline(ROOMS), [buffer(viewBuffer), buffer(roomBuffer)]),
       strokes: bind(pipeline(STROKES), [buffer(viewBuffer), buffer(wallBuffer)]),
       // The walls give way to whatever pet stands in front of them.
       panels: bind(pipeline(PANELS, { depthCompare: 'less' }), [
@@ -366,24 +376,28 @@ const barkLines = (pet: Pet, at: Placed, t: number): ReadonlyArray<ReadonlyArray
 
 interface Scene {
   readonly plan: Plan
-  readonly reveal: ReadonlyArray<number>
+  readonly draft: Draft
   readonly pets: Pets | null
   readonly view: View
   readonly lift: number
   readonly now: number
 }
 
-const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, reveal, pets, view, lift, now }: Scene) =>
+const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, lift, now }: Scene) =>
   Effect.sync(() => {
     const dpr = fitCanvas(canvas, gpu.device.limits.maxTextureDimension2D)
     const { house } = plan.rooms
     // NOTE: the order matches `struct View` in the shaders.
     gpu.viewData.set([canvas.clientWidth, canvas.clientHeight, dpr, now / 1000])
     gpu.viewData.set(columns(view.gpu), 4)
-    gpu.viewData.set([house.x, house.y, house.w, house.h, lift, view.height, 0, 0], 20)
+    gpu.viewData.set(
+      [house.x, house.y, house.w, house.h, lift, view.height, draft.fill, draft.sketch],
+      20,
+    )
     gpu.device.queue.writeBuffer(gpu.viewBuffer, 0, gpu.viewData)
 
     gpu.wallData.fill(0)
+    gpu.roomData.fill(0)
     gpu.barkData.fill(0)
     gpu.dotData.fill(0)
     gpu.spriteData.fill(0)
@@ -397,7 +411,7 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, reveal, pets, view,
           w.to.x,
           w.to.y,
           w.width,
-          reveal[i] ?? 0,
+          draft.sketch,
           w.gold,
           w.dash,
           w.alpha,
@@ -408,6 +422,15 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, reveal, pets, view,
         i * WALL_FLOATS,
       ),
     )
+
+    ROOM_ORDER.forEach((name, i) => {
+      const r = plan.rooms[name]
+      // NOTE: the order matches `struct Room` in the shader.
+      gpu.roomData.set(
+        [r.x, r.y, r.w, r.h, name === 'locked' ? 1 : 0, draft.rooms[i] ?? 0, 0, 0],
+        i * ROOM_FLOATS,
+      )
+    })
 
     let dots = 0
     let sprites = 0
@@ -436,6 +459,7 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, reveal, pets, view,
       }
     }
     gpu.device.queue.writeBuffer(gpu.wallBuffer, 0, gpu.wallData)
+    gpu.device.queue.writeBuffer(gpu.roomBuffer, 0, gpu.roomData)
     gpu.device.queue.writeBuffer(gpu.barkBuffer, 0, gpu.barkData)
     gpu.device.queue.writeBuffer(gpu.dotBuffer, 0, gpu.dotData)
     gpu.device.queue.writeBuffer(gpu.spriteBuffer, 0, gpu.spriteData)
@@ -470,6 +494,7 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, reveal, pets, view,
     // The floor and everything on it, then the pets, then the walls over
     // them wherever a wall stands in front.
     if (lift > 0) draw(gpu.floor, 6, 1)
+    draw(gpu.rooms, 6, MAX_ROOMS)
     draw(gpu.strokes, 6, walls)
     draw(gpu.dots, 6, dots)
     draw(gpu.solids, 6, sprites)
@@ -655,7 +680,7 @@ export const runHouseDrawing = (
 
         yield* render(gpu, canvas, {
           plan: current,
-          reveal: draftOf(current.walls, { since, still }),
+          draft: draftOf({ since, still }),
           pets: moved,
           view,
           lift,
