@@ -2,6 +2,7 @@ import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Option } from 'effect'
 
 import {
+  ALERT_FRAME,
   DRAFT_MS,
   PRINTS,
   PRINT_LIFE,
@@ -11,6 +12,7 @@ import {
   type Plan,
   type Point,
   type Rooms,
+  barkOf,
   draftOf,
   drafted,
   frameOf,
@@ -107,6 +109,36 @@ describe('the pets', () => {
     assert.isAtMost(distance(later.teddy.at, pointer), 14)
   })
 
+  it('Teddy play-bows and barks once he catches the pointer', () => {
+    const pointer = { x: 60, y: 50 }
+    const later = run(initialPets(plan, 3), { ms: 6000, pointer })
+    assert.isTrue(later.teddy.alert)
+    assert.strictEqual(frameOf(later.teddy), ALERT_FRAME)
+    // He barks within a couple of seconds of playing.
+    const barks = Arr.makeBy(120, i => barkOf(run(later, { from: 6000, ms: i * 20, pointer }).teddy, 6000 + i * 20))
+    assert.isTrue(Arr.some(barks, b => b !== null))
+    // And settles down once the pointer leaves.
+    const calm = run(later, { from: 6000, ms: 100 })
+    assert.isFalse(calm.teddy.alert)
+  })
+
+  it('Rain ignores the pointer, but sometimes sits up to watch it', () => {
+    // A pointer up in Work: Teddy goes, Rain stays in the yard.
+    const pointer = { x: 60, y: 50 }
+    const later = run(initialPets(plan, 5), { ms: 20_000, pointer })
+    assert.isTrue(inside(later.rain.at, plan.yard))
+    const home = restingPets(plan)
+    const resting: Pets = {
+      ...home,
+      rain: { ...home.rain, restUntil: 10_000, curious: true },
+    }
+    const watching = stepPets(resting, { now: 0, plan, pointer, still: false })
+    assert.isTrue(watching.rain.alert)
+    assert.strictEqual(watching.rain.facing, Math.sign(pointer.x - home.rain.at.x))
+    const napping = stepPets({ ...resting, rain: { ...resting.rain, curious: false } }, { now: 0, plan, pointer, still: false })
+    assert.isFalse(napping.rain.alert)
+  })
+
   it('Teddy never follows the pointer out of the house', () => {
     const later = run(initialPets(plan, 3), { ms: 6000, pointer: { x: 900, y: -400 } })
     assert.isTrue(inside(later.teddy.at, plan.inside))
@@ -149,7 +181,8 @@ describe('the pets', () => {
     const frames = Arr.makeBy(30, i => frameOf(run(walking, { ms: i * 30 }).teddy))
     assert.isTrue(Arr.every(Arr.range(0, WALK_FRAMES - 1), f => frames.includes(f)))
     assert.strictEqual(run(walking, { ms: 300 }).teddy.facing, -1)
-    assert.strictEqual(frameOf(run(walking, { ms: 3000 }).teddy), REST_FRAME)
+    // He gets there in under a second and sits for at least 600ms.
+    assert.strictEqual(frameOf(run(walking, { ms: 1300 }).teddy), REST_FRAME)
   })
 
   it('sit still when motion is reduced', () => {
