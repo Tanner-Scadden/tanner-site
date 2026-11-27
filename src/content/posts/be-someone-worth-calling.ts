@@ -83,11 +83,13 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Be the first to jump in.'),
-      ' Fix problems as you find them. Answer the question in Slack. Be the person people come to by default. If you’re not sure where to start, mirror the top performers on your team. If there isn’t one, join a team that has one.',
+      ' Fix problems as you find them. Answer the question in Slack. Be the person people default coming to. If youre not sure where to start, mirror the top performers on your team. If there isnt one there, join a new team',
     ),
     h.p(
       h.strong('Give back to open source.'),
-      ' Maintaining open source is thankless. Maintainers hear far more complaints than thanks. When a tool you use has a bug or is missing something, open a PR instead of hacking around it.',
+      ' Maintaining open source is thankless. Maintainers hear far more complaints than thanks, and AI has made that ten times worse. When a tool you use has a bug or is missing something, open a ',
+      h.em('high-quality'),
+      ' PR.',
     ),
     h.p(
       h.strong('Believe in yourself.'),
