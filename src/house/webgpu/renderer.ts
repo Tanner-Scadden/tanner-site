@@ -22,6 +22,7 @@ import {
   type Point,
   type Rect,
   type Rooms,
+  barkOf,
   draftOf,
   drafted,
   frameOf,
@@ -35,6 +36,7 @@ import {
 } from './house.ts'
 import { DOTS, DOT_FLOATS, SPRITE_FLOATS, WALLS, WALL_FLOATS, spritesShader } from './shaders.ts'
 import {
+  BARK_FROM,
   CELL_H,
   CELL_W,
   COLS,
@@ -51,7 +53,7 @@ export interface HouseSettings {
 
 const VIEW_FLOATS = 4
 const MAX_PIXEL_RATIO = 2
-const MAX_WALLS = 48
+const MAX_WALLS = 56
 // Five dots a paw print.
 const MAX_DOTS = PRINTS * 2 * 5
 const MAX_SPRITES = 2
@@ -239,6 +241,27 @@ const spriteFor = (pet: Pet, plan: Plan): ReadonlyArray<number> => {
   ]
 }
 
+// A bark: three short gold lines bursting out of Teddy's mouth, `t` of the
+// way through.
+const barkLines = (pet: Pet, plan: Plan, t: number): ReadonlyArray<ReadonlyArray<number>> => {
+  const w = petWidth(plan)
+  const unit = w / CELL_W
+  const h = (w * CELL_H) / CELL_W
+  const left = pet.at.x - w / 2
+  const top = pet.at.y - (44 / CELL_H) * h
+  const facing = pet.facing < 0 ? -1 : 1
+  const mouthX = facing > 0 ? BARK_FROM[0] : CELL_W - BARK_FROM[0]
+  const x = left + mouthX * unit
+  const y = top + BARK_FROM[1] * unit
+  const near = (3 + t * 9) * unit
+  const far = near + 7 * unit
+  return [-0.55, 0, 0.55].map(turn => {
+    const dx = Math.cos(turn) * facing
+    const dy = Math.sin(turn) - 0.25
+    return [x + dx * near, y + dy * near, x + dx * far, y + dy * far, 1.6, 1, 1, 0, 1 - t * t, 0, 0, 0]
+  })
+}
+
 const render = (
   gpu: Gpu,
   canvas: HTMLCanvasElement,
@@ -295,6 +318,10 @@ const render = (
         if (sprites < MAX_SPRITES) gpu.spriteData.set(spriteFor(pet, plan), sprites++ * SPRITE_FLOATS)
       }
     }
+    // Barks go on top of the pets, so they're drawn after them.
+    const planWalls = walls
+    const bark = pets === null ? null : barkOf(pets.teddy, now)
+    if (pets !== null && bark !== null) barkLines(pets.teddy, plan, bark).forEach(addWall)
     gpu.device.queue.writeBuffer(gpu.wallBuffer, 0, gpu.wallData)
     gpu.device.queue.writeBuffer(gpu.dotBuffer, 0, gpu.dotData)
     gpu.device.queue.writeBuffer(gpu.spriteBuffer, 0, gpu.spriteData)
@@ -310,10 +337,10 @@ const render = (
         },
       ],
     })
-    if (walls > 0) {
+    if (planWalls > 0) {
       pass.setPipeline(gpu.walls.pipeline)
       pass.setBindGroup(0, gpu.walls.group)
-      pass.draw(6, walls)
+      pass.draw(6, planWalls)
     }
     if (dots > 0) {
       pass.setPipeline(gpu.dots.pipeline)
@@ -324,6 +351,11 @@ const render = (
       pass.setPipeline(gpu.sprites.pipeline)
       pass.setBindGroup(0, gpu.sprites.group)
       pass.draw(6, sprites)
+    }
+    if (walls > planWalls) {
+      pass.setPipeline(gpu.walls.pipeline)
+      pass.setBindGroup(0, gpu.walls.group)
+      pass.draw(6, walls - planWalls, 0, planWalls)
     }
     pass.end()
     gpu.device.queue.submit([encoder.finish()])

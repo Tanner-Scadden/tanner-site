@@ -5,12 +5,15 @@
 //
 // Coordinates are in a 64 x 48 cell with the ground at y = 44.
 
-import { REST_FRAME as REST, WALK_FRAMES } from './house.ts'
+import { ALERT_FRAME as ALERT, REST_FRAME as REST, WALK_FRAMES } from './house.ts'
 
 export const CELL_W = 64
 export const CELL_H = 48
-// Walking frames, then the resting pose.
-export const COLS = WALK_FRAMES + 1
+// Walking frames, the resting pose, then the alert one: Teddy's play bow and
+// Rain sitting up to watch.
+export const COLS = WALK_FRAMES + 2
+// Where Teddy's mouth is in his play bow, for his barks.
+export const BARK_FROM = [58, 33] as const
 // Teddy's row, then Rain's.
 export const ROWS = 2
 export const TEDDY_ROW = 0
@@ -196,6 +199,22 @@ const teddySit = (ctx: Ctx) => {
   teddyHead(ctx, 42, 12)
 }
 
+// The play bow: elbows down, rear up, tail going.
+const teddyPlay = (ctx: Ctx) => {
+  ctx.globalAlpha = 0.55
+  leg(ctx, [22, 26], 0.12, 5, GOLD, 0.7)
+  ctx.globalAlpha = 1
+  leg(ctx, [17, 26], -0.06, 5, GOLD, 0.7)
+  curly(ctx, ellipse(13.5, 16.5, 3.4, 8, 11, -0.35), 1.2)
+  ink(ctx, GOLD)
+  curly(ctx, ellipse(31, 29, 17, 8, 16, 0.32), 1.6)
+  ink(ctx, GOLD)
+  // Forelegs flat on the floor, reaching forward.
+  curly(ctx, ellipse(48, 41.5, 9.5, 2.6, 10), 0.8)
+  ink(ctx, GOLD)
+  teddyHead(ctx, 50, 31)
+}
+
 // ---------------------------------------------------------------------------
 // Rain, the Nebelung
 // ---------------------------------------------------------------------------
@@ -270,6 +289,20 @@ const rainNap = (ctx: Ctx) => {
   tube(ctx, [15, 39], [10, 46], [28, 46], [42, 43], 3.6, INK)
 }
 
+// Sitting up, tail round her feet, watching.
+const rainWatch = (ctx: Ctx) => {
+  tube(ctx, [22, 42], [18, 46], [34, 46], [44, 43.5], 3.6, INK)
+  curly(ctx, ellipse(27, 38, 8.5, 6, 12), 0.7)
+  ink(ctx, INK)
+  smooth(ctx, ellipse(32, 31, 7.5, 10, 14, 0.25))
+  ink(ctx, INK)
+  leg(ctx, [36.5, 30], 0, 3.4, INK, 0)
+  fringe(ctx, 26, 32, 40)
+  curly(ctx, ellipse(35, 23, 5.4, 5, 10), 1.1)
+  ink(ctx, INK)
+  rainHead(ctx, 37, 15, false)
+}
+
 // ---------------------------------------------------------------------------
 // The sheet
 // ---------------------------------------------------------------------------
@@ -298,5 +331,7 @@ export const drawSheet = (level = 0): HTMLCanvasElement => {
   }
   cell(ctx, scale, REST, TEDDY_ROW, teddySit)
   cell(ctx, scale, REST, RAIN_ROW, rainNap)
+  cell(ctx, scale, ALERT, TEDDY_ROW, teddyPlay)
+  cell(ctx, scale, ALERT, RAIN_ROW, rainWatch)
   return canvas
 }
