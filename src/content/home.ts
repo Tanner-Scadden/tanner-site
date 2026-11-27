@@ -130,7 +130,7 @@ export const HOUSE = {
     work: { name: '01 WORK', note: `${WORK.length} PROJECTS` },
     oss: { name: '02 OPEN SOURCE', note: `${OPEN_SOURCE.length} REPOS` },
     outside: { name: '03 OUTSIDE WORK', note: 'GAMES · DEMI · TEDDY · RAIN' },
-    locked: { name: 'D-13', note: 'DO NOT OPEN' },
+    locked: { name: 'D-13', note: 'CLOSED' },
   },
   // Only shown while WebGPU draws them.
   pets: { teddy: 'TEDDY', rain: 'RAIN' },
