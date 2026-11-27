@@ -16,6 +16,7 @@ import {
 import {
   PRINTS,
   type Pet,
+  type Print,
   type Pets,
   type Plan,
   type Point,
@@ -23,14 +24,26 @@ import {
   type Rooms,
   draftOf,
   drafted,
+  frameOf,
   initialPets,
   movePets,
   planFor,
+  printAlpha,
   restingPets,
   stepPets,
   wakePets,
 } from './house.ts'
-import { DOTS, DOT_FLOATS, WALLS, WALL_FLOATS } from './shaders.ts'
+import { DOTS, DOT_FLOATS, SPRITE_FLOATS, WALLS, WALL_FLOATS, spritesShader } from './shaders.ts'
+import {
+  CELL_H,
+  CELL_W,
+  COLS,
+  RAIN_ROW,
+  ROWS,
+  SHEET_LEVELS,
+  TEDDY_ROW,
+  drawSheet,
+} from './sprites.ts'
 
 export interface HouseSettings {
   readonly still: boolean
@@ -39,7 +52,9 @@ export interface HouseSettings {
 const VIEW_FLOATS = 4
 const MAX_PIXEL_RATIO = 2
 const MAX_WALLS = 48
-const MAX_DOTS = 24
+// Five dots a paw print.
+const MAX_DOTS = PRINTS * 2 * 5
+const MAX_SPRITES = 2
 
 const BLEND: GPUBlendState = {
   color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
@@ -84,6 +99,42 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     })
 
+    const spriteBuffer = yield* acquireBuffer(device, {
+      size: MAX_SPRITES * SPRITE_FLOATS * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    })
+
+    // Teddy and Rain, drawn once onto a sheet, a level at a time.
+    const sheet = yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        const levels = Array.from({ length: SHEET_LEVELS }, (_, level) => drawSheet(level))
+        const [top] = levels
+        const texture = device.createTexture({
+          size: [top?.width ?? 1, top?.height ?? 1],
+          format: 'rgba8unorm',
+          mipLevelCount: levels.length,
+          usage:
+            GPUTextureUsage.TEXTURE_BINDING |
+            GPUTextureUsage.COPY_DST |
+            GPUTextureUsage.RENDER_ATTACHMENT,
+        })
+        levels.forEach((source, mipLevel) =>
+          device.queue.copyExternalImageToTexture(
+            { source },
+            { texture, mipLevel, premultipliedAlpha: true },
+            [source.width, source.height],
+          ),
+        )
+        return texture
+      }),
+      texture => Effect.sync(() => texture.destroy()),
+    )
+    const sampler = device.createSampler({
+      magFilter: 'linear',
+      minFilter: 'linear',
+      mipmapFilter: 'linear',
+    })
+
     const pipeline = (code: string) => {
       const module = device.createShaderModule({ code })
       return device.createRenderPipeline({
@@ -100,6 +151,16 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       })
     const walls = pipeline(WALLS)
     const dots = pipeline(DOTS)
+    const sprites = pipeline(spritesShader(COLS, ROWS))
+    const spriteGroup = device.createBindGroup({
+      layout: sprites.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: viewBuffer } },
+        { binding: 1, resource: { buffer: spriteBuffer } },
+        { binding: 2, resource: sheet.createView() },
+        { binding: 3, resource: sampler },
+      ],
+    })
 
     return {
       device,
@@ -112,6 +173,9 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       dotData: new Float32Array(MAX_DOTS * DOT_FLOATS),
       walls: { pipeline: walls, group: bind(walls, [viewBuffer, wallBuffer]) },
       dots: { pipeline: dots, group: bind(dots, [viewBuffer, dotBuffer]) },
+      spriteBuffer,
+      spriteData: new Float32Array(MAX_SPRITES * SPRITE_FLOATS),
+      sprites: { pipeline: sprites, group: spriteGroup },
     }
   })
 
@@ -133,62 +197,46 @@ const fitCanvas = (canvas: HTMLCanvasElement, maxSize: number): number => {
   return w / width
 }
 
-// The extra lines and dots that draw one pet: its body and paw prints, plus
-// Teddy's ears or Rain's tail.
-interface PetMarks {
-  readonly walls: ReadonlyArray<ReadonlyArray<number>>
-  readonly dots: ReadonlyArray<ReadonlyArray<number>>
+// One paw print: a pad and four toes ahead of it, fading with age.
+const pawDots = (print: Print, gold: number, now: number): ReadonlyArray<ReadonlyArray<number>> => {
+  const alpha = printAlpha(print, now) * 0.8
+  if (alpha <= 0) return []
+  const { at, heading: h } = print
+  const size = gold === 1 ? 1.3 : 1.1
+  const toe = (turn: number, reach: number) => {
+    const c = Math.cos(turn)
+    const s = Math.sin(turn)
+    const dx = h.x * c - h.y * s
+    const dy = h.x * s + h.y * c
+    return [at.x + dx * reach * size, at.y + dy * reach * size, 0.55 * size, 0, gold, alpha, 0, 0]
+  }
+  return [
+    [at.x, at.y, 1.25 * size, 0, gold, alpha, 0, 0],
+    toe(-1.05, 2),
+    toe(-0.36, 2.3),
+    toe(0.36, 2.3),
+    toe(1.05, 2),
+  ]
 }
 
-const marksFor = (pet: Pet, alpha: number): PetMarks => {
-  const { at, heading: h } = pet
-  const side: Point = { x: -h.y, y: h.x }
-  const gold = pet.name === 'teddy' ? 1 : 0
-  const prints = pet.prints.map((p, i) => [
-    p.x,
-    p.y,
-    1.1,
-    0,
-    gold,
-    (((i + 1) / PRINTS) * 0.45 + 0.05) * alpha,
-    0,
-    0,
-  ])
-  if (pet.name === 'teddy') {
-    const ear = (s: number) => [
-      at.x + h.x * 3.2 + side.x * 3 * s,
-      at.y + h.y * 3.2 + side.y * 3 * s,
-      1.8,
-      0,
-      1,
-      alpha,
-      0,
-      0,
-    ]
-    return {
-      walls: [],
-      dots: [...prints, [at.x, at.y, 4.5, 0, 1, alpha, 0, 0], ear(1), ear(-1)],
-    }
-  }
-  // Rain's tail curls off behind her.
-  const tail = [
-    at.x - h.x * 3.5,
-    at.y - h.y * 3.5,
-    at.x - h.x * 8 + side.x * 3,
-    at.y - h.y * 8 + side.y * 3,
-    1.2,
+// How big the pets are: about a tenth of the house, within reason.
+const petWidth = (plan: Plan): number => Math.min(50, Math.max(30, (plan.inside.w + 16) / 10))
+
+// Where a pet's sprite goes: its feet on its spot on the floor.
+const spriteFor = (pet: Pet, plan: Plan): ReadonlyArray<number> => {
+  const w = petWidth(plan) * (pet.name === 'rain' ? 0.92 : 1)
+  const h = (w * CELL_H) / CELL_W
+  const ground = (44 / CELL_H) * h
+  return [
+    pet.at.x - w / 2,
+    pet.at.y - ground,
+    w,
+    h,
+    frameOf(pet),
+    pet.name === 'teddy' ? TEDDY_ROW : RAIN_ROW,
+    pet.facing < 0 ? 1 : 0,
     1,
-    0,
-    0,
-    0.9 * alpha,
-    0,
-    0,
-    0,
   ]
-  return {
-    walls: [tail],
-    dots: [...prints, [at.x, at.y, 3.6, 1.3, 0, alpha, 0, 0]],
-  }
 }
 
 const render = (
@@ -197,6 +245,7 @@ const render = (
   plan: Plan,
   reveal: ReadonlyArray<number>,
   pets: Pets | null,
+  now: number,
 ) =>
   Effect.sync(() => {
     const dpr = fitCanvas(canvas, gpu.device.limits.maxTextureDimension2D)
@@ -205,8 +254,10 @@ const render = (
 
     gpu.wallData.fill(0)
     gpu.dotData.fill(0)
+    gpu.spriteData.fill(0)
     let walls = 0
     let dots = 0
+    let sprites = 0
     const addWall = (data: ReadonlyArray<number>) => {
       if (walls >= MAX_WALLS) return
       gpu.wallData.set(data, walls++ * WALL_FLOATS)
@@ -235,13 +286,18 @@ const render = (
     )
     if (pets !== null) {
       for (const pet of [pets.rain, pets.teddy]) {
-        const marks = marksFor(pet, 1)
-        marks.walls.forEach(addWall)
-        marks.dots.forEach(addDot)
+        const gold = pet.name === 'teddy' ? 1 : 0
+        for (const print of pet.prints) pawDots(print, gold, now).forEach(addDot)
+      }
+      // Whoever is further down the page stands in front.
+      const order = pets.rain.at.y <= pets.teddy.at.y ? [pets.rain, pets.teddy] : [pets.teddy, pets.rain]
+      for (const pet of order) {
+        if (sprites < MAX_SPRITES) gpu.spriteData.set(spriteFor(pet, plan), sprites++ * SPRITE_FLOATS)
       }
     }
     gpu.device.queue.writeBuffer(gpu.wallBuffer, 0, gpu.wallData)
     gpu.device.queue.writeBuffer(gpu.dotBuffer, 0, gpu.dotData)
+    gpu.device.queue.writeBuffer(gpu.spriteBuffer, 0, gpu.spriteData)
 
     const encoder = gpu.device.createCommandEncoder()
     const pass = encoder.beginRenderPass({
@@ -263,6 +319,11 @@ const render = (
       pass.setPipeline(gpu.dots.pipeline)
       pass.setBindGroup(0, gpu.dots.group)
       pass.draw(6, dots)
+    }
+    if (sprites > 0) {
+      pass.setPipeline(gpu.sprites.pipeline)
+      pass.setBindGroup(0, gpu.sprites.group)
+      pass.draw(6, sprites)
     }
     pass.end()
     gpu.device.queue.submit([encoder.finish()])
@@ -405,7 +466,7 @@ export const runHouseDrawing = (
               : stepPets(before, { now, plan: current, pointer: yield* Ref.get(pointer), still })
         yield* Ref.set(pets, moved)
 
-        yield* render(gpu, canvas, current, draftOf(current.walls, { since, still }), moved)
+        yield* render(gpu, canvas, current, draftOf(current.walls, { since, still }), moved, now)
 
         // Once it's drawn, a still house or one off screen can rest.
         if (done && (still || !(yield* Ref.get(visible)))) return

@@ -202,7 +202,8 @@
               "src/work/webgpu/renderer.ts",
               "src/work/webgpu/shaders.ts",
               "src/house/webgpu/renderer.ts",
-              "src/house/webgpu/shaders.ts"
+              "src/house/webgpu/shaders.ts",
+              "src/house/webgpu/sprites.ts"
             ],
             "options": {
               "diagnosticSeverity": {

@@ -180,3 +180,48 @@ fn fs(in: Out) -> @location(0) vec4f {
   return paint(color, cover * d.look.y);
 }
 `
+
+// NOTE: left, top, width, height, then the sheet's column and row, flip (1
+// faces left) and alpha. Matches `struct Sprite`.
+export const SPRITE_FLOATS = 8
+
+export const spritesShader = (cols: number, rows: number) => /* wgsl */ `
+${COMMON}
+
+struct Sprite {
+  box: vec4f,
+  // column, row, flip, alpha
+  cell: vec4f,
+}
+
+@group(0) @binding(1) var<storage, read> sprites: array<Sprite>;
+@group(0) @binding(2) var sheet: texture_2d<f32>;
+@group(0) @binding(3) var sheetSampler: sampler;
+
+const SHEET = vec2f(${cols}.0, ${rows}.0);
+
+struct SpriteOut {
+  @builtin(position) position: vec4f,
+  @location(0) uv: vec2f,
+  @location(1) @interpolate(flat) alpha: f32,
+}
+
+@vertex
+fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> SpriteOut {
+  let s = sprites[i];
+  let q = QUAD[v];
+  var out: SpriteOut;
+  out.position = toClip(s.box.xy + q * s.box.zw);
+  // The sheet faces right; a pet heading left reads it mirrored.
+  let u = select(q.x, 1.0 - q.x, s.cell.z > 0.5);
+  out.uv = (s.cell.xy + vec2f(u, q.y)) / SHEET;
+  out.alpha = s.cell.w;
+  return out;
+}
+
+@fragment
+fn fs(in: SpriteOut) -> @location(0) vec4f {
+  // The sheet is premultiplied already.
+  return textureSample(sheet, sheetSampler, in.uv) * in.alpha;
+}
+`
