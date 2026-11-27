@@ -17,8 +17,8 @@ export const HELLO_LINKS: ReadonlyArray<Link> = [
 ]
 
 export const HELLO_NOTE: ReadonlyArray<string> = [
-  "Thanks for poking around. I'm Tanner, and I turn the rules in",
-  "people's heads into engines that run themselves. Say hi anytime:",
+  "Thanks for poking around. I'm Tanner, and I build engines",
+  "out of other people's rules. Say hi anytime:",
 ]
 
 // The value `tanner.hello()` returns, shown last in the console.

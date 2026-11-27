@@ -62,7 +62,11 @@ a { color: var(--hi) }
 .hero .role { font-family: Archivo, sans-serif; font-weight: 800; font-size: clamp(18px, 2.6vw, 28px); line-height: 1.2; font-stretch: 112%; text-transform: uppercase; color: var(--dim); margin-top: 14px }
 .hero .thesis { margin-top: 40px; padding-left: 18px; border-left: 2px solid var(--hi); font-size: 17px; max-width: 560px; user-select: none }
 .hero .thesis:focus-visible { outline: 2px dashed var(--hi); outline-offset: 4px }
-.hero .bio { margin-top: 18px; max-width: 600px; color: var(--dim) }
+.hero .rules { margin-top: 32px; max-width: 560px }
+.hero .rules small { display: block; font-size: 10px; letter-spacing: .16em; color: var(--dim); margin-bottom: 10px }
+.hero .rules ol { list-style: none; counter-reset: rule; display: grid; gap: 6px; color: var(--dim) }
+.hero .rules li { counter-increment: rule; display: grid; grid-template-columns: 28px 1fr }
+.hero .rules li::before { content: counter(rule) "."; color: var(--hi) }
 
 .job { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding: 30px 0; border-bottom: 1px dashed var(--faint) }
 .job:first-child { padding-top: 0 }

@@ -109,17 +109,23 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
   { label: 'x', href: 'https://x.com/TannerSDev' },
 ]
 
+// The welcome line up top. Each click drops a few more words, down to a hi.
 export const THESES = [
-  "I turn the rules in people's heads into engines that run themselves.",
-  'Rules in heads → engines.',
-  'Rules → engines.',
-  'Solved.',
+  "Welcome in. I build engines out of other people's rules.",
+  'Welcome in. Engines from rules.',
+  'Welcome in.',
+  'Hi.',
 ] as const
 
 export const ROLE = 'Engine builder'
 
-export const BIO =
-  "It started with solar permits, where every city has its own rules for what goes on a roof. Then four marketplaces that each wanted listings their own way. Then every tabletop RPG's rulebook. Now union rules for hospital staffing. Each time, I learn the rules, model them as code, and build the engine so nobody has to do it by hand again. Self-taught, mostly TypeScript and Effect."
-
+// NOTE: every product I build runs on someone's rulebook, so the site gets
+// one too. Each rule nudges toward an egg without giving it away.
+export const HOUSE_RULES = (eggs: number): ReadonlyArray<string> => [
+  'Click things. Some of them click back.',
+  'Developers, open your tools. Someone left a note.',
+  'Old cheat codes still work here.',
+  `There are ${eggs} eggs. Have fun.`,
+]
 
 export const SITE_REPO_URL = 'https://github.com/Tanner-Scadden/tanner-site'
