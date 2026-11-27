@@ -1,0 +1,415 @@
+// NOTE: the rules for the floor plan drawing, as plain data in and plain data
+// out, so the walls, the drafting and the pets are testable without a GPU.
+// The renderer only draws what these return.
+//
+// The plan is drafted once: pens trace every wall one after another, then
+// the front door swings in. Once it's drawn, Teddy and Rain move in through
+// the front door. Teddy wanders the Outside Work room and comes over to the
+// pointer whenever it's on the house; Rain mostly naps, and bolts when Teddy
+// gets too close. With motion reduced the plan is simply there, and the
+// pets sit still.
+
+import { Array as Arr } from 'effect'
+import { dual } from 'effect/Function'
+
+export interface Point {
+  readonly x: number
+  readonly y: number
+}
+
+export interface Rect {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+}
+
+// The house and its rooms, in CSS px from the canvas's corner.
+export interface Rooms {
+  readonly house: Rect
+  readonly work: Rect
+  readonly oss: Rect
+  readonly outside: Rect
+  readonly locked: Rect
+}
+
+export interface Wall {
+  readonly from: Point
+  readonly to: Point
+  readonly width: number
+  // 1 draws in gold, 0 in ink.
+  readonly gold: number
+  // Dash length in px, or 0 for a solid line.
+  readonly dash: number
+  readonly alpha: number
+}
+
+export interface Plan {
+  // In drafting order.
+  readonly walls: ReadonlyArray<Wall>
+  // Where the pets come in: just outside the front door.
+  readonly door: Point
+  // Where they live.
+  readonly yard: Rect
+  // Where Teddy can follow the pointer.
+  readonly inside: Rect
+}
+
+export const DRAFT_MS = 2400
+const OUTER = 2.4
+const INNER = 1.6
+const THIN = 0.8
+const ARC_STEPS = 10
+
+const pt = (x: number, y: number): Point => ({ x, y })
+
+const wall = (
+  from: Point,
+  to: Point,
+  width: number,
+  { gold = 0, dash = 0, alpha = 0.9 }: { gold?: number; dash?: number; alpha?: number } = {},
+): Wall => ({ from, to, width, gold, dash, alpha })
+
+const distance = (a: Point, b: Point): number => Math.hypot(b.x - a.x, b.y - a.y)
+
+// A quarter circle around `hinge`, as short dashed segments.
+const swing = (hinge: Point, radius: number, from: number, to: number): ReadonlyArray<Wall> =>
+  Arr.makeBy(ARC_STEPS, i => {
+    const a = from + ((to - from) * i) / ARC_STEPS
+    const b = from + ((to - from) * (i + 1)) / ARC_STEPS
+    return wall(
+      pt(hinge.x + radius * Math.cos(a), hinge.y + radius * Math.sin(a)),
+      pt(hinge.x + radius * Math.cos(b), hinge.y + radius * Math.sin(b)),
+      THIN,
+      { dash: 3, alpha: 0.7 },
+    )
+  })
+
+const inset = (r: Rect, by: number): Rect => ({
+  x: r.x + by,
+  y: r.y + by,
+  w: Math.max(0, r.w - 2 * by),
+  h: Math.max(0, r.h - 2 * by),
+})
+
+// Every wall of the house, in the order the pens draft them: the outside
+// walls clockwise from the front door, the inside walls, the doors, and the
+// locked room's cross last.
+export const planFor = ({ house, work, outside, locked }: Rooms): Plan => {
+  const left = house.x
+  const top = house.y
+  const right = house.x + house.w
+  const bottom = house.y + house.h
+  const middle = work.y + work.h
+  const split = work.x + work.w
+  const lockX = locked.x
+
+  const doorWidth = Math.min(30, outside.w * 0.3)
+  const doorLeft = outside.x + outside.w * 0.38
+  const doorRight = doorLeft + doorWidth
+
+  const hallWidth = Math.min(28, work.w * 0.3)
+  const hallLeft = work.x + work.w * 0.35
+  const sideWidth = Math.min(24, work.h * 0.3)
+  const sideTop = work.y + work.h * 0.45
+
+  const walls: ReadonlyArray<Wall> = [
+    // The outside, clockwise from the front door.
+    wall(pt(doorLeft, bottom), pt(left, bottom), OUTER),
+    wall(pt(left, bottom), pt(left, top), OUTER),
+    wall(pt(left, top), pt(right, top), OUTER),
+    wall(pt(right, top), pt(right, bottom), OUTER),
+    wall(pt(right, bottom), pt(doorRight, bottom), OUTER),
+    // Down the middle, with a doorway from Work into Outside Work.
+    wall(pt(left, middle), pt(hallLeft, middle), INNER),
+    wall(pt(hallLeft + hallWidth, middle), pt(right, middle), INNER),
+    // Between Work and Open Source, with a doorway.
+    wall(pt(split, top), pt(split, sideTop), INNER),
+    wall(pt(split, sideTop + sideWidth), pt(split, middle), INNER),
+    // The locked room.
+    wall(pt(lockX, middle), pt(lockX, bottom), INNER),
+    // The front door, open, and its swing.
+    wall(pt(doorLeft, bottom), pt(doorLeft, bottom - doorWidth), THIN, { alpha: 0.8 }),
+    ...swing(pt(doorLeft, bottom), doorWidth, -Math.PI / 2, 0),
+    // The doorway's swing into Outside Work.
+    ...swing(pt(hallLeft, middle), hallWidth, 0, Math.PI / 2),
+    // D-13, crossed out.
+    wall(
+      pt(locked.x + 8, locked.y + 8),
+      pt(locked.x + locked.w - 8, locked.y + locked.h - 8),
+      THIN,
+      { gold: 1, dash: 4, alpha: 0.6 },
+    ),
+    wall(
+      pt(locked.x + locked.w - 8, locked.y + 8),
+      pt(locked.x + 8, locked.y + locked.h - 8),
+      THIN,
+      { gold: 1, dash: 4, alpha: 0.6 },
+    ),
+  ]
+
+  return {
+    walls,
+    door: pt((doorLeft + doorRight) / 2, bottom + 14),
+    yard: inset(outside, 14),
+    inside: inset(house, 8),
+  }
+}
+
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
+
+// 0 to 1 for each wall: how much of it is drawn, `since` ms after drafting
+// started. One pen works through the walls in order at a steady speed, so a
+// long wall takes longer than a short one.
+export interface Drafting {
+  // Ms since drafting started.
+  readonly since: number
+  readonly still: boolean
+}
+
+export const draftOf: {
+  (at: Drafting): (walls: ReadonlyArray<Wall>) => ReadonlyArray<number>
+  (walls: ReadonlyArray<Wall>, at: Drafting): ReadonlyArray<number>
+} = dual(2, (walls: ReadonlyArray<Wall>, { since, still }: Drafting): ReadonlyArray<number> => {
+  if (still || since >= DRAFT_MS) return Arr.map(walls, () => 1)
+  if (since <= 0) return Arr.map(walls, () => 0)
+  const lengths = Arr.map(walls, w => distance(w.from, w.to))
+  const total = Arr.reduce(lengths, 0, (sum, l) => sum + l)
+  const head = clamp01(since / DRAFT_MS) * total
+  // Where each wall starts along the pen's path.
+  const starts = Arr.scan(lengths, 0, (sum, l) => sum + l)
+  return Arr.map(lengths, (length, i) => {
+    const start = starts[i] ?? 0
+    return length <= 0 ? (head >= start ? 1 : 0) : clamp01((head - start) / length)
+  })
+})
+
+export const drafted = ({ since, still }: Drafting): boolean => still || since >= DRAFT_MS
+
+// ---------------------------------------------------------------------------
+// The pets
+// ---------------------------------------------------------------------------
+
+export type PetName = 'teddy' | 'rain'
+
+export interface Pet {
+  readonly name: PetName
+  readonly at: Point
+  readonly target: Point
+  // CSS px per second, toward the target.
+  readonly speed: number
+  // Resting until this time, or 0 when it's on the move.
+  readonly restUntil: number
+  // Rain only: running from Teddy.
+  readonly fleeing: boolean
+  // The way it last moved, for the tail and the paw prints.
+  readonly heading: Point
+  // Distance walked since the last paw print.
+  readonly stride: number
+  // The latest paw prints, newest last.
+  readonly prints: ReadonlyArray<Point>
+}
+
+export interface Pets {
+  readonly seed: number
+  readonly teddy: Pet
+  readonly rain: Pet
+  // The previous frame's time, or null at the start of a burst.
+  readonly last: number | null
+}
+
+export interface PetTick {
+  readonly now: number
+  readonly plan: Plan
+  // The pointer on the house, or null when it's elsewhere.
+  readonly pointer: Point | null
+  readonly still: boolean
+}
+
+export const PRINTS = 8
+const PRINT_EVERY = 7
+const PRINT_SIDE = 2
+const TEDDY_WALK = 45
+const TEDDY_RUN = 95
+const RAIN_WALK = 22
+const RAIN_RUN = 120
+// Teddy sits this close to the pointer, and Rain bolts at this distance.
+const HEEL = 12
+const PERSONAL_SPACE = 24
+const ARRIVED = 0.5
+const LONGEST_STEP_S = 0.05
+
+// A small, pure random source: the next seed and a number from 0 to 1.
+const next = (seed: number): readonly [number, number] => {
+  const s = (seed + 0x6d2b79f5) | 0
+  let t = Math.imul(s ^ (s >>> 15), 1 | s)
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+  return [s, ((t ^ (t >>> 14)) >>> 0) / 4294967296]
+}
+
+const randomIn = (seed: number, r: Rect): readonly [number, Point] => {
+  const [s1, u] = next(seed)
+  const [s2, v] = next(s1)
+  return [s2, pt(r.x + u * r.w, r.y + v * r.h)]
+}
+
+const randomBetween = (seed: number, lo: number, hi: number): readonly [number, number] => {
+  const [s, u] = next(seed)
+  return [s, lo + u * (hi - lo)]
+}
+
+const clampTo = (p: Point, r: Rect): Point =>
+  pt(Math.min(r.x + r.w, Math.max(r.x, p.x)), Math.min(r.y + r.h, Math.max(r.y, p.y)))
+
+const pet = (name: PetName, at: Point, target: Point, speed: number): Pet => ({
+  name,
+  at,
+  target,
+  speed,
+  restUntil: 0,
+  fleeing: false,
+  heading: pt(0, -1),
+  stride: 0,
+  prints: [],
+})
+
+// Both pets wait at the front door, already headed somewhere in the yard.
+export const initialPets: {
+  (seed: number): (plan: Plan) => Pets
+  (plan: Plan, seed: number): Pets
+} = dual(2, (plan: Plan, seed: number): Pets => {
+  const [s1, teddyTo] = randomIn(seed, plan.yard)
+  const [s2, rainTo] = randomIn(s1, plan.yard)
+  return {
+    seed: s2,
+    teddy: pet('teddy', plan.door, teddyTo, TEDDY_WALK),
+    rain: pet('rain', pt(plan.door.x + 6, plan.door.y + 4), rainTo, RAIN_WALK),
+    last: null,
+  }
+})
+
+// Moves a pet toward its target, leaving paw prints as it goes.
+const walk = (p: Pet, dt: number): Pet => {
+  const dx = p.target.x - p.at.x
+  const dy = p.target.y - p.at.y
+  const d = Math.hypot(dx, dy)
+  if (d <= ARRIVED) return p
+  const moved = Math.min(d, p.speed * dt)
+  const heading = pt(dx / d, dy / d)
+  const at = pt(p.at.x + heading.x * moved, p.at.y + heading.y * moved)
+  const stride = p.stride + moved
+  if (stride < PRINT_EVERY) return { ...p, at, heading, stride }
+  // Prints alternate left and right of the path.
+  const side = p.prints.length % 2 === 0 ? PRINT_SIDE : -PRINT_SIDE
+  const print = pt(at.x - heading.y * side, at.y + heading.x * side)
+  return {
+    ...p,
+    at,
+    heading,
+    stride: stride - PRINT_EVERY,
+    prints: Arr.takeRight([...p.prints, print], PRINTS),
+  }
+}
+
+const arrived = (p: Pet): boolean => distance(p.at, p.target) <= ARRIVED
+
+// What Teddy wants: the pointer if it's on the house, otherwise somewhere in
+// the yard after a short sit.
+const teddyPlans = (seed: number, p: Pet, tick: PetTick): readonly [number, Pet] => {
+  if (tick.pointer !== null) {
+    const to = clampTo(tick.pointer, tick.plan.inside)
+    const d = distance(p.at, to)
+    // Close enough: sit and look at it.
+    const target = d <= HEEL ? p.at : pt(to.x - ((to.x - p.at.x) / d) * HEEL, to.y - ((to.y - p.at.y) / d) * HEEL)
+    return [seed, { ...p, target, speed: TEDDY_RUN, restUntil: 0 }]
+  }
+  if (!arrived(p)) return [seed, p.speed === TEDDY_WALK ? p : { ...p, speed: TEDDY_WALK }]
+  if (p.restUntil === 0) {
+    const [s, rest] = randomBetween(seed, 600, 2200)
+    return [s, { ...p, restUntil: tick.now + rest }]
+  }
+  if (tick.now < p.restUntil) return [seed, p]
+  const [s, target] = randomIn(seed, tick.plan.yard)
+  return [s, { ...p, target, speed: TEDDY_WALK, restUntil: 0 }]
+}
+
+// What Rain wants: a long nap, a short stroll, and to be far from Teddy.
+const rainPlans = (
+  seed: number,
+  p: Pet,
+  teddy: Pet,
+  tick: PetTick,
+): readonly [number, Pet] => {
+  if (!p.fleeing && distance(p.at, teddy.at) < PERSONAL_SPACE) {
+    // Bolt to the far side of the yard from Teddy.
+    const yard = tick.plan.yard
+    const x = teddy.at.x < yard.x + yard.w / 2 ? yard.x + yard.w : yard.x
+    const [s, y] = randomBetween(seed, yard.y, yard.y + yard.h)
+    return [s, { ...p, target: pt(x, y), speed: RAIN_RUN, fleeing: true, restUntil: 0 }]
+  }
+  if (!arrived(p)) return [seed, p]
+  if (p.restUntil === 0) {
+    const [s, nap] = randomBetween(seed, 2500, 7000)
+    return [s, { ...p, fleeing: false, speed: RAIN_WALK, restUntil: tick.now + nap }]
+  }
+  if (tick.now < p.restUntil) return [seed, p]
+  const [s, target] = randomIn(seed, tick.plan.yard)
+  return [s, { ...p, target, speed: RAIN_WALK, restUntil: 0 }]
+}
+
+export const stepPets: {
+  (tick: PetTick): (pets: Pets) => Pets
+  (pets: Pets, tick: PetTick): Pets
+} = dual(2, (pets: Pets, tick: PetTick): Pets => {
+  if (tick.still) return { ...pets, last: tick.now }
+  const dt = pets.last === null ? 0 : Math.min((tick.now - pets.last) / 1000, LONGEST_STEP_S)
+  const [s1, teddyPlan] = teddyPlans(pets.seed, pets.teddy, tick)
+  const teddy = walk(teddyPlan, dt)
+  const [s2, rainPlan] = rainPlans(s1, pets.rain, teddy, tick)
+  const rain = walk(rainPlan, dt)
+  return { seed: s2, teddy, rain, last: tick.now }
+})
+
+// With motion reduced the pets are already home: Teddy by the door, Rain
+// curled up in the corner.
+export const restingPets = (plan: Plan): Pets => {
+  const { yard } = plan
+  const teddyAt = pt(yard.x + yard.w * 0.45, yard.y + yard.h * 0.6)
+  const rainAt = pt(yard.x + yard.w * 0.85, yard.y + yard.h * 0.3)
+  return {
+    seed: 1,
+    teddy: { ...pet('teddy', teddyAt, teddyAt, TEDDY_WALK), heading: pt(1, 0) },
+    rain: { ...pet('rain', rainAt, rainAt, RAIN_WALK), heading: pt(-1, 0) },
+    last: null,
+  }
+}
+
+// A burst of frames starts fresh, so its first dt is 0, not the rest time.
+export const wakePets = (pets: Pets): Pets => ({ ...pets, last: null })
+
+// Rooms can move when the page reflows, so the pets keep their spot within
+// the yard rather than their spot on the canvas.
+export interface Replan {
+  readonly from: Plan
+  readonly to: Plan
+}
+
+export const movePets: {
+  (replan: Replan): (pets: Pets) => Pets
+  (pets: Pets, replan: Replan): Pets
+} = dual(2, (pets: Pets, { from, to }: Replan): Pets => {
+  const map = (p: Point): Point =>
+    from.yard.w <= 0 || from.yard.h <= 0
+      ? p
+      : pt(
+          to.yard.x + ((p.x - from.yard.x) / from.yard.w) * to.yard.w,
+          to.yard.y + ((p.y - from.yard.y) / from.yard.h) * to.yard.h,
+        )
+  const move = (p: Pet): Pet => ({
+    ...p,
+    at: map(p.at),
+    target: map(p.target),
+    prints: Arr.map(p.prints, map),
+  })
+  return { ...pets, teddy: move(pets.teddy), rain: move(pets.rain) }
+})

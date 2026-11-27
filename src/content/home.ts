@@ -117,8 +117,24 @@ export const THESES = [
   'Build.',
 ] as const
 
-// Under my name, where a job title would usually go.
-export const WELCOME = 'Welcome. Make sure you click around.'
+export const GREETING = "Hey, I'm Tanner 👋"
+
+export const WELCOME = "Come on in and look around. More things are clickable than you'd think."
+
+// NOTE: the floor plan next to the greeting. Each room is a section of the
+// page; D-13 stays shut, like the door at the bottom of the sheet.
+export const HOUSE = {
+  sheet: 'SHEET A-1 · THE HOUSE',
+  here: 'YOU ARE HERE',
+  rooms: {
+    work: { name: '01 WORK', note: `${WORK.length} PROJECTS` },
+    oss: { name: '02 OPEN SOURCE', note: `${OPEN_SOURCE.length} REPOS` },
+    outside: { name: '03 OUTSIDE WORK', note: 'GAMES · DEMI · TEDDY · RAIN' },
+    locked: { name: 'D-13', note: 'DO NOT OPEN' },
+  },
+  // Only shown while WebGPU draws them.
+  pets: { teddy: 'TEDDY', rain: 'RAIN' },
+} as const
 
 export const SIGN_OFF = 'Thanks for stopping by'
 
