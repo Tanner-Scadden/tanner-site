@@ -1,5 +1,5 @@
 import { assert, describe, it } from '@effect/vitest'
-import { Array as Arr, Option, Schema, String as Str } from 'effect'
+import { Array as Arr, Option, Record as Rec, Schema, String as Str } from 'effect'
 
 import { PUBLISHED } from '#content/blog'
 import type { Post } from '#domain/Post'
@@ -76,6 +76,17 @@ describe('withHead', () => {
         assert.deepStrictEqual(metaOf(html, key), metaOf(INDEX, key), key)
       }
     }
+  })
+
+  it('points the site card at a file that ships, everywhere index.html names it', () => {
+    const files = Arr.map(Rec.keys(import.meta.glob('/public/**/*.png', { query: '?url' })), Str.slice('/public'.length))
+    const images = [
+      ...metaOf(INDEX, 'property="og:image"'),
+      ...metaOf(INDEX, 'name="twitter:image"'),
+      jsonLdOf(INDEX)['image'] as string,
+    ]
+    assert.lengthOf(Arr.dedupe(images), 1)
+    assert.include(files, Str.slice(SITE.length)(images[0]!))
   })
 
   it('describes it as a BlogPosting', () => {

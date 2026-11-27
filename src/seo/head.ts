@@ -7,7 +7,10 @@ import { type Post, sortPosts } from '#domain/Post'
 export const SITE = 'https://tannerscadden.com'
 const NAME = 'Tanner Scadden'
 // The site's card, for pages that don't have their own.
-const IMAGE = { url: `${SITE}/og.png`, alt: 'Tanner Scadden: I like to build things.' }
+const IMAGE = {
+  url: `${SITE}/og/home.png`,
+  alt: 'Tanner Scadden, software engineer: I like to build things. Mostly software, sometimes games. Beside it, this site drawn as a blueprint of a house.',
+}
 const AUTHOR = { '@type': 'Person', name: NAME, url: `${SITE}/` } as const
 
 export interface Page {

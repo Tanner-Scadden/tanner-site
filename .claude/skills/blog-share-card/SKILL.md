@@ -1,6 +1,6 @@
 ---
 name: blog-share-card
-description: "Use when a blog post on this site needs its share card (the og:image / twitter:image shown when a link is posted): when the author asks for an OG image, social card, share image or link preview for a post, or a post is about to go up without one. Renders a 1200×630 card of the post's title and summary beside one of its own figures at a moment that tells the post's story, and wires it into the post."
+description: "Use when a blog post on this site needs its share card (the og:image / twitter:image shown when a link is posted): when the author asks for an OG image, social card, share image or link preview for a post, or a post is about to go up without one. Also when the site's own card is stale, say after the home page's copy or house changes. Renders a 1200×630 card of the post's title and summary beside one of its own figures at a moment that tells the post's story, and wires it in."
 ---
 
 # Blog share card
@@ -84,3 +84,21 @@ and no notes or scratch files committed. Run `bun run typecheck`,
 `bun run lint`, `bun run test` and `bun run build`. Check that
 `dist/blog/<slug>.html` names the card, then commit the PNG and the post
 change together.
+
+## The site's own card
+
+The home page, /blog and posts without a card share the site's card,
+`public/og/home.png`. It shows the name, the line up top (`THESES[0]` in
+`src/content/home.ts`) and the house. When any of those change, remake it:
+
+```sh
+bun run card --home
+```
+
+Then update the alt text in both places it lives, `index.html` (both
+`image:alt` tags) and `IMAGE` in `src/seo/head.ts`. A test fails if they
+disagree. Link previews are cached by image URL, so if an old card needs
+to stop showing, give the new one a new file name. Change it everywhere
+`index.html` names it (Open Graph, Twitter and the JSON-LD) and in
+`IMAGE`. A test fails if `index.html` names a card that isn't in
+`public/`.
