@@ -128,6 +128,5 @@ export const beSomeoneWorthCalling: Post = {
       h.p(h.em('The Lorax'), ', Dr. Seuss'),
     ),
     ForestFigure(h, { key: 'forest' }),
-    h.p('Be that someone. The calls will come on their own.'),
   ],
 }
