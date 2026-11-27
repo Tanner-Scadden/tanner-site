@@ -531,7 +531,6 @@ const SEED_FADE = 0.6
 const ROOTS_DEEPEN = 6
 const ROOT_RATE = 0.07
 const ROOT_DEPTH = 0.08
-const ROOT_KNEE = 0.07
 const BOND = 2
 
 const reachingFrom = (tree: Tree) => tree.sprout + tree.grow * 0.5
@@ -547,16 +546,77 @@ const neighbourOf = (trees: ReadonlyArray<Tree>, id: number): number => {
   return best
 }
 
-// A reaching root: down from the trunk, then across under the ground.
-const rootRun = (tree: number, x: number, dir: number, length: number, bond: number): ReadonlyArray<FrameBranch> => {
+// NOTE: roots are drawn as paths, not sticks. Each is sampled in short
+// steps along its length, so it can wander, taper from the trunk to its
+// tip, and send little rootlets off as it goes. Only the part grown so far
+// is drawn, so a root only ever gets longer.
+export const ROOT_STEPS = 8
+const ROOTLETS = [0.3, 0.55, 0.8] as const
+export const ROOT_FORKS = ROOTLETS.length
+const ROOTLET = 0.035
+
+// A point on a reaching root, `d` along it. It dives under the ground, then
+// wanders on toward the neighbour. The wander fades out at `half`, so both
+// roots of a pair arrive at the same spot.
+const reachingPoint = (x: number, dir: number, half: number, phase: number, d: number): Point => {
+  const wander = 0.018 * Math.sin((Math.PI * d) / half) * Math.sin(d * 21 + phase)
+  return [x + dir * d, GROUND + ROOT_DEPTH * (1 - Math.exp(-d / 0.045)) + wander]
+}
+
+// A path from `at(0)` to `at(length)` in short steps, thinning toward its
+// tip, plus a rootlet off each of `forks` once it's grown past them.
+const rootPath = (
+  tree: number,
+  at: (d: number) => Point,
+  length: number,
+  full: number,
+  width: number,
+  bond: number,
+  outward: number,
+): ReadonlyArray<FrameBranch> => {
   if (length <= 0) return []
-  const knee = Math.min(length, ROOT_KNEE)
-  const bend: Point = [x + dir * knee, GROUND + (ROOT_DEPTH * knee) / ROOT_KNEE]
-  const width = 0.008 * (1 + bond)
-  const down: FrameBranch = { tree, from: [x, GROUND], to: bend, width, root: true, bond }
-  return length <= knee
-    ? [down]
-    : [down, { tree, from: bend, to: [x + dir * length, GROUND + ROOT_DEPTH], width, root: true, bond }]
+  const taper = (d: number) => width * (1 - 0.65 * Math.min(1, d / full)) * (1 + bond)
+  const out: Array<FrameBranch> = []
+  for (let k = 0; k < ROOT_STEPS; k++) {
+    const a = (length * k) / ROOT_STEPS
+    const b = (length * (k + 1)) / ROOT_STEPS
+    out.push({ tree, from: at(a), to: at(b), width: taper(a), root: true, bond })
+  }
+  for (const [k, fork] of ROOTLETS.entries()) {
+    const d = full * fork
+    const grown = clamp01((length - d) / (full * 0.25))
+    if (grown <= 0) continue
+    const [fx, fy] = at(d)
+    const side = k % 2 === 0 ? 1 : -0.4
+    out.push({
+      tree,
+      from: [fx, fy],
+      to: [fx + outward * ROOTLET * 0.6 * grown, fy + ROOTLET * (0.6 + 0.4 * side) * grown],
+      width: taper(d) * 0.55,
+      root: true,
+      bond,
+    })
+  }
+  return out
+}
+
+// A reaching root, from the trunk toward a neighbour `half` away.
+const rootRun = (
+  tree: number,
+  x: number,
+  dir: number,
+  half: number,
+  length: number,
+  bond: number,
+): ReadonlyArray<FrameBranch> =>
+  rootPath(tree, d => reachingPoint(x, dir, half, tree * 1.7, d), length, half, 0.009, bond, dir)
+
+// One of a tree's own roots: it fans out from the trunk and curls downward.
+const ownRoot = (x: number, angle: number, length: number) => (d: number): Point => {
+  const curl = 0.9 * (d / Math.max(length, 1e-6)) ** 2 * length
+  // Never deeper than the bottom of the sheet.
+  const y = Math.min(GROUND + Math.sin(angle) * d + curl * 0.4, BOUNDS.y - 0.04)
+  return [x + Math.cos(angle) * d + Math.sign(Math.cos(angle)) * curl * 0.3, y]
 }
 
 export const frameAt = (timeline: Timeline, time: number): Frame => {
@@ -599,16 +659,12 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     }
     for (const root of tree.roots) {
       const deepen = 1 + 1.2 * easeInOut((time - tree.sprout - tree.grow) / ROOTS_DEEPEN)
+      const full = root.length * (1 + 1.2)
       const drawn = Math.min(root.length, root.length * pose.grown * 2.5) * deepen
-      if (drawn <= 0) continue
-      branches.push({
-        tree: id,
-        from: [tree.x, GROUND],
-        to: [tree.x + Math.cos(root.angle) * drawn, GROUND + Math.sin(root.angle) * drawn],
-        width: root.width * (0.3 + 0.7 * pose.grown) * deepen,
-        root: true,
-        bond: 0,
-      })
+      const width = root.width * (0.3 + 0.7 * pose.grown) * deepen
+      branches.push(
+        ...rootPath(id, ownRoot(tree.x, root.angle, full), drawn, full, width, 0, Math.sign(Math.cos(root.angle))),
+      )
     }
     for (const [i, leaf] of tree.leaves.entries()) {
       const open = easeInOut((time - leaf.born) / LEAF_OPEN)
@@ -639,8 +695,8 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     const lengthOf = (t: Tree) => Num.clamp((time - reachingFrom(t)) * ROOT_RATE, { minimum: 0, maximum: half })
     const met = Math.max(reachingFrom(tree), reachingFrom(them)) + half / ROOT_RATE
     const bond = easeInOut((time - met) / BOND)
-    branches.push(...rootRun(id, tree.x, dir, lengthOf(tree), bond))
-    branches.push(...rootRun(other, them.x, -dir, lengthOf(them), bond))
+    branches.push(...rootRun(id, tree.x, dir, half, lengthOf(tree), bond))
+    branches.push(...rootRun(other, them.x, -dir, half, lengthOf(them), bond))
   }
 
   const seeds: Array<FrameSeed> = []

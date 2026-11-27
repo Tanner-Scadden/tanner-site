@@ -11,7 +11,18 @@
 import { Array as Arr, Option } from 'effect'
 
 import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
-import { BOUNDS, type Frame, GROUND, HATCHES, HATCH_GAP, MAX_SEGMENTS, MAX_TREES, ROOTS } from './grove.ts'
+import {
+  BOUNDS,
+  type Frame,
+  GROUND,
+  HATCHES,
+  HATCH_GAP,
+  MAX_SEGMENTS,
+  MAX_TREES,
+  ROOTS,
+  ROOT_FORKS,
+  ROOT_STEPS,
+} from './grove.ts'
 
 type Rgb = readonly [number, number, number]
 
@@ -22,8 +33,11 @@ const WARM: Rgb = [1, 0.94, 0.8]
 
 // The most a frame draws: the ground and its hatching, every branch and
 // root, a wisp per seed; every leaf, a seed and a landing ring each.
-// Plus up to four lines per tree for the roots it reaches toward a neighbour.
-export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + ROOTS + 4) + MAX_TREES
+// Roots are paths: ROOT_STEPS lines and a rootlet per fork. Each tree has
+// its own ROOTS, plus two reaching roots (its own, and its neighbour's
+// reaching back).
+const ROOT_LINES = ROOT_STEPS + ROOT_FORKS
+export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + (ROOTS + 2) * ROOT_LINES) + MAX_TREES
 export const MAX_DOTS = MAX_TREES * MAX_SEGMENTS + MAX_TREES * 2
 
 // How much of itself the rest of the grove keeps while a tree's picked.
