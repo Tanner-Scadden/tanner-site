@@ -2,7 +2,7 @@ import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
 import { Array as Arr } from 'effect'
 
-import { type Sx, sx } from '../styles/sx.ts'
+import { sx } from '../styles/sx.ts'
 
 // NOTE: 16x16 pixel maps, one letter per palette color and '.' for clear.
 // Effect UI's Html has no SVG elements, so a sprite is one pixel-sized box
@@ -136,7 +136,9 @@ const styles = stylex.create({
   sprite: (pixel: number) => ({
     display: 'inline-block',
     position: 'relative',
-    flex: 'none',
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
     width: `${SPRITE_SIZE * pixel}px`,
     height: `${SPRITE_SIZE * pixel}px`,
   }),
@@ -151,13 +153,22 @@ const styles = stylex.create({
   }),
 })
 
+// What a layout may set on a sprite: where it sits, and how it shrinks on
+// small screens. Its size and its pixels are the sprite's own.
+type Placement = stylex.StyleXStyles<{
+  readonly transform?: string | number | null
+  readonly transformOrigin?: string | number | null
+  readonly marginBlock?: string | number | null
+  readonly marginRight?: string | number | null
+  readonly marginBottom?: string | number | null
+}>
+
 // A sprite `pixel` CSS pixels per sprite pixel, hidden from screen readers.
-// `style` places it, for a layout that shrinks it on small screens.
 export const Sprite = <M>(
   h: Html.H<M>,
   name: SpriteName,
   pixel: number,
-  style?: Sx,
+  style?: Placement,
 ) =>
   sx(h.span, styles.sprite(pixel), style)
     .attr('aria-hidden', 'true')

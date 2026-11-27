@@ -6,7 +6,7 @@ import { REST_FACTS, SHOTS } from '#content/rest'
 
 import { homeRoute, href } from '../../routes.ts'
 import { sx } from '../../styles/sx.ts'
-import { fonts, media, rest } from '../../styles/tokens.stylex.ts'
+import { fonts, media, rest, widths } from '../../styles/tokens.stylex.ts'
 
 const styles = stylex.create({
   page: {
@@ -44,17 +44,17 @@ const styles = stylex.create({
     backgroundColor: rest.red,
     paddingBlock: 8,
     paddingInline: 14,
-    outlineColor: { default: null, ':focus-visible': '#fff' },
+    outlineColor: { default: null, ':focus-visible': rest.white },
   },
   title: {
     fontFamily: fonts.display,
     fontWeight: 900,
     fontSize: 'clamp(56px, 12vw, 140px)',
     lineHeight: 0.85,
-    fontStretch: '125%',
+    fontStretch: widths.widest,
     marginTop: 26,
     marginBottom: 6,
-    backgroundImage: 'linear-gradient(180deg, #fff 30%, #6f7a8f)',
+    backgroundImage: `linear-gradient(180deg, ${rest.white} 30%, ${rest.steel})`,
     WebkitBackgroundClip: 'text',
     backgroundClip: 'text',
     color: 'transparent',
@@ -83,13 +83,6 @@ const styles = stylex.create({
     aspectRatio: '4 / 3',
     overflow: 'hidden',
   },
-  big: {
-    gridColumn: { default: 'span 4', [media.narrow]: 'span 2' },
-    gridRow: 'span 2',
-    aspectRatio: { default: 'auto', [media.narrow]: '4 / 3' },
-  },
-  mid: { gridColumn: 'span 2' },
-  full: { gridColumn: { default: 'span 6', [media.narrow]: 'span 2' }, aspectRatio: '16 / 9' },
   photo: {
     position: 'absolute',
     inset: 0,
@@ -105,7 +98,7 @@ const styles = stylex.create({
     bottom: 0,
     paddingBlock: 10,
     paddingInline: 12,
-    backgroundImage: 'linear-gradient(transparent, rgba(0, 0, 0, .85))',
+    backgroundImage: `linear-gradient(transparent, ${rest.shade})`,
     fontFamily: fonts.mono,
     lineHeight: 'normal',
     fontWeight: 700,
@@ -115,7 +108,16 @@ const styles = stylex.create({
   when: { display: 'block', color: rest.gold, fontSize: 10 },
 })
 
-const SIZES = { big: styles.big, mid: styles.mid, full: styles.full }
+// How much of the gallery each shot takes.
+const sizes = stylex.create({
+  big: {
+    gridColumn: { default: 'span 4', [media.narrow]: 'span 2' },
+    gridRow: 'span 2',
+    aspectRatio: { default: 'auto', [media.narrow]: '4 / 3' },
+  },
+  mid: { gridColumn: 'span 2' },
+  full: { gridColumn: { default: 'span 6', [media.narrow]: 'span 2' }, aspectRatio: '16 / 9' },
+})
 
 // NOTE: /rest, the playing days. The gallery shows only shots with a photo.
 export const RestPage = <M>(h: Html.H<M>) =>
@@ -139,7 +141,7 @@ export const RestPage = <M>(h: Html.H<M>) =>
             shot.photo === undefined
               ? []
               : [
-                  sx(h.figure, styles.shot, SIZES[shot.size]).children(
+                  sx(h.figure, styles.shot, sizes[shot.size]).children(
                     sx(h.img, styles.photo).attrs({
                       src: `/${shot.photo}`,
                       alt: `${shot.title}, ${shot.when}`,

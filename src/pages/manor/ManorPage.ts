@@ -77,7 +77,7 @@ const styles = stylex.create({
     color: manor.ink,
     paddingBlock: 8,
     paddingInline: 12,
-    boxShadow: '4px 4px 0 #000',
+    boxShadow: `4px 4px 0 ${manor.shadow}`,
     outlineColor: { default: null, ':focus-visible': manor.gold },
   },
   title: {
@@ -98,7 +98,7 @@ const styles = stylex.create({
     padding: 6,
     backgroundColor: manor.ink,
   },
-  roomsBroken: { backgroundColor: '#2a0d14' },
+  roomsBroken: { backgroundColor: manor.broken },
   room: {
     cursor: 'pointer',
     textDecoration: 'none',
@@ -129,9 +129,6 @@ const styles = stylex.create({
   },
   // The doors jam and hang crooked until he calms down.
   roomBroken: { pointerEvents: 'none', filter: 'saturate(.3) brightness(.7)' },
-  crooked0: { transform: 'rotate(-4deg) translateY(6px)' },
-  crooked1: { transform: 'rotate(3deg) translateY(-4px)' },
-  crooked2: { transform: 'rotate(-2deg) translate(4px, 10px)' },
   roomName: {
     fontFamily: fonts.pixel,
     fontWeight: 700,
@@ -214,7 +211,12 @@ const styles = stylex.create({
   plaqueNote: { fontSize: 19, color: manor.lilac, lineHeight: 1.1 },
 })
 
-const CROOKED = [styles.crooked0, styles.crooked1, styles.crooked2]
+// How each room's door hangs while the Manor is broken.
+const crooked = stylex.create({
+  parlour: { transform: 'rotate(-4deg) translateY(6px)' },
+  trophy: { transform: 'rotate(3deg) translateY(-4px)' },
+  workshop: { transform: 'rotate(-2deg) translate(4px, 10px)' },
+})
 
 export const ManorPage = <M>(
   h: Html.H<M>,
@@ -238,13 +240,13 @@ export const ManorPage = <M>(
         sx(h.nav, styles.rooms, upset && styles.roomsBroken)
           .attr('aria-label', 'Rooms')
           .children(
-            ...Arr.map(ROOMS, (r, i) =>
+            ...Arr.map(ROOMS, r =>
               sx(
                 h.a,
                 styles.room,
                 r === room && styles.roomOn,
                 upset && styles.roomBroken,
-                upset && CROOKED[i],
+                upset && crooked[r],
               )
                 .attr('href', href(roomRoute(r)))
                 .attr('aria-current', r === room ? 'page' : 'false')

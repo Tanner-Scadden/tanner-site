@@ -3,10 +3,8 @@ import * as stylex from '@stylexjs/stylex'
 
 import { homeRoute, href } from '../../routes.ts'
 import { sx } from '../../styles/sx.ts'
-import { blueprint, fonts, manor, media, rest } from '../../styles/tokens.stylex.ts'
+import { blueprint, fonts, manor, media, paper, rest } from '../../styles/tokens.stylex.ts'
 import type { ToastState } from '../machines/Toast.ts'
-
-const PAPER = '#0f3b78'
 
 const styles = stylex.create({
   toast: {
@@ -16,7 +14,7 @@ const styles = stylex.create({
     transform: 'translateX(-50%) translateY(20px)',
     opacity: 0,
     backgroundColor: blueprint.hi,
-    color: PAPER,
+    color: paper.blueprint,
     fontFamily: fonts.mono,
     lineHeight: 'normal',
     fontWeight: 700,
@@ -25,7 +23,8 @@ const styles = stylex.create({
     paddingBlock: 10,
     paddingInline: 16,
     zIndex: 30,
-    transition: '.25s',
+    transitionProperty: 'opacity, transform',
+    transitionDuration: '.25s',
     pointerEvents: 'none',
     maxWidth: 'calc(100vw - 32px)',
     display: { default: null, [media.print]: 'none' },
@@ -38,15 +37,15 @@ const styles = stylex.create({
     textDecoration: 'none',
     display: { default: 'grid', [media.print]: 'none' },
     justifyItems: 'center',
-    backgroundColor: PAPER,
+    backgroundColor: paper.blueprint,
     color: blueprint.hi,
-    boxShadow: `0 0 0 2px ${blueprint.hi}, 0 8px 24px rgba(0, 0, 0, .35)`,
+    boxShadow: `0 0 0 2px ${blueprint.hi}, 0 8px 24px ${blueprint.shadow}`,
     transform: {
       default: 'translateX(-50%)',
       ':hover': 'translateX(-50%) translateY(-2px)',
       ':focus-visible': 'translateX(-50%) translateY(-2px)',
     },
-    outline: { default: null, ':focus-visible': '2px solid #fff' },
+    outlineColor: { default: null, ':focus-visible': blueprint.focus },
     outlineOffset: { default: null, ':focus-visible': 3 },
     transitionProperty: 'background-color, color, box-shadow, opacity, transform',
     transitionDuration: { default: '.3s, .3s, .3s, .25s, .25s', [media.reducedMotion]: '0s' },
@@ -54,22 +53,24 @@ const styles = stylex.create({
   },
   news: {
     backgroundColor: blueprint.hi,
-    color: PAPER,
+    color: paper.blueprint,
     pointerEvents: 'none',
     transitionDelay: '0s',
   },
   manor: {
     backgroundColor: manor.green,
     color: manor.ink,
-    boxShadow: '4px 4px 0 #000',
+    boxShadow: `4px 4px 0 ${manor.shadow}`,
   },
   rest: {
     backgroundColor: rest.red,
     color: rest.night,
-    boxShadow: '0 8px 24px rgba(0, 0, 0, .5)',
+    boxShadow: `0 8px 24px ${rest.shadow}`,
   },
   text: {
-    gridArea: '1 / 1',
+    // BACK and the news share one cell, so the pill fits whichever shows.
+    gridColumn: 1,
+    gridRow: 1,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     transitionProperty: 'opacity, transform',

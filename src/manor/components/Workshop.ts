@@ -18,7 +18,7 @@ import { WORKSHOP_SAYS, WORKSHOP_STACK } from '#content/manor'
 import { type Actor, started } from '../../lib/actor.ts'
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
-import { fonts, manor, media } from '../../styles/tokens.stylex.ts'
+import { arcade, fonts, manor, media } from '../../styles/tokens.stylex.ts'
 import {
   WorkshopEvent,
   WorkshopState,
@@ -97,25 +97,14 @@ const fly = stylex.keyframes({
 })
 const blink = stylex.keyframes({ '50%': { opacity: 0 } })
 
-// The screen's own colors.
-const SCREEN = {
-  hud: '#f4f1de',
-  doorway: '#0b0614',
-  tileA: '#33264a',
-  tileB: '#2c2040',
-  flash: '#fff1a8',
-  tracer: '#ffd23f',
-  held: '#9be36a',
-}
-
 const styles = stylex.create({
   screen: {
     marginTop: 4,
     marginInline: { default: 0, [media.narrow]: -10 },
-    backgroundColor: manor.screen,
+    backgroundColor: arcade.screen,
     borderWidth: 4,
     borderStyle: 'solid',
-    borderColor: manor.screen,
+    borderColor: arcade.screen,
     boxShadow: `6px 6px 0 ${manor.purple}`,
     position: 'relative',
     // Scanlines.
@@ -124,7 +113,7 @@ const styles = stylex.create({
       position: 'absolute',
       inset: 0,
       pointerEvents: 'none',
-      backgroundImage: 'repeating-linear-gradient(rgba(0, 0, 0, .16) 0 1px, transparent 1px 3px)',
+      backgroundImage: `repeating-linear-gradient(${arcade.scanline} 0 1px, transparent 1px 3px)`,
     },
   },
   hud: {
@@ -138,7 +127,7 @@ const styles = stylex.create({
     lineHeight: 'normal',
     fontWeight: 700,
     fontSize: 'clamp(10px, 1.8vw, 13px)',
-    color: SCREEN.hud,
+    color: arcade.text,
   },
   hearts: { display: 'flex', gap: 4 },
   heart: {
@@ -153,7 +142,7 @@ const styles = stylex.create({
     position: 'relative',
     aspectRatio: '16 / 9',
     overflow: 'hidden',
-    backgroundImage: `repeating-conic-gradient(${SCREEN.tileA} 0 25%, ${SCREEN.tileB} 0 50%)`,
+    backgroundImage: `repeating-conic-gradient(${arcade.tile} 0 25%, ${arcade.tileDark} 0 50%)`,
     backgroundPosition: '0 0',
     backgroundSize: '12.5% 22.2222%',
   },
@@ -163,7 +152,7 @@ const styles = stylex.create({
     top,
     width: '6.25%',
     height: '11.1111%',
-    backgroundColor: SCREEN.doorway,
+    backgroundColor: arcade.doorway,
     boxShadow: `inset 0 0 0 3px ${manor.plum}`,
   }),
   // A survivor or a zombie, standing on its tile.
@@ -188,13 +177,15 @@ const styles = stylex.create({
     animationIterationCount: 'infinite',
   },
   brute: { animationDuration: '1.2s' },
-  // Hit, it flashes white, then shambles on.
+  // Hit, it flashes white (its tile flashes, so the zombie can keep its
+  // shamble), then shambles on once the flash is done.
   hit: {
-    animationName: { default: `${hit}, ${shamble}`, [media.reducedMotion]: 'none' },
-    animationDuration: '.3s, .9s',
-    animationDelay: '.15s, .45s',
-    animationIterationCount: '1, infinite',
+    animationName: { default: hit, [media.reducedMotion]: 'none' },
+    animationDuration: '.3s',
+    animationDelay: '.15s',
+    animationIterationCount: 1,
   },
+  hitZombie: { animationDelay: '.45s' },
   dying: {
     display: { default: null, [media.reducedMotion]: 'none' },
   },
@@ -231,8 +222,8 @@ const styles = stylex.create({
     width: '1.6%',
     aspectRatio: 1,
     transform: 'translate(-50%, -50%)',
-    backgroundColor: SCREEN.flash,
-    boxShadow: `0 0 0 2px ${SCREEN.tracer}`,
+    backgroundColor: arcade.muzzle,
+    boxShadow: `0 0 0 2px ${arcade.tracer}`,
     zIndex: 2,
     display: { default: null, [media.reducedMotion]: 'none' },
     animationName: pop,
@@ -251,7 +242,7 @@ const styles = stylex.create({
     width: '2.6%',
     height: '1.2%',
     transform: `translate(-50%, -50%) rotate(${angle})`,
-    backgroundImage: `linear-gradient(90deg, transparent, ${SCREEN.tracer} 45%, ${SCREEN.flash})`,
+    backgroundImage: `linear-gradient(90deg, transparent, ${arcade.tracer} 45%, ${arcade.muzzle})`,
     zIndex: 2,
     display: { default: null, [media.reducedMotion]: 'none' },
     animationName: fly,
@@ -268,14 +259,14 @@ const styles = stylex.create({
     lineHeight: 'normal',
     fontWeight: 700,
     fontSize: 'clamp(18px, 5vw, 40px)',
-    textShadow: `4px 4px 0 ${manor.screen}`,
+    textShadow: `4px 4px 0 ${arcade.screen}`,
     whiteSpace: 'nowrap',
     animationName: { default: blink, [media.reducedMotion]: 'none' },
     animationDuration: '1s',
     animationTimingFunction: 'steps(2, end)',
     animationIterationCount: 'infinite',
   },
-  held: { color: SCREEN.held },
+  held: { color: arcade.held },
   eaten: { color: manor.red },
   stats: {
     display: 'flex',
@@ -300,9 +291,14 @@ const styles = stylex.create({
     color: { default: manor.cream, ':hover': manor.ink },
     paddingBlock: 10,
     paddingInline: 14,
-    boxShadow: { default: '4px 4px 0 #000', ':active': '2px 2px 0 #000' },
+    boxShadow: {
+      default: `4px 4px 0 ${manor.shadow}`,
+      ':active': `2px 2px 0 ${manor.shadow}`,
+    },
     transform: { default: null, ':active': 'translate(2px, 2px)' },
-    outline: { default: null, ':focus-visible': `2px solid ${manor.gold}` },
+    outlineWidth: { default: null, ':focus-visible': 2 },
+    outlineStyle: { default: null, ':focus-visible': 'solid' },
+    outlineColor: { default: null, ':focus-visible': manor.gold },
     outlineOffset: { default: null, ':focus-visible': 2 },
   },
 })
@@ -410,12 +406,16 @@ const workshopView = WorkshopDef.view((h, state) => {
             ),
           ),
           ...Arr.map(frame.zombies, z =>
-            sx(h.div.key(`z${z.id}`), onTile(z.x, z.y, ZOMBIE_ART[z.kind].w)).children(
+            sx(
+              h.div.key(`z${z.id}`),
+              onTile(z.x, z.y, ZOMBIE_ART[z.kind].w),
+              frame.hits.includes(z.id) && styles.hit,
+            ).children(
               sx(
                 h.img,
                 styles.zombie,
                 z.kind === 'brute' && styles.brute,
-                frame.hits.includes(z.id) && styles.hit,
+                frame.hits.includes(z.id) && styles.hitZombie,
               ).attrs({ src: ZOMBIE_ART[z.kind].src, alt: '' }),
             ),
           ),

@@ -2,21 +2,9 @@ import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
 
 import { sx } from '../../styles/sx.ts'
-import { fonts, manor, media } from '../../styles/tokens.stylex.ts'
+import { arcade, blueprint, fonts, manor, media } from '../../styles/tokens.stylex.ts'
 import type { GpuState } from '../machines/Gpu.ts'
 import { PARTICLE_COUNT } from '../webgpu/shaders.ts'
-
-// The outbreak's own colors, from Munch Manor's HUD.
-const HUD = {
-  dark: '#1c1622',
-  text: '#f4f1de',
-  muted: '#b8c2b0',
-  alarm: '#ff6b5e',
-  alarmHi: '#ffe066',
-  alarmText: '#140c10',
-  barEmpty: '#24401a',
-  callShadow: '#10240a',
-}
 
 const waveCall = stylex.keyframes({
   '0%': { opacity: 0, transform: 'scale(2.2)' },
@@ -33,8 +21,8 @@ const tallyIn = stylex.keyframes({
   to: { opacity: 1, transform: 'none' },
 })
 const alarm = stylex.keyframes({
-  from: { backgroundColor: HUD.alarm },
-  to: { backgroundColor: HUD.alarmHi },
+  from: { backgroundColor: arcade.alarm },
+  to: { backgroundColor: arcade.alarmHi },
 })
 
 const styles = stylex.create({
@@ -51,17 +39,26 @@ const styles = stylex.create({
     fontFamily: fonts.pixel,
     opacity: 0,
     visibility: 'hidden',
-    transition: 'opacity .3s, visibility 0s .3s',
+    transitionProperty: 'opacity, visibility',
+    transitionDuration: '.3s, 0s',
+    transitionDelay: '0s, .3s',
   },
-  on: { opacity: 1, visibility: 'visible', transition: 'opacity .15s' },
-  layer: { gridArea: '1 / 1' },
+  on: {
+    opacity: 1,
+    visibility: 'visible',
+    transitionProperty: 'opacity',
+    transitionDuration: '.15s',
+    transitionDelay: '0s',
+  },
+  // The call and the tally share one cell, one after the other.
+  layer: { gridColumn: 1, gridRow: 1 },
   call: {
     fontFamily: fonts.pixel,
     fontWeight: 700,
     fontSize: 'clamp(24px, 6vw, 44px)',
     lineHeight: 1,
     color: manor.green,
-    textShadow: `3px 3px 0 ${HUD.callShadow}, 6px 6px 0 rgba(0, 0, 0, .35)`,
+    textShadow: `3px 3px 0 ${arcade.callShadow}, 6px 6px 0 ${blueprint.shadow}`,
     letterSpacing: '.04em',
     whiteSpace: 'nowrap',
     marginTop: '10vh',
@@ -77,11 +74,11 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: HUD.dark,
-    color: HUD.text,
+    backgroundColor: arcade.panel,
+    color: arcade.text,
     paddingBlock: 7,
     paddingInline: 10,
-    boxShadow: `0 0 0 2px ${manor.green}, 4px 4px 0 2px #000`,
+    boxShadow: `0 0 0 2px ${manor.green}, 4px 4px 0 2px ${manor.shadow}`,
     fontSize: 11,
     fontWeight: 700,
     whiteSpace: 'nowrap',
@@ -95,7 +92,7 @@ const styles = stylex.create({
     animationDelay: '1.9s',
     animationFillMode: 'both',
   },
-  level: { backgroundColor: HUD.alarm, color: HUD.alarmText, paddingBlock: 2, paddingInline: 6 },
+  level: { backgroundColor: arcade.alarm, color: arcade.screen, paddingBlock: 2, paddingInline: 6 },
   levelOn: {
     animationName: { default: alarm, [media.reducedMotion]: 'none' },
     animationDuration: '1s',
@@ -103,15 +100,17 @@ const styles = stylex.create({
     animationDelay: '2.2s',
     animationIterationCount: 4,
   },
-  what: { color: HUD.muted },
+  what: { color: arcade.muted },
   count: { color: manor.green, minWidth: '6.4em' },
-  bar: { width: 64, height: 8, backgroundColor: HUD.barEmpty, boxShadow: '0 0 0 1px #000' },
+  bar: { width: 64, height: 8, backgroundColor: arcade.meter, boxShadow: `0 0 0 1px ${manor.shadow}` },
   fill: (share: number) => ({
     display: 'block',
     height: '100%',
     width: `${share * 100}%`,
     backgroundColor: manor.green,
-    transition: { default: 'width .25s steps(3, end)', [media.reducedMotion]: 'none' },
+    transitionProperty: 'width',
+    transitionDuration: { default: '.25s', [media.reducedMotion]: '0s' },
+    transitionTimingFunction: 'steps(3, end)',
   }),
 })
 

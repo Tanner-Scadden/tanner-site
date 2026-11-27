@@ -22,6 +22,7 @@ import { SiteSnapshot, initialSnapshot, siteActors, siteSnapshots } from './site
 import { Keys, KeysEvent } from './site/machines/Keys.ts'
 import { Page, PageEvent, PageState } from './site/machines/Page.ts'
 import { classOf } from './styles/sx.ts'
+import { paper } from './styles/tokens.stylex.ts'
 import { Thesis, ThesisEvent, thesisText } from './thesis/machines/Thesis.ts'
 import { Dock, Toast } from './toast/components/Toast.ts'
 
@@ -105,9 +106,9 @@ const roomColorOf = (page: PageState): RoomColor =>
     NotFound: () => BLUEPRINT,
   })
 
-const BLUEPRINT: RoomColor = { name: 'blueprint', color: '#0f3b78' }
-const MANOR: RoomColor = { name: 'manor', color: '#141022' }
-const REST: RoomColor = { name: 'rest', color: '#07090d' }
+const BLUEPRINT: RoomColor = { name: 'blueprint', color: paper.blueprint }
+const MANOR: RoomColor = { name: 'manor', color: paper.manor }
+const REST: RoomColor = { name: 'rest', color: paper.rest }
 
 // NOTE: the body carries the blueprint paper, which the document shows
 // through. The hidden pages paint over it, on <html> too.

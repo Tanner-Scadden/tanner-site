@@ -1,6 +1,6 @@
 import * as stylex from '@stylexjs/stylex'
 
-import { blueprint, fonts, manor, media, rest } from '../styles/tokens.stylex.ts'
+import { blueprint, fonts, media, paper } from '../styles/tokens.stylex.ts'
 
 // NOTE: the document itself: the blueprint paper behind every page, and the
 // hidden pages' own colors, so overscroll, the space under short pages and
@@ -20,6 +20,6 @@ export const documentStyles = stylex.create({
     },
     backgroundSize: '120px 120px, 120px 120px, 24px 24px, 24px 24px',
   },
-  manor: { backgroundColor: manor.night, backgroundImage: 'none' },
-  rest: { backgroundColor: rest.night, backgroundImage: 'none' },
+  manor: { backgroundColor: paper.manor, backgroundImage: 'none' },
+  rest: { backgroundColor: paper.rest, backgroundImage: 'none' },
 })
