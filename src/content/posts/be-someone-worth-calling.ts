@@ -9,7 +9,7 @@ export const beSomeoneWorthCalling: Post = {
   title: 'Be Someone Worth Calling',
   date: '2026-11-27',
   summary:
-    'The best turns in your career will come from people vouching for you in rooms you’re not in. You can’t ask for that. It all traces back to being kind, being useful, and giving your best.',
+    'The best turns in your career will come from people vouching for you in rooms you’re not in. It all traces back to being kind, being useful, and giving your best.',
   body: h => [
     h.p('My call to join Sentinels came after I’d thought I was done playing.'),
     h.p(
