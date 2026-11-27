@@ -1,39 +1,37 @@
-// NOTE: a frame of the team as lines and dots in CSS px, coloured like the
-// rest of the sheet. Both renderers draw exactly this.
+// NOTE: a frame of the team and their bucket as lines and dots in CSS px,
+// coloured like the rest of the sheet. Both renderers draw exactly this.
 //
-// Each teammate is a dot that brightens on their beat and sends out a small
-// ring. The links between them are the trust: faint at first, thickening
-// and turning gold as drops land, each drop a brief brightening along the
-// link. Once the team is in step, a ring in the middle beats with them.
+// The bucket is drawn like a part on a technical drawing: thin outline, a
+// lip at the rim and its near edge, a dashed centreline, and the floor it stands
+// on, hatched underneath. What's in it is a stack of gold courses, one per
+// drop, the newest bright as it lands. Once something's been lost, a dashed
+// high-water line and a small level mark stay at the most it ever held.
 //
-// The flare is the post's red: a flash ring from whoever flared, and a red
-// cast on the links and people it reaches. Whoever flared keeps a little of
-// it, and a ring, so the end frame still says who. Every link leaves a
-// faint ghost at the most it ever was, so the end frame shows what was
-// built as well as what's left.
+// The teammates are a row of dots, linked only to their neighbours. A drop
+// is a gold bead with a short streak. A flare is the post's red: a flash
+// ring from whoever flared, a ring that stays round them, and the spill,
+// red beads and a puddle on the floor where the bucket went over.
 //
-// Along the bottom, the team's trust so far: a slow climb, a cliff, and a
-// short way back.
-//
-// Pointing at a teammate picks them out: their links stay bright, a ring
-// goes round them, and the rest dims.
+// Pointing at a teammate picks them out: a ring goes round them, and their
+// courses in the bucket stay bright while the rest dims.
 
 import { Array as Arr, Option } from 'effect'
 
 import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
 import {
+  AFTER,
+  BEFORE,
   BOUNDS,
-  END,
-  FLARE,
+  BUCKET,
+  COURSE,
+  FLOOR,
   type Frame,
-  type FrameLink,
-  type FramePerson,
-  MAX_LINKS,
-  MAX_PEOPLE,
-  TRACE_STEP,
-  WAVE_SPEED,
-  smooth,
-} from './rhythm.ts'
+  MAX_FLARES,
+  PEOPLE,
+  SPRAY,
+  halfAt,
+  posed,
+} from './bucket.ts'
 
 type Rgb = readonly [number, number, number]
 
@@ -43,18 +41,24 @@ const GOLD: Rgb = [1, 0.82, 0.4]
 const WARM: Rgb = [1, 0.94, 0.8]
 const ALARM: Rgb = [1, 0.42, 0.38]
 
-// Every link and its ghost, the trace's segments and its baseline.
-export const MAX_LINES = MAX_LINKS * 2 + Math.ceil(END / TRACE_STEP) + 4
-// Everyone and their rings, plus the shared beat, the flash, the ring
-// round whoever flared, the trace's head and flare mark, and the picked
-// ring.
-export const MAX_DOTS = MAX_PEOPLE * 2 + 8
+// The floor runs this far either side, hatched this often underneath.
+const FLOOR_HALF = 1.5
+const HATCHES = 16
+const RIM_ARC = 12
+const CENTRELINE = 7
+const HIGH_WATER = 9
+const MAX_COURSES = BEFORE + AFTER
 
-// Where the trace sits, in world units: across most of the width, below
-// the team.
-const TRACE = { left: -1.25, right: 1.25, top: 0.5, bottom: 0.8 } as const
+// The floor and its hatching, the bucket's outline, lip, near rim and
+// centreline, the high-water mark, every course, a streak per drop, the
+// neighbour links, and a puddle per flare.
+export const MAX_LINES =
+  1 + HATCHES + 6 + RIM_ARC + CENTRELINE + HIGH_WATER + 3 + MAX_COURSES + MAX_COURSES + (PEOPLE - 1) + MAX_FLARES
+// Everyone, a giving ring and a flare ring each, every flash, every drop,
+// every bead, and the picked ring.
+export const MAX_DOTS = PEOPLE * 3 + MAX_FLARES + MAX_COURSES + MAX_FLARES * SPRAY + 1
 
-const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], alpha]
+const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], Math.min(1, Math.max(0, alpha))]
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
@@ -70,12 +74,6 @@ export const projection = (width: number, height: number) => {
     px: ([x, y]: Point): Point => [width / 2 + x * scale, height / 2 + y * scale],
   }
 }
-
-// Where a moment of the trace sits, in world units.
-export const tracePoint = ([time, trust]: readonly [number, number]): Point => [
-  TRACE.left + (TRACE.right - TRACE.left) * (time / END),
-  TRACE.bottom - (TRACE.bottom - TRACE.top) * trust,
-]
 
 // How close, in px, the pointer has to be to pick someone out.
 const REACH = 18
@@ -98,10 +96,16 @@ const pickedBy = (frame: Frame, px: (point: Point) => Point, pointer: Option.Opt
     return best
   })
 
-const radiusOf = (person: FramePerson) => 4.5 + 2.5 * person.beat
-
-const colourOf = (person: FramePerson): Rgb =>
-  mix(mix(WARM, GOLD, person.bond), ALARM, Math.max(person.heat, person.scar))
+// A dashed line, as this many dashes.
+const dashed = (from: Point, to: Point, dashes: number, fill: number): ReadonlyArray<readonly [Point, Point]> =>
+  Arr.map(Arr.range(0, dashes - 1), i => {
+    const a = i / dashes
+    const b = (i + fill) / dashes
+    return [
+      [from[0] + (to[0] - from[0]) * a, from[1] + (to[1] - from[1]) * a],
+      [from[0] + (to[0] - from[0]) * b, from[1] + (to[1] - from[1]) * b],
+    ] as const
+  })
 
 export const shapesOf = (
   frame: Frame,
@@ -111,146 +115,147 @@ export const shapesOf = (
 ): Shapes => {
   const { scale, px } = projection(width, height)
   const picked = pickedBy(frame, px, pointer)
-  const touches = (link: FrameLink) =>
-    Option.match(picked, { onNone: () => true, onSome: id => link.a === id || link.b === id })
-  const near = (id: number) =>
-    Option.match(picked, {
-      onNone: () => true,
-      onSome: p => p === id || Arr.some(frame.links, link => touches(link) && (link.a === id || link.b === id)),
-    })
+  const mine = (id: number) => Option.match(picked, { onNone: () => true, onSome: p => p === id })
   const faded = ([r, g, b, a]: Rgba, keep: boolean): Rgba => [r, g, b, keep ? a : a * DIMMED]
-  const grownOf = (link: FrameLink) => Math.min(frame.people[link.a]!.grown, frame.people[link.b]!.grown)
+  const unpicked = Option.isNone(picked)
+  const g = frame.grown
+  // The bucket's own frame, posed and then onto the canvas.
+  const pose = posed(frame.angle, frame.side)
+  const at = (point: Point): Point => px(pose(point))
+  const line = (from: Point, to: Point, width: number, color: Rgba): Line => ({ from, to, width, color })
 
-  // What each link was at its strongest, left behind once it's lost.
-  const ghosts = Arr.map(frame.links, (link): Line => {
-    const lost = smooth((link.peak - link.weight) / 0.25)
-    return {
-      from: px(link.from),
-      to: px(link.to),
-      width: 2 + 5 * link.peak,
-      color: faded(rgba(mix(GOLD, LINE, 0.35), 0.16 * lost), touches(link)),
-    }
+  // The floor, hatched underneath like a section.
+  const floor = line(px([-FLOOR_HALF, FLOOR]), px([FLOOR_HALF, FLOOR]), 1, rgba(LINE, 0.32 * g))
+  const hatches = Arr.map(Arr.range(0, HATCHES - 1), i => {
+    const x = -FLOOR_HALF + 0.04 + ((FLOOR_HALF * 2 - 0.12) * i) / (HATCHES - 1)
+    return line(px([x + 0.07, FLOOR + 0.005]), px([x, FLOOR + 0.07]), 1, rgba(LINE, 0.13 * g))
   })
 
-  const links = Arr.map(frame.links, (link): Line => {
-    const { weight, drop, heat } = link
-    const beat = (frame.people[link.a]!.beat + frame.people[link.b]!.beat) / 2
-    const lit = Option.isSome(picked) && touches(link)
-    const alpha = Math.min(1, (0.1 + 0.62 * weight + 0.22 * drop + 0.12 * weight * beat) * (1 - heat) + 0.85 * heat)
-    return {
-      from: px(link.from),
-      to: px(link.to),
-      width: 0.7 + 3 * weight + 0.6 * drop + (lit ? 1 : 0),
-      color: faded(
-        rgba(mix(mix(LINE, GOLD, Math.min(1, weight * 1.4)), ALARM, heat), alpha * grownOf(link)),
-        touches(link),
-      ),
-    }
+  // The bucket: walls, base, and a doubled lip at the rim. Tinted red
+  // while it's over.
+  const over = Math.min(1, frame.angle / 0.6)
+  const ink = mix(LINE, mix(LINE, ALARM, 0.55), over)
+  const outline = rgba(ink, 0.85 * g)
+  const { base, rim, baseHalf, rimHalf } = BUCKET
+  const lip = rim + 0.03
+  const walls = [
+    line(at([-baseHalf, base]), at([-rimHalf, rim]), 1.6, outline),
+    line(at([baseHalf, base]), at([rimHalf, rim]), 1.6, outline),
+    line(at([-baseHalf, base]), at([baseHalf, base]), 1.6, outline),
+    line(at([-rimHalf - 0.02, rim]), at([rimHalf + 0.02, rim]), 1.6, outline),
+    line(at([-rimHalf - 0.02, rim]), at([-rimHalf + 0.004, lip]), 1, rgba(ink, 0.5 * g)),
+    line(at([rimHalf + 0.02, rim]), at([rimHalf - 0.004, lip]), 1, rgba(ink, 0.5 * g)),
+  ]
+  // The near edge of the rim, seen from a little above.
+  const arc = Arr.map(Arr.range(0, RIM_ARC), i => {
+    const t = Math.PI * (i / RIM_ARC)
+    return at([-rimHalf * Math.cos(t), rim + 0.09 * Math.sin(t)])
   })
-
-  // The trace: gold as trust builds, red where it's lost, and back to gold,
-  // dimmer, as it slowly comes back.
-  const points = Arr.map(frame.trace, sample => ({ time: sample[0], at: px(tracePoint(sample)) }))
-  const trace = Arr.flatMap(
-    Arr.zip(points, Arr.drop(points, 1)),
-    ([from, to]): ReadonlyArray<Line> => {
-      const losing = from.time >= FLARE && from.time < FLARE + 1.4
-      const after = from.time >= FLARE + 1.4
-      return [
-        {
-          from: from.at,
-          to: to.at,
-          width: 1.5,
-          color: faded(losing ? rgba(ALARM, 0.9) : rgba(GOLD, after ? 0.6 : 0.8), Option.isNone(picked)),
-        },
-      ]
-    },
+  const nearRim = Arr.map(Arr.zip(arc, Arr.drop(arc, 1)), ([a, b]) => line(a, b, 1, rgba(ink, 0.3 * g)))
+  // A dashed centreline, past the rim and the base, like a drawing.
+  const centreline = Arr.map(dashed([0, base + 0.05], [0, rim - 0.1], CENTRELINE, 0.55), ([a, b]) =>
+    line(at(a), at(b), 1, rgba(LINE, 0.12 * g)),
   )
-  const baseline: Line = {
-    from: px([TRACE.left, TRACE.bottom]),
-    to: px([TRACE.right, TRACE.bottom]),
-    width: 1,
-    color: rgba(LINE, 0.14),
-  }
 
-  // Each teammate's ring on their beat, gold and brighter the more bonded
-  // they are.
-  const rings = Arr.flatMap(frame.people, (person): ReadonlyArray<Dot> => {
-    if (person.cycle >= 0.5) return []
-    const c = person.cycle / 0.5
-    const [x, y] = px([person.x, person.y])
-    return [
-      {
-        x,
-        y,
-        radius: 7 + 18 * easeOut(c),
-        glow: 0,
-        ring: 1.2,
-        color: faded(
-          rgba(colourOf(person), (0.12 + 0.4 * person.bond) * (1 - c) * person.grown),
-          Option.isNone(picked),
+  // The fill: a course for each drop, bright as it lands.
+  const levelOf = (level: number) => base - BUCKET.wall * 0.6 - (level + 0.5) * COURSE
+  const courses = Arr.map(frame.courses, course => {
+    const y = levelOf(course.level)
+    const half = halfAt(y) * Math.min(1, course.amount)
+    const colour = mix(GOLD, WARM, course.fresh * 0.7)
+    return line(
+      at([-half, y]),
+      at([half, y]),
+      COURSE * scale * 0.58,
+      faded(rgba(colour, (0.78 + 0.22 * course.fresh) * Math.min(1, course.amount * 2)), mine(course.from)),
+    )
+  })
+
+  // The high-water mark, once some of it's been lost: dashed across at the
+  // most it held, and a small level triangle on the wall.
+  const lost = Math.min(1, Math.max(0, (frame.peak - frame.fill - 0.5) / 2)) * (1 - over)
+  const peakY = levelOf(frame.peak - 0.5)
+  const peakHalf = halfAt(peakY) + BUCKET.wall
+  const highWater =
+    lost > 0
+    ? [
+        ...Arr.map(dashed([-peakHalf, peakY], [peakHalf, peakY], HIGH_WATER, 0.5), ([a, b]) =>
+          line(at(a), at(b), 1, rgba(GOLD, 0.45 * lost)),
         ),
-      },
-    ]
-  })
+        ...(() => {
+          const tip: Point = [peakHalf + 0.07, peakY]
+          const l: Point = [peakHalf + 0.03, peakY - 0.06]
+          const r: Point = [peakHalf + 0.11, peakY - 0.06]
+          const c = rgba(GOLD, 0.55 * lost)
+          return [line(at(l), at(r), 1, c), line(at(r), at(tip), 1, c), line(at(tip), at(l), 1, c)]
+        })(),
+      ]
+    : []
 
-  const shared = Option.flatMap(frame.shared, ({ x, y, cycle, strength }): Option.Option<Dot> => {
-    if (cycle >= 0.6) return Option.none()
-    const c = cycle / 0.6
-    const [cx, cy] = px([x, y])
-    return Option.some({
-      x: cx,
-      y: cy,
-      radius: 6 + scale * 0.32 * easeOut(c),
-      glow: 0,
-      ring: 1.5,
-      color: faded(rgba(GOLD, 0.4 * strength * (1 - c)), Option.isNone(picked)),
-    })
-  })
+  const streaks = Arr.map(frame.drops, drop =>
+    line(px(drop.tail), px([drop.x, drop.y]), 1.5, rgba(GOLD, 0.45)),
+  )
 
-  const flash = Option.map(frame.flash, ({ x, y, progress }): Dot => {
-    const [fx, fy] = px([x, y])
-    return {
-      x: fx,
-      y: fy,
-      radius: 8 + scale * WAVE_SPEED * 1.4 * progress,
-      glow: 0,
-      ring: 2.5,
-      color: rgba(ALARM, 0.85 * (1 - progress) ** 1.5),
-    }
-  })
+  // Neighbours only, faint: a row, not a web.
+  const links = Arr.map(Arr.zip(frame.people, Arr.drop(frame.people, 1)), ([a, b]) =>
+    line(px([a.x, a.y]), px([b.x, b.y]), 1, faded(rgba(LINE, 0.14 * Math.min(a.grown, b.grown)), unpicked)),
+  )
 
-  const people = Arr.map(frame.people, (person): Dot => {
-    const [x, y] = px([person.x, person.y])
-    const glow = (4 + 10 * person.beat) * (0.35 + 0.65 * person.bond) + 18 * person.heat
+  const puddles = Arr.map(frame.puddles, puddle =>
+    line(px([puddle.from, FLOOR - 0.008]), px([puddle.to, FLOOR - 0.008]), 3, rgba(ALARM, 0.75)),
+  )
+
+  const flashes = Arr.map(frame.flashes, (flash): Dot => {
+    const [x, y] = px([flash.x, flash.y])
     return {
       x,
       y,
-      radius: radiusOf(person) * person.grown,
-      glow: glow * person.grown,
-      ring: 0,
-      color: faded(rgba(colourOf(person), 0.95), near(person.id)),
+      radius: 8 + scale * (0.2 + 0.15 * flash.share) * easeOut(flash.progress),
+      glow: 0,
+      ring: 2.5,
+      color: rgba(ALARM, 0.9 * (1 - flash.progress) ** 1.5),
     }
   })
 
-  // A ring round whoever flared, so the end still says who.
-  const marked = Arr.flatMap(frame.people, (person): ReadonlyArray<Dot> => {
-    if (!person.flarer || person.scar <= 0) return []
+  const colourOf = (giving: number, heat: number): Rgb => mix(mix(WARM, GOLD, 0.5 + 0.5 * giving), ALARM, heat)
+  const people = Arr.map(frame.people, (person): Dot => {
     const [x, y] = px([person.x, person.y])
-    return [{ x, y, radius: 11, glow: 0, ring: 1.5, color: faded(rgba(ALARM, 1.3 * person.scar), near(person.id)) }]
+    return {
+      x,
+      y,
+      radius: (5 + 1.5 * person.giving) * person.grown,
+      glow: (5 + 9 * person.giving + 14 * person.heat) * person.grown,
+      ring: 0,
+      color: faded(rgba(colourOf(person.giving, person.heat), 0.95), mine(person.id)),
+    }
+  })
+  // A small ring as someone lets a drop go, and one that stays round
+  // whoever flared.
+  const giving = Arr.flatMap(frame.people, (person): ReadonlyArray<Dot> => {
+    if (person.giving <= 0.02) return []
+    const [x, y] = px([person.x, person.y])
+    return [{ x, y, radius: 9, glow: 0, ring: 1.2, color: faded(rgba(GOLD, 0.5 * person.giving), mine(person.id)) }]
+  })
+  const marked = Arr.flatMap(frame.people, (person): ReadonlyArray<Dot> => {
+    if (person.heat <= 0) return []
+    const [x, y] = px([person.x, person.y])
+    return [{ x, y, radius: 11, glow: 0, ring: 1.5, color: faded(rgba(ALARM, person.heat), mine(person.id)) }]
   })
 
-  const head = Option.map(Arr.last(points), ({ at }): Dot => ({
-    x: at[0],
-    y: at[1],
-    radius: 2.5,
-    glow: 6,
-    ring: 0,
-    color: faded(rgba(GOLD, 0.9), Option.isNone(picked)),
-  }))
-  const flared = Option.map(frame.flared, (sample): Dot => {
-    const [x, y] = px(tracePoint(sample))
-    return { x, y, radius: 3, glow: 6, ring: 0, color: faded(rgba(ALARM, 1), Option.isNone(picked)) }
+  const drops = Arr.map(frame.drops, (drop): Dot => {
+    const [x, y] = px([drop.x, drop.y])
+    return { x, y, radius: 3, glow: 8, ring: 0, color: rgba(GOLD, 1) }
+  })
+  const beads = Arr.map(frame.beads, (bead): Dot => {
+    const [x, y] = px([bead.x, bead.y])
+    return {
+      x,
+      y: bead.flying ? y : y - bead.radius,
+      radius: bead.radius,
+      glow: bead.flying ? 5 : 0,
+      ring: 0,
+      color: rgba(ALARM, bead.flying ? 0.95 : 0.8),
+    }
   })
 
   const halo = Option.flatMap(picked, id =>
@@ -258,22 +263,24 @@ export const shapesOf = (
       Arr.get(frame.people, id),
       (person): Dot => {
         const [x, y] = px([person.x, person.y])
-        return { x, y, radius: radiusOf(person) + (person.flarer ? 10 : 6), glow: 0, ring: 1.5, color: rgba(WARM, 0.9) }
+        return { x, y, radius: person.heat > 0 ? 16 : 11, glow: 0, ring: 1.5, color: rgba(WARM, 0.9) }
       },
     ),
   )
 
   return {
-    lines: [...ghosts, ...links, baseline, ...trace],
-    dots: [
-      ...Option.toArray(shared),
-      ...rings,
-      ...Option.toArray(flash),
-      ...people,
-      ...marked,
-      ...Option.toArray(flared),
-      ...Option.toArray(head),
-      ...Option.toArray(halo),
+    lines: [
+      floor,
+      ...hatches,
+      ...links,
+      ...centreline,
+      ...nearRim,
+      ...courses,
+      ...highWater,
+      ...walls,
+      ...puddles,
+      ...streaks,
     ],
+    dots: [...flashes, ...giving, ...people, ...marked, ...beads, ...drops, ...Option.toArray(halo)],
   }
 }

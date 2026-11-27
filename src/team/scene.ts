@@ -3,7 +3,7 @@
 
 import { makeAnimation } from '../blog/animation/Animation.ts'
 import type { Scene } from '../blog/animation/scene.ts'
-import { buildTimeline, frameAt } from './rhythm.ts'
+import { buildTimeline, frameAt } from './bucket.ts'
 import { MAX_DOTS, MAX_LINES, shapesOf } from './shapes.ts'
 
 export const teamScene: Scene = {
@@ -11,10 +11,8 @@ export const teamScene: Scene = {
     {
       id: 'team',
       label: 'TEAM',
-      // The canvas has no words of its own, so the caption names the
-      // flare and the line along the bottom.
       caption:
-        'A team falling into rhythm over a season. Each beat they land together adds a little trust. One flare of frustration takes it all at once, and the line along the bottom shows how little comes back.',
+        'Every bit of help adds a drop. One blowup tips the whole bucket, and the team starts again from almost nothing.',
       tone: 'hi',
     },
   ],
@@ -22,7 +20,9 @@ export const teamScene: Scene = {
     const timeline = buildTimeline(seed)
     return {
       end: timeline.end,
-      shapesAt: (time, width, height, pointer) => shapesOf(frameAt(timeline, time), width, height, pointer),
+      // The end holds still while the run waits to replay.
+      shapesAt: (time, width, height, pointer) =>
+        shapesOf(frameAt(timeline, Math.min(time, timeline.end)), width, height, pointer),
     }
   },
   maxLines: MAX_LINES,
