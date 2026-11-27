@@ -125,15 +125,18 @@ export const GREETING = "Hey, I'm Tanner 👋"
 
 export const WELCOME = "Come on in and click around. There's a few Easter eggs."
 
+// The third section of the page, about life away from the keyboard.
+export const PERSONAL_LIFE = 'PERSONAL LIFE'
+
 // NOTE: the floor plan next to the greeting. Each room is a section of the
 // page; D-13 stays shut, like the door at the bottom of the sheet.
 export const HOUSE = {
   sheet: 'SHEET A-1 · THE HOUSE',
   here: 'YOU ARE HERE',
   rooms: {
-    work: { name: '01 WORK', note: `${WORK.length} PROJECTS` },
-    oss: { name: '02 OPEN SOURCE', note: `${OPEN_SOURCE.length} REPOS` },
-    outside: { name: '03 OUTSIDE WORK', note: 'GAMES · DEMI · TEDDY · RAIN' },
+    work: { name: '01 WORK' },
+    oss: { name: '02 OPEN SOURCE' },
+    outside: { name: `03 ${PERSONAL_LIFE}` },
     locked: { name: 'D-13', note: 'CLOSED' },
   },
   // Only shown while WebGPU draws them.

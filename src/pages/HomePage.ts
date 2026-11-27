@@ -6,6 +6,7 @@ import {
   GREETING,
   HOUSE,
   OPEN_SOURCE,
+  PERSONAL_LIFE,
   SIGN_OFF,
   SITE_REPO_URL,
   WELCOME,
@@ -65,7 +66,7 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
       h.nav(
         h.a.attr('href', '#work').children('WORK'),
         h.a.attr('href', '#oss').children('OPEN SOURCE'),
-        h.a.attr('href', '#outside').children('OUTSIDE WORK'),
+        h.a.attr('href', '#outside').children(PERSONAL_LIFE),
       ),
       EggCounter(h, eggs),
     )
@@ -97,7 +98,7 @@ const Room = <M>(
   h.a
     .class('house-room')
     .attrs({ href: target, 'data-room': name })
-    .children(h.b(HOUSE.rooms[name].name), h.small(HOUSE.rooms[name].note))
+    .children(h.b(HOUSE.rooms[name].name))
 
 // NOTE: a floor plan of the page. Each room jumps to its section. With
 // WebGPU the walls are drafted in and Teddy and Rain move in; without it the
@@ -223,7 +224,7 @@ const Outside = <M>(h: Html.H<M>) =>
     .class('blk')
     .attr('id', 'outside')
     .children(
-      Label(h, 3, 'OUTSIDE WORK'),
+      Label(h, 3, PERSONAL_LIFE),
       h.p
         .class('p')
         .children(

@@ -78,7 +78,7 @@ describe('planFor', () => {
     assert.strictEqual(door.length, 1)
   })
 
-  it('keeps the yard inside Outside Work', () => {
+  it('keeps the yard inside Personal Life', () => {
     assert.isTrue(inside(plan.yard, rooms.outside))
     assert.isTrue(inside({ x: plan.yard.x + plan.yard.w, y: plan.yard.y + plan.yard.h }, rooms.outside))
   })
