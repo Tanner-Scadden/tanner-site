@@ -69,18 +69,18 @@ export const beSomeoneWorthCalling: Post = {
     h.h2('How to be someone worth calling'),
     h.p('None of those calls came from a strategy. They came from habits, and you can build every one of them.'),
     h.p(
+      h.strong('Understand the problems.'),
+      ' Step back and look at the bigger picture, then step back and do it again. Don’t stop at the ticket in front of you. Ask what it’s really for and what else it touches. Talk to customers, watch session replays, and dig through your OpenTelemetry data for problems users never reported. The more of the picture you can see, the bigger the problems you can take on. Bring the team solutions, not problems.',
+    ),
+    h.p(
       h.strong('Build with intent.'),
       ' Don’t build just for fun. Build for a better developer experience, a better agent experience, or a real return for the org, and push your knowledge however you can along the way.',
     ),
     h.p(
-      h.strong('Go find the problems.'),
-      ' Talk to customers, watch session replays, and dig through your OpenTelemetry data for problems users never reported. Bring the team solutions, not problems.',
-    ),
-    h.p(
       h.strong('Be intentional about how you communicate.'),
-      ' ',
+      ' The first sentence decides how the rest gets read, so make it count. When you need something from someone, lead with what you need, then give them the context to act on it. ',
       h.a.attr('href', 'https://www.smartbrevity.com/').children('Smart Brevity'),
-      ' makes the case that the first sentence decides how the rest gets read.',
+      ' is a whole book on doing this well.',
     ),
     h.p(
       h.strong('When someone needs help, jump in.'),
