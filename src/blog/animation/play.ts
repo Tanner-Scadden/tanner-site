@@ -11,7 +11,7 @@
 // canvas is on screen, and while paused it waits for the next change (the
 // controls, the reader's pointer, a resize) instead of drawing every frame.
 
-import { Effect, Latch, Number as Num, Option, Ref, Stream } from 'effect'
+import { Effect, Latch, Number as Num, Option, Ref, Stream, String as Str } from 'effect'
 
 import { nextFrame } from '../../blueprint/webgpu/renderer.ts'
 import { type Controls, FADE, HOLD, SLIDER_STEPS, type Started } from './controls.ts'
@@ -49,6 +49,12 @@ const tick = (scene: Scene, clock: Clock, seconds: number): Clock => {
 }
 
 const opacityAt = ({ run, time }: Clock): number => 1 - clamp01((time - run.end - HOLD) / FADE)
+
+// Seconds as m:ss.
+const clockOf = (seconds: number): string => {
+  const whole = Math.max(0, Math.floor(seconds))
+  return `${Math.floor(whole / 60)}:${Str.padStart(2, '0')(String(whole % 60))}`
+}
 
 // The canvas's CSS size, with its backing store matched to the screen.
 const fit = (canvas: HTMLCanvasElement) => {
@@ -116,9 +122,9 @@ export const playScene = (
     const painter = yield* painterFor(canvas, scene.maxLines, scene.maxDots)
     yield* started({ renderer: painter.renderer, still })
 
-    const slider = Option.fromNullishOr(
-      canvas.closest('figure')?.querySelector<HTMLInputElement>('input[type="range"]'),
-    )
+    const figure = canvas.closest('figure')
+    const slider = Option.fromNullishOr(figure?.querySelector<HTMLInputElement>('input[type="range"]'))
+    const readout = Option.fromNullishOr(figure?.querySelector<HTMLElement>('[data-clock]'))
     const run = scene.run(controls.variant, 1)
     const clock = yield* Ref.make<Clock>({
       seed: 1,
@@ -137,6 +143,10 @@ export const playScene = (
       Option.map(slider, input => {
         const step = String(Math.round(clamp01(now.time / now.run.end) * SLIDER_STEPS))
         if (input.value !== step) input.value = step
+      })
+      Option.map(readout, element => {
+        const text = `${clockOf(Math.min(now.time, now.run.end))} / ${clockOf(now.run.end)}`
+        if (element.textContent !== text) element.textContent = text
       })
     }
 

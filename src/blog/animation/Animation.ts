@@ -118,15 +118,19 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
             ),
           model.renderer !== 'none' &&
             sx(h.div, styles.controls).children(
-              sx(h.button, base.button, styles.button, styles.lead, alarm && styles.alarmLead)
-                .attrs({ type: 'button', 'aria-label': model.playing ? 'Pause' : 'Play' })
+              sx(h.button, base.button, styles.icon, styles.lead, alarm && styles.alarmLead)
+                .attrs({
+                  type: 'button',
+                  'aria-label': model.playing ? 'Pause' : 'Play',
+                  title: model.playing ? 'Pause' : 'Play',
+                })
                 .on('click', Message.ClickedPlay())
-                .children(model.playing ? 'PAUSE' : 'PLAY'),
-              sx(h.button, base.button, styles.button)
-                .attrs({ type: 'button', 'aria-label': 'Replay' })
+                .children(Icon(h, model.playing ? 'pause' : 'play')),
+              sx(h.button, base.button, styles.icon)
+                .attrs({ type: 'button', 'aria-label': 'Restart', title: 'Restart' })
                 .on('click', Message.ClickedReplay())
-                .children('REPLAY'),
-              sx(h.input, styles.slider, alarm && styles.alarmSlider)
+                .children(Icon(h, 'restart')),
+              sx(h.input, base.focus, styles.slider, alarm && styles.alarmSlider)
                 .attrs({
                   type: 'range',
                   min: '0',
@@ -136,6 +140,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                   'aria-label': 'Time',
                 })
                 .on('input', ({ value }) => Message.MovedSlider({ value })),
+              // The drawing keeps this up to date as it plays.
+              sx(h.span, styles.clock).attrs({ 'data-clock': '', 'aria-hidden': 'true' }).children('0:00'),
               scene.variants.length > 1 &&
                 sx(h.div, styles.variants)
                   .attrs({ role: 'group', 'aria-label': 'Version' })
@@ -160,6 +166,13 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
   })
 }
 
+// The usual media icons (Material's, Apache 2.0): play, pause, and replay
+// from the start. Each is a mask over the text colour, so it takes the
+// button's colour and hover like a word would.
+
+const Icon = <M>(h: Html.H<M>, icon: keyof typeof glyphs) =>
+  sx(h.span, styles.glyph, glyphs[icon]).attr('aria-hidden', 'true')
+
 const styles = stylex.create({
   // A frame in the text column, drawn like a detail on the sheet.
   figure: {
@@ -177,10 +190,9 @@ const styles = stylex.create({
     display: { default: 'flex', [media.print]: 'none' },
     flexWrap: 'wrap',
     alignItems: 'center',
-    rowGap: 10,
-    columnGap: 14,
-    paddingBlock: 10,
-    paddingInline: 14,
+    gap: 8,
+    paddingBlock: 8,
+    paddingInline: 10,
     borderTopWidth: 1,
     borderTopStyle: 'dashed',
     borderTopColor: blueprint.faint,
@@ -199,8 +211,40 @@ const styles = stylex.create({
     paddingBlock: 7,
     paddingInline: 10,
   },
-  // Play and pause, a little wider so the label doesn't shift the row.
-  lead: { minWidth: 64, color: blueprint.hi, borderColor: blueprint.hiSoft },
+  // A square icon button, a comfortable size to hit.
+  icon: {
+    display: 'grid',
+    placeItems: 'center',
+    flexShrink: 0,
+    width: 32,
+    height: 32,
+    cursor: 'pointer',
+    color: { default: blueprint.dim, ':hover': blueprint.line, ':focus-visible': blueprint.line },
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: { default: blueprint.faint, ':hover': blueprint.dim, ':focus-visible': blueprint.dim },
+  },
+  glyph: {
+    display: 'block',
+    width: 18,
+    height: 18,
+    backgroundColor: 'currentColor',
+    maskRepeat: 'no-repeat',
+    maskPosition: 'center',
+    maskSize: 'contain',
+  },
+  // Play and pause leads the row, in gold.
+  lead: { color: blueprint.hi, borderColor: { default: blueprint.hiSoft, ':hover': blueprint.hi } },
+  // Elapsed and total, fixed-width digits so it doesn't jiggle.
+  clock: {
+    flexShrink: 0,
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    lineHeight: 'normal',
+    fontVariantNumeric: 'tabular-nums',
+    color: blueprint.dim,
+    whiteSpace: 'nowrap',
+  },
   alarmLead: { color: post.alarm, borderColor: post.alarm },
   on: { color: blueprint.hi, borderColor: blueprint.hi },
   onAlarm: { color: post.alarm, borderColor: post.alarm },
@@ -209,6 +253,7 @@ const styles = stylex.create({
     flexShrink: 1,
     flexBasis: 160,
     minWidth: 120,
+    marginInline: 4,
     accentColor: blueprint.hi,
     cursor: 'pointer',
   },
@@ -232,5 +277,21 @@ const styles = stylex.create({
     fontSize: 12,
     lineHeight: 1.6,
     color: blueprint.dim,
+  },
+})
+
+// Each glyph's path is written out in full: StyleX only takes literals.
+const glyphs = stylex.create({
+  play: {
+    maskImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5v14l11-7z'/%3E%3C/svg%3E\")",
+  },
+  pause: {
+    maskImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 19h4V5H6v14zm8-14v14h4V5h-4z'/%3E%3C/svg%3E\")",
+  },
+  restart: {
+    maskImage:
+      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z'/%3E%3C/svg%3E\")",
   },
 })
