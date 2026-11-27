@@ -111,7 +111,7 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
 
 // The big line up top. Each click drops a few more words, down to one.
 export const THESES = [
-  'I like to build things. Mostly software, sometimes zombie games.',
+  'I like to build things. Mostly software, sometimes games.',
   'I like to build things.',
   'I like to build.',
   'Build.',
@@ -119,7 +119,7 @@ export const THESES = [
 
 export const GREETING = "Hey, I'm Tanner 👋"
 
-export const WELCOME = "Come on in and look around. More things are clickable than you'd think."
+export const WELCOME = "Come on in and click around. There's a few Easter eggs."
 
 // NOTE: the floor plan next to the greeting. Each room is a section of the
 // page; D-13 stays shut, like the door at the bottom of the sheet.
