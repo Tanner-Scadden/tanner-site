@@ -1,10 +1,20 @@
 import type { Html } from '@effect/ui/html'
 import { Array as Arr } from 'effect'
 
-import { ELSEWHERE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
+import {
+  ELSEWHERE,
+  GREETING,
+  HOUSE,
+  OPEN_SOURCE,
+  SIGN_OFF,
+  SITE_REPO_URL,
+  WELCOME,
+  WORK,
+} from '#content/home'
 
 import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
+import { HouseDrawing } from '../house/mounts/HouseDrawing.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
 import { SiteRoute, href, restRoute } from '../routes.ts'
 import { WorkDrawing } from '../work/mounts/WorkDrawing.ts'
@@ -25,7 +35,7 @@ export const HomePage = <M>(
     .class('sheet')
     .children(
       TopBar(h, options.eggs),
-      Hero(h, options.thesis, options.clickedThesis),
+      Hero(h, options.thesis, options.clickedThesis, options.still),
       Work(h, options.still),
       OpenSource(h),
       Outside(h),
@@ -60,23 +70,69 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
       EggCounter(h, eggs),
     )
 
-const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M) =>
+const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M, still: boolean) =>
   h.header
-    .class('hero')
+    .class('hero', 'home')
     .children(
-      h.h1('Tanner Scadden'),
-      h.p.class('role').children('Product engineer'),
-      h.p
-        .class('thesis')
-        .attrs({ role: 'button', tabindex: '0' })
-        .on('click', clicked)
-        .on('keydown', pressed(clicked), { preventDefault: true })
-        .children(thesis),
-      h.p
-        .class('bio')
+      h.div
+        .class('hello')
         .children(
-          "I'm usually one of the first engineers at an early startup. I figure out what to build, build it, and keep it running. Mostly TypeScript and Effect these days. Self-taught.",
+          h.h1(GREETING),
+          h.p
+            .class('thesis')
+            .attrs({ role: 'button', tabindex: '0' })
+            .on('click', clicked)
+            .on('keydown', pressed(clicked), { preventDefault: true })
+            .children(thesis),
+          h.p.class('welcome').children(WELCOME),
         ),
+      House(h, still),
+    )
+
+const Room = <M>(
+  h: Html.H<M>,
+  name: 'work' | 'oss' | 'outside',
+  target: string,
+) =>
+  h.a
+    .class('house-room')
+    .attrs({ href: target, 'data-room': name })
+    .children(h.b(HOUSE.rooms[name].name), h.small(HOUSE.rooms[name].note))
+
+// NOTE: a floor plan of the page. Each room jumps to its section. With
+// WebGPU the walls are drafted in and Teddy and Rain move in; without it the
+// CSS walls show and the house is empty.
+const House = <M>(h: Html.H<M>, still: boolean) =>
+  h.figure
+    .class('house')
+    .children(
+      h.canvas
+        .class('house-gpu')
+        .attr('aria-hidden', 'true')
+        .onMount(HouseDrawing({ still })),
+      h.small.class('sheet-no').attr('aria-hidden', 'true').children(HOUSE.sheet),
+      h.nav
+        .class('plan')
+        .attr('aria-label', 'Floor plan of this page')
+        .children(
+          Room(h, 'work', '#work'),
+          Room(h, 'oss', '#oss'),
+          Room(h, 'outside', '#outside'),
+          h.div
+            .class('house-room', 'locked')
+            .attrs({ 'data-room': 'locked', 'aria-hidden': 'true' })
+            .children(h.b(HOUSE.rooms.locked.name), h.small(HOUSE.rooms.locked.note)),
+        ),
+      h.figcaption.children(
+        h.span.class('here').children(HOUSE.here),
+        h.span
+          .class('pets')
+          .attr('aria-hidden', 'true')
+          .children(
+            h.span.class('teddy').children(HOUSE.pets.teddy),
+            h.span.class('rain').children(HOUSE.pets.rain),
+          ),
+      ),
     )
 
 const Step = <M>(h: Html.H<M>, title: string, text: string, out: boolean) =>
@@ -185,7 +241,7 @@ const Footer = <M>(h: Html.H<M>, clickedWebGpu: M) =>
   h.footer
     .class('foot')
     .children(
-      h.div(h.small('TANNER SCADDEN'), h.strong('Product engineer')),
+      h.div(h.small('TANNER SCADDEN'), h.strong(SIGN_OFF)),
       h.div(
         h.small('ELSEWHERE'),
         ...Arr.flatMap(ELSEWHERE, (link, i) => [

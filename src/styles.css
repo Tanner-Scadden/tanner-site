@@ -60,9 +60,47 @@ a { color: var(--hi) }
 .hero { padding: 72px 40px 56px; border-bottom: 1px solid var(--line) }
 .hero h1 { font-family: Archivo, sans-serif; font-weight: 900; font-size: clamp(36px, 7vw, 84px); line-height: .95; font-stretch: 125%; text-transform: uppercase }
 .hero .role { font-family: Archivo, sans-serif; font-weight: 800; font-size: clamp(18px, 2.6vw, 28px); line-height: 1.2; font-stretch: 112%; text-transform: uppercase; color: var(--dim); margin-top: 14px }
-.hero .thesis { margin-top: 40px; padding-left: 18px; border-left: 2px solid var(--hi); font-size: 17px; max-width: 560px; user-select: none }
+
+/* the front page's hero: a hello on one side, the house on the other */
+.hero.home { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; padding: 64px 40px 56px }
+.hero.home h1 { font-weight: 800; font-size: clamp(30px, 3.6vw, 46px); line-height: 1.05; font-stretch: 112%; text-transform: none }
+.hero .thesis { margin-top: 28px; padding-left: 18px; border-left: 2px solid var(--hi); font-size: 17px; max-width: 520px; user-select: none }
+.hero .welcome { margin-top: 18px; max-width: 520px; color: var(--dim) }
+
+/* the floor plan: each room is a section of the page */
+.house { position: relative; isolation: isolate; margin: 0 }
+canvas.house-gpu { position: absolute; left: -24px; top: -24px; width: calc(100% + 48px); height: calc(100% + 48px); z-index: -1; pointer-events: none; display: block }
+.house:not([data-gpu="on"]) canvas.house-gpu { display: none }
+.house .sheet-no { display: block; text-align: center; font-size: 9px; letter-spacing: .16em; color: var(--dim); margin-bottom: 8px }
+.plan { display: grid; grid-template-columns: 150fr 55fr 75fr; grid-template-rows: 1.3fr 1fr; aspect-ratio: 28 / 19; border: 2.5px solid var(--line); position: relative }
+.plan::after { content: ""; position: absolute; bottom: -3px; left: 28%; width: 30px; height: 4px; background: var(--bp) }
+.house-room { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px; text-align: center; color: inherit; text-decoration: none; transition: color .15s, background-color .15s }
+.house-room b { font-size: 12px; letter-spacing: .08em }
+.house-room small { font-size: 9px; letter-spacing: .12em; color: var(--dim) }
+a.house-room:hover, a.house-room:focus-visible { color: var(--hi); background: rgba(255, 209, 102, .06) }
+a.house-room:hover small, a.house-room:focus-visible small { color: var(--hi) }
+a.house-room:focus-visible { outline: 2px dashed var(--hi); outline-offset: -4px }
+.house-room[data-room="work"] { grid-column: 1; border-right: 1.5px solid var(--line); border-bottom: 1.5px solid var(--line) }
+.house-room[data-room="oss"] { grid-column: 2 / 4; border-bottom: 1.5px solid var(--line) }
+.house-room[data-room="outside"] { grid-column: 1 / 3; border-right: 1.5px solid var(--line); justify-content: flex-start; padding-top: 14px }
+.house-room.locked { grid-column: 3; color: var(--hi) }
+.house-room.locked small { color: var(--hi); font-size: 8px }
+.house figcaption { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 10px; letter-spacing: .14em }
+.house .here { color: var(--hi); display: inline-flex; align-items: center; gap: 8px; margin-left: calc(28% - 4px) }
+.house .here::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hi) }
+.house .pets { display: none; gap: 14px; color: var(--dim) }
+.house .pets span { display: inline-flex; align-items: center; gap: 6px }
+.house .pets .teddy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hi) }
+.house .pets .rain::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1.3px solid var(--line) }
+/* while WebGPU draws the plan, the CSS walls step aside and the labels
+   wait for the pens */
+.house[data-gpu="on"] .plan, .house[data-gpu="on"] .house-room { border-color: transparent }
+.house[data-gpu="on"] .plan::after { display: none }
+.house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] figcaption, .house[data-gpu="on"] .sheet-no { transition: opacity .6s ease-out; opacity: 0 }
+.house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] figcaption, .house[data-gpu="on"][data-drawn] .sheet-no { opacity: 1 }
+.house[data-gpu="on"] .pets { display: inline-flex }
+@media (prefers-reduced-motion: reduce) { .house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] figcaption, .house[data-gpu="on"] .sheet-no { transition: none } }
 .hero .thesis:focus-visible { outline: 2px dashed var(--hi); outline-offset: 4px }
-.hero .bio { margin-top: 18px; max-width: 600px; color: var(--dim) }
 
 .job { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding: 30px 0; border-bottom: 1px dashed var(--faint) }
 .job:first-child { padding-top: 0 }
@@ -290,6 +328,9 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 
 @media (max-width: 820px) {
   .blk, .hero { padding: 36px 20px }
+  .hero.home { grid-template-columns: 1fr; gap: 36px; padding: 36px 20px }
+  .house-room b { font-size: 10px }
+  .house-room small { font-size: 8px }
   .job { grid-template-columns: 1fr; gap: 12px }
   .flow { grid-template-columns: 1fr }
   .flow .arr { transform: rotate(90deg); height: 22px }
@@ -316,7 +357,7 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 /* printing the page gives a plain resume */
 @media print {
   :root { --line: #111; --dim: #555; --hi: #111; --faint: #ddd }
-  .top nav, .eggs, .door-cell, .horde, .toast, canvas.blueprint, canvas.work-gpu { display: none !important }
+  .top nav, .eggs, .door-cell, .horde, .toast, canvas.blueprint, canvas.work-gpu, .house { display: none !important }
   .flow > * { opacity: 1 !important }
   body { background: #fff !important; color: #111 }
   .sheet { border: none; outline: none; margin: 0; max-width: none }

@@ -109,11 +109,33 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
   { label: 'x', href: 'https://x.com/TannerSDev' },
 ]
 
+// The big line up top. Each click drops a few more words, down to one.
 export const THESES = [
-  'I take messy problems and make them boring.',
-  'Messy problems, made boring.',
-  'Messy → boring.',
-  'Solved.',
+  'I like to build things. Mostly software, sometimes zombie games.',
+  'I like to build things.',
+  'I like to build.',
+  'Build.',
 ] as const
+
+export const GREETING = "Hey, I'm Tanner 👋"
+
+export const WELCOME = "Come on in and look around. More things are clickable than you'd think."
+
+// NOTE: the floor plan next to the greeting. Each room is a section of the
+// page; D-13 stays shut, like the door at the bottom of the sheet.
+export const HOUSE = {
+  sheet: 'SHEET A-1 · THE HOUSE',
+  here: 'YOU ARE HERE',
+  rooms: {
+    work: { name: '01 WORK', note: `${WORK.length} PROJECTS` },
+    oss: { name: '02 OPEN SOURCE', note: `${OPEN_SOURCE.length} REPOS` },
+    outside: { name: '03 OUTSIDE WORK', note: 'GAMES · DEMI · TEDDY · RAIN' },
+    locked: { name: 'D-13', note: 'DO NOT OPEN' },
+  },
+  // Only shown while WebGPU draws them.
+  pets: { teddy: 'TEDDY', rain: 'RAIN' },
+} as const
+
+export const SIGN_OFF = 'Thanks for stopping by'
 
 export const SITE_REPO_URL = 'https://github.com/Tanner-Scadden/tanner-site'
