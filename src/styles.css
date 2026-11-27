@@ -93,8 +93,8 @@ a.house-room:focus-visible { outline: 2px dashed var(--hi); outline-offset: -4px
 .house .here::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hi) }
 .house .pets { display: none; gap: 14px; color: var(--dim) }
 .house .pets span { display: inline-flex; align-items: center; gap: 6px }
-.house .pets .teddy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hi) }
-.house .pets .rain::before { content: ""; width: 6px; height: 6px; border-radius: 50%; border: 1.3px solid var(--line) }
+.house .pets .teddy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #f5ecdd; box-shadow: inset -2px -1px 0 #e2c19b }
+.house .pets .rain::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #717b88; box-shadow: 0 0 0 1px #d2d9e2 }
 /* while WebGPU draws the plan, the CSS walls step aside and the labels
    wait for the pens */
 .house[data-gpu="on"] .plan, .house[data-gpu="on"] .house-room { border-color: transparent }
