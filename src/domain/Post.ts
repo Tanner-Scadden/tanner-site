@@ -15,7 +15,14 @@ export interface Post {
   // One or two sentences for the index.
   readonly summary: string
   readonly body: <M>(h: Html.H<M>) => View.Children<M, never>
+  // Where the post's file lives in the repo, if it isn't the usual
+  // src/content/posts/<slug>.ts. The post links to it, so readers can see
+  // how it's built.
+  readonly source?: string
 }
+
+// The post's file in the repo, from the root.
+export const sourcePath = (post: Post): string => post.source ?? `src/content/posts/${post.slug}.ts`
 
 export const PostSlug = Schema.String.check(Schema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/))
 

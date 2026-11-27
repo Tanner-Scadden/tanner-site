@@ -4,7 +4,8 @@ import { Option } from 'effect'
 
 import { sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
-import { type Post, formatDate } from '#domain/Post'
+import { type Post, formatDate, sourcePath } from '#domain/Post'
+import { SITE_REPO_URL } from '#content/home'
 
 import { proseTags } from '../../blog/components/Prose.ts'
 import { flow } from '../../blog/components/prose.stylex.ts'
@@ -30,6 +31,11 @@ export const PostPage = <M>(h: Html.H<M>, post: Post) => {
         sx(h.p, styles.dek).children(post.summary),
       ),
       sx(h.div, styles.prose).children(...post.body(proseTags(h))),
+      sx(h.p, styles.source).children(
+        sx(h.a, base.link, styles.sourceLink)
+          .attrs({ href: `${SITE_REPO_URL}/blob/main/${sourcePath(post)}`, target: '_blank', rel: 'noopener noreferrer' })
+          .children(BLOG.source),
+      ),
     ),
     sx(h.nav, styles.pager)
       .attr('aria-label', 'More posts')
@@ -85,6 +91,15 @@ const styles = stylex.create({
     lineHeight: 1.8,
     color: blueprint.line,
   },
+  // The way into the post's source, after the body: the encore.
+  source: {
+    display: { default: null, [media.print]: 'none' },
+    paddingBottom: { default: 28, [media.narrowScreen]: 22 },
+    paddingInline: { default: 40, [media.narrowScreen]: 20 },
+    fontSize: 12,
+    letterSpacing: '.08em',
+  },
+  sourceLink: { color: { default: blueprint.hi, ':hover': blueprint.line, ':focus-visible': blueprint.line } },
 
   pager: {
     display: { default: 'grid', [media.print]: 'none' },

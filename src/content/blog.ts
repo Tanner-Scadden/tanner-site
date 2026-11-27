@@ -26,6 +26,8 @@ export const BLOG = {
   all: 'ALL POSTS →',
   empty: 'Nothing posted yet. The first one is still on the drafting table.',
   back: '← ALL POSTS',
+  // Under each post, linking to its file on GitHub.
+  source: 'See how this post is built ↗',
   newer: 'NEWER',
   older: 'OLDER',
 } as const

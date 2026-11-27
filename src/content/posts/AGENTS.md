@@ -135,6 +135,15 @@ time. The figure still tells its own story; the button adds to it.
   spread out and all at the same moment, in a `scene.test.ts` beside the
   scene, like each figure's.
 
+## Its source is public
+
+Every post ends with a link to its file on GitHub, so readers can see how
+it's built. The link comes from the slug, so keep the file at
+`src/content/posts/<slug>.ts`, or set `source` on the `Post` if it lives
+elsewhere. A test fails if the file isn't there. Readers will follow the
+imports into the figures too, so tidy any `NOTE` or `TODO` comments before
+it goes up.
+
 ## Before it goes up
 
 Run `bun run typecheck`, `bun run lint`, `bun run test` and

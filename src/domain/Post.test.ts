@@ -1,9 +1,9 @@
 import { assert, describe, it } from '@effect/vitest'
-import { Array as Arr, Schema } from 'effect'
+import { Array as Arr, Record as Rec, Schema, String as Str } from 'effect'
 
 import { DRAFTS, PUBLISHED } from '#content/blog'
 
-import { type Post, PostDate, PostSlug, formatDate, sheetNo, sortPosts } from './Post.ts'
+import { type Post, PostDate, PostSlug, formatDate, sheetNo, sortPosts, sourcePath } from './Post.ts'
 
 const ALL_POSTS = [...PUBLISHED, ...DRAFTS]
 
@@ -22,6 +22,16 @@ describe('posts', () => {
       assert.isTrue(Schema.is(PostDate)(post.date), `date of ${post.slug}`)
       assert.isNotEmpty(post.title)
     }
+  })
+
+  it('every post links to a file that exists in the repo', () => {
+    // Every module under src, keyed by its path from the repo root.
+    const files = Arr.map(Rec.keys(import.meta.glob('/src/**/*.ts')), Str.slice(1))
+    for (const post of ALL_POSTS) {
+      assert.include(files, sourcePath(post), `source of ${post.slug}`)
+    }
+    assert.strictEqual(sourcePath(post('my-post', '2026-01-01')), 'src/content/posts/my-post.ts')
+    assert.strictEqual(sourcePath({ ...post('moved', '2026-01-01'), source: 'src/x.ts' }), 'src/x.ts')
   })
 
   it('no two posts share a slug', () => {
