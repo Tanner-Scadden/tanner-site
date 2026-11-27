@@ -13,19 +13,13 @@ export const beSomeoneWorthCalling: Post = {
   body: h => [
     h.p('My call to join Sentinels came after I’d thought I was done playing.'),
     h.p(
-      'A few years earlier, I got really into Arena of Valor. I wanted to be the best, so I played constantly, and along the way the people I played with became friends. When we lost, I looked at what I could have done better. When we won, I gave my teammates the credit. Own your mistakes, share your wins, and you’ll improve and earn your peers’ respect.',
+      'A few years earlier, I got really into Arena of Valor. I played constantly, and the people I played with became friends. When we lost, I looked at what I could have done better. When we won, I gave my teammates the credit.',
     ),
     h.p(
-      'Eventually, people notice. Allegiance signed my Arena of Valor team, and we won NA twice without dropping a game on stage. I took home an MVP, played at worlds twice, and partnered with Tencent and Twitch. Later, Immortals put me on retainer for Wild Rift before the game had even come out.',
+      'Eventually, people noticed. We got signed, won NA twice, and I played at worlds twice. When I went to be a software engineer full time, I figured that chapter was closed.',
     ),
     h.p(
-      'When the retainer ended, I didn’t really believe I’d play again. I’d had my run, and I figured that chapter was closed.',
-    ),
-    h.p(
-      'About two years later, a teammate from my Arena of Valor days reached out. Sentinels was putting together a Wild Rift team, they needed an ADC, and would I want to play again?',
-    ),
-    h.p(
-      'Playing League on a stage was a childhood dream. Wild Rift isn’t quite League, but it’s close, and Sentinels is about as well known as an org gets. Saying yes was easy.',
+      'About two years later, a teammate from those days reached out. Sentinels was putting together a Wild Rift team, they needed an ADC, and would I want to play again? Saying yes was easy.',
     ),
     h.p(
       'I hadn’t pitched myself to anyone. An old teammate vouched for me in a room I wasn’t in, because of how I’d shown up in Arena of Valor.',
