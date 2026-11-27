@@ -323,7 +323,7 @@ describe('the blog’s own posts', () => {
     const post = 'be-someone-worth-calling'
     const body = Option.getOrThrow(Arr.findFirst(docs, d => d.id === post)).body
     // The body's prose is in, and the animated figure added nothing.
-    assert.include(body, 'Trust is built in drops and lost in buckets.')
+    assert.include(body, 'people remember it long after.')
     for (const query of ['sentinels', 'vouching', '"safety net"', 'calls', 'call', 'called ', 'sentinals', 'vouch']) {
       assert.include(ids(index, query), post, query)
     }
