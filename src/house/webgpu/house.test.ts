@@ -66,6 +66,16 @@ describe('planFor', () => {
     assert.isAbove(plan.door.y, 210)
   })
 
+  it('stands the walls and the door up, and leaves the markings on the floor', () => {
+    const outer = Arr.filter(plan.walls, w => w.width > 2)
+    assert.isTrue(Arr.every(outer, w => w.rise === 1))
+    const dashed = Arr.filter(plan.walls, w => w.dash > 0)
+    assert.isAbove(dashed.length, 0)
+    assert.isTrue(Arr.every(dashed, w => w.rise === 0))
+    const door = Arr.filter(plan.walls, w => w.rise > 0 && w.rise < 1)
+    assert.strictEqual(door.length, 1)
+  })
+
   it('keeps the yard inside Outside Work', () => {
     assert.isTrue(inside(plan.yard, rooms.outside))
     assert.isTrue(inside({ x: plan.yard.x + plan.yard.w, y: plan.yard.y + plan.yard.h }, rooms.outside))

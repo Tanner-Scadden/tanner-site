@@ -69,7 +69,10 @@ a { color: var(--hi) }
 
 /* the floor plan: each room is a section of the page */
 .house { position: relative; isolation: isolate; margin: 0 }
-canvas.house-gpu { position: absolute; left: -24px; top: -24px; width: calc(100% + 48px); height: calc(100% + 48px); z-index: -1; pointer-events: none; display: block }
+/* the canvas bleeds past the figure, so the risen walls and the pets on the
+   back rooms have room to stand */
+.house { --bleed: 40px }
+canvas.house-gpu { position: absolute; left: calc(-1 * var(--bleed)); top: calc(-1 * var(--bleed)); width: calc(100% + 2 * var(--bleed)); height: calc(100% + 2 * var(--bleed)); z-index: -1; pointer-events: none; display: block }
 .house:not([data-gpu="on"]) canvas.house-gpu { display: none }
 .house .sheet-no { display: block; text-align: center; font-size: 9px; letter-spacing: .16em; color: var(--dim); margin-bottom: 8px }
 .plan { display: grid; grid-template-columns: 150fr 55fr 75fr; grid-template-rows: 1.3fr 1fr; aspect-ratio: 28 / 19; border: 2.5px solid var(--line); position: relative }
@@ -95,6 +98,8 @@ a.house-room:focus-visible { outline: 2px dashed var(--hi); outline-offset: -4px
 /* while WebGPU draws the plan, the CSS walls step aside and the labels
    wait for the pens */
 .house[data-gpu="on"] .plan, .house[data-gpu="on"] .house-room { border-color: transparent }
+/* the renderer tips the plan into 3D with the walls, from its own corner */
+.house[data-gpu="on"] .plan { transform-origin: 0 0; will-change: transform }
 .house[data-gpu="on"] .plan::after { display: none }
 .house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] figcaption, .house[data-gpu="on"] .sheet-no { transition: opacity .6s ease-out; opacity: 0 }
 .house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] figcaption, .house[data-gpu="on"][data-drawn] .sheet-no { opacity: 1 }
@@ -323,6 +328,7 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
   .hero.home { grid-template-columns: 1fr; gap: 36px; padding: 36px 20px }
   .house-room b { font-size: 10px }
   .house-room small { font-size: 8px }
+  .house { --bleed: 16px }
   .job { grid-template-columns: 1fr; gap: 12px }
   .flow { grid-template-columns: 1fr }
   .flow .arr { transform: rotate(90deg); height: 22px }
