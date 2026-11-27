@@ -40,7 +40,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     TeamFigure(h, { key: 'team' }),
     h.p(
-      'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them, and the whole team gets slower and less fun. Don’t be that person, and don’t hire them.',
+      'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them, and the whole team gets slower and less fun. You spend more time with your team than with your family, so it should be fun. Don’t be that person, and don’t hire them.',
     ),
     h.p('People rarely remember who was right. They’ll long remember how you made them feel.'),
 
