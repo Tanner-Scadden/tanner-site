@@ -95,7 +95,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('See the cup half full.'),
-      ' Things will break, deals will fall through, and you’ll lose games you should have won. Look for what you can still do, not who to blame. People want to work with someone who makes the hard days lighter.',
+      ' Things will break, deals will fall through, and launches will slip. Look for what you can still do, not who to blame. People want to work with someone who makes the hard days lighter.',
     ),
     h.p(
       h.strong('Believe in yourself.'),
