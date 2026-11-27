@@ -5,11 +5,9 @@ import { makeAnimation } from '../blog/animation/Animation.ts'
 import { Array as Arr } from 'effect'
 
 import { type Interaction, type Scene, rememberLast } from '../blog/animation/scene.ts'
-import { MAX_FLARES, RIGHT_FOR, RIGHT_START, buildTimeline, frameAt, withFlares } from './bucket.ts'
+import { KICK_SETTLE, MAX_FLARES, buildTimeline, frameAt, withFlares } from './bucket.ts'
 import { MAX_DOTS, MAX_LINES, shapesOf } from './shapes.ts'
 
-// Seconds until a flare has tipped the bucket and it's stood back up.
-const FLARE_SETTLE = RIGHT_START + RIGHT_FOR
 
 export const teamScene: Scene = {
   variants: [
@@ -23,25 +21,26 @@ export const teamScene: Scene = {
   ],
   run: (_variant, seed) => {
     const timeline = buildTimeline(seed)
-    const flared = rememberLast((interactions: ReadonlyArray<Interaction>) =>
+    // Each press is a kick, spilling half of whatever water is there.
+    const kicked = rememberLast((interactions: ReadonlyArray<Interaction>) =>
       interactions.length === 0 ? timeline : withFlares(timeline, Arr.map(interactions, ({ time }) => time)),
     )
     return {
       end: timeline.end,
       // The end holds still while the run waits to replay, once the last
-      // flare a reader added has played out.
+      // kick a reader added has played out.
       shapesAt: (time, width, height, pointer, interactions) => {
         const last = Arr.reduce(interactions, timeline.end, (latest, { time: at }) =>
-          Math.max(latest, at + FLARE_SETTLE),
+          Math.max(latest, at + KICK_SETTLE),
         )
-        return shapesOf(frameAt(flared(interactions), Math.min(time, last)), width, height, pointer)
+        return shapesOf(frameAt(kicked(interactions), Math.min(time, last)), width, height, pointer)
       },
     }
   },
   maxLines: MAX_LINES,
   maxDots: MAX_DOTS,
-  // A bad interaction: a flare of frustration tips some trust out.
-  interact: { hint: 'Have a flare of frustration', settle: FLARE_SETTLE, max: MAX_FLARES - 1 },
+  // A bad interaction: someone kicks the bucket, and some trust slops out.
+  interact: { hint: 'Kick the bucket', settle: KICK_SETTLE, max: MAX_FLARES - 1 },
 }
 
 export const TeamFigure = makeAnimation('TeamFigure', teamScene)

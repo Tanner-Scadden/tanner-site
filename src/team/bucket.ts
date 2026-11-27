@@ -4,20 +4,21 @@
 //
 // The run tells it in three beats:
 //   1. Five teammates in a loose row. Now and then one of them lets fall a
-//      small gold drop, a small helpful moment, into one shared bucket
-//      below. Each drop adds one thin course to the bucket, so you can
-//      watch it fill a sliver at a time.
-//   2. One teammate flares red. The flash knocks the bucket onto its side,
-//      and everything in it spills out in one splash, in about half a
-//      second. It lies there a moment, then rights itself.
-//   3. Drops start again, slowly and sparsely. It ends with only a little
-//      in it, beside the spill and below the mark of how full it once was.
+//      small gold drop, a small helpful moment, into one shared bucket of
+//      water below. Each one rings out across the surface and lifts the
+//      level a little.
+//   2. One teammate flares red and kicks the bucket. It lurches over, a
+//      good half of the water slops over the lip and splashes red on the
+//      floor, and the bucket rocks back upright with the rest sloshing.
+//   3. Drops start again, slowly and sparsely. The last one lands, the
+//      water settles and goes still, well under the mark of how full it
+//      once was.
 //
-// The run is a list of events, drops and flares, and what's in the bucket
-// at any moment is a pure fold over that list. The flare at the heart of
-// the run is one entry in it, so more flares at any time (a reader's bad
-// interaction, say) slot in with `withFlares` and the fill, the spill and
-// the bucket's pose all follow.
+// The run is a list of events, drops and kicks, and how much water is in
+// the bucket at any moment is a pure fold over that list. The kick at the
+// heart of the run is one entry in it, so more kicks at any time (a
+// reader's bad interaction, say) slot in with `withFlares`, and the level,
+// the spill, the slosh and the bucket's pose all follow.
 
 import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
@@ -37,48 +38,54 @@ export const BUCKET = {
   wall: 0.035,
 } as const
 export const FLOOR = BUCKET.base
+// The inside of the bucket's floor, where the water starts.
+export const INNER_BASE = BUCKET.base - BUCKET.wall * 0.6
+// How far one drop lifts the water.
+export const RISE = 0.034
 
-// Each drop adds a course this tall.
-export const COURSE = 0.036
-// How many drops land before the flare, and after it. The last of the
-// drops after it is still falling when the run ends.
+// How many drops land before the kick, and after it.
 export const BEFORE = 14
-export const AFTER = 4
-// The most flares a run can hold, the one it starts with included.
+export const AFTER = 2
+// The most kicks a run can hold, the one it starts with included.
 export const MAX_FLARES = 6
-// How many beads a full spill throws out.
-export const SPRAY = 28
+// How many beads a kick that spills everything would throw.
+export const SPRAY = 36
 
-// When the first drop leaves, and when the last one before the flare lands.
+// When the first drop leaves, and when the last one before the kick lands.
 const FIRST = 0.7
 const LAST_BEFORE = 7.4
-// How long a drop takes to fall.
+// How long a drop takes to fall, and its water to join the rest.
 export const FALL = 0.75
-// How long a course takes to spread once its drop lands.
-export const SPREAD = 0.25
+export const JOIN = 0.35
 // How long teammates and the bucket take to appear.
 export const POP = 0.6
+// How long a drop's ripple runs before the surface is still again.
+export const RIPPLE_FOR = 1.8
 
-// The run's own flare.
+// The run's own kick, and how much of the water it spills.
 export const FLARE = 7.9
-// After a flare, in seconds from it: the flash reaches the bucket and it
-// goes over, empties while it's over, lies there a moment, then slowly
-// rights itself.
-export const TIP_START = 0.12
-export const TIP_FOR = 0.3
-export const SPILL_START = 0.18
-export const SPILL_FOR = 0.42
-export const RIGHT_START = 1.1
-export const RIGHT_FOR = 1.1
-// How far over a full spill knocks it: onto its side, its wall flat on the
-// floor.
-export const TIP_ANGLE = Math.PI / 2 - Math.atan2(BUCKET.rimHalf - BUCKET.baseHalf, BUCKET.base - BUCKET.rim)
+export const KICK_SHARE = 0.58
+// After a kick, in seconds from it: the foot lands, the bucket lurches
+// over, and the water slops out over the lip.
+export const HIT = 0.08
+export const LURCH_FOR = 0.16
+export const SPILL_START = 0.14
+export const SPILL_FOR = 0.5
+// It rocks back and forth on its edge, smaller each time, and is still
+// about two seconds after.
+const ROCK_FOR = 0.7
+// How far over a kick that spills everything would push it.
+const LURCH = 0.55
+// Seconds until a kick has played out: the bucket's still, the water's
+// stopped sloshing, and the spill has settled.
+export const KICK_SETTLE = HIT + 2.8
 // How long the red flash takes to fade.
 export const FLASH_FOR = 0.7
 // The drops after it land at about these times.
-const AFTER_LANDS = [10.9, 11.9, 12.8, 13.9] as const
-// The run ends a little after the third of them lands.
-const SETTLED = 0.65
+const AFTER_LANDS = [10.9, 12.3] as const
+// The water goes still for this long after the last drop before the run
+// ends, so it eases into the hold.
+const REST = 2.2
 
 export interface Person {
   readonly x: number
@@ -91,29 +98,28 @@ export interface Drop {
   readonly from: number
   readonly start: number
   readonly lands: number
-  // Where across the bucket it lands, from -1 to 1 of the inside.
+  // Where across the surface it lands, from -1 to 1.
   readonly across: number
 }
 
-// A bead of a spill: where it leaves the mouth, from -1 to 1 along it,
-// how long after the spill starts, how long it flies, and how far past the
-// mouth it ends up on the floor.
+// A bead of a spill: when after the kick it leaves the lip, how long it
+// flies, and how far past the lip it ends up on the floor.
 export interface Bead {
-  readonly along: number
   readonly delay: number
   readonly flight: number
   readonly reach: number
+  readonly lift: number
   readonly radius: number
 }
 
-// Someone flares. The bucket tips away from them and loses `share` of
-// whatever's in it.
+// Someone flares and kicks the bucket. It lurches away from them and loses
+// `share` of whatever water is in it.
 export interface Flare {
   readonly _tag: 'Flare'
   readonly from: number
   readonly at: number
   readonly share: number
-  // Which way it tips: 1 to the right, -1 to the left.
+  // Which way it goes over: 1 to the right, -1 to the left.
   readonly side: 1 | -1
   readonly beads: ReadonlyArray<Bead>
 }
@@ -123,9 +129,9 @@ export type Event = Drop | Flare
 export interface Timeline {
   readonly seed: number
   readonly people: ReadonlyArray<Person>
-  // In time order: drops by when they land, flares by when they happen.
+  // In time order: drops by when they land, kicks by when they happen.
   readonly events: ReadonlyArray<Event>
-  // Whoever flares in the run itself.
+  // Whoever kicks in the run itself.
   readonly flarer: number
   readonly end: number
 }
@@ -148,7 +154,7 @@ export const smooth = (t: number): number => {
   const c = clamp01(t)
   return c * c * (3 - 2 * c)
 }
-const easeOut = (t: number) => 1 - (1 - clamp01(t)) ** 3
+export const easeOut = (t: number) => 1 - (1 - clamp01(t)) ** 3
 
 const eventTime = (event: Event) => (event._tag === 'Drop' ? event.lands : event.at)
 const byTime = Order.mapInput(Order.Number, eventTime)
@@ -157,7 +163,7 @@ export const dropsOf = (timeline: Timeline): ReadonlyArray<Drop> =>
 export const flaresOf = (timeline: Timeline): ReadonlyArray<Flare> =>
   Arr.filter(timeline.events, (event): event is Flare => event._tag === 'Flare')
 
-// A flare from one teammate, its beads drawn from a seed so it replays.
+// A kick from one teammate, its spill drawn from a seed so it replays.
 export const makeFlare = (
   people: ReadonlyArray<Person>,
   from: number,
@@ -177,12 +183,12 @@ export const makeFlare = (
     beads: Arr.map(
       Arr.range(0, count - 1),
       (i): Bead => ({
-        along: between(-0.8, 0.8),
-        delay: SPILL_START + (SPILL_FOR * 0.7 * i) / count + between(0, 0.04),
-        flight: between(0.22, 0.36),
-        // Further out for the later, slower beads.
-        reach: between(0, 0.28) + (0.1 * i) / count,
-        radius: between(1.6, 2.8),
+        delay: SPILL_START + (SPILL_FOR * 0.75 * i) / count + between(0, 0.05),
+        flight: between(0.24, 0.4),
+        // The first out go furthest.
+        reach: between(0.05, 0.2) + 0.35 * (1 - i / count) * between(0.5, 1),
+        lift: between(0, 0.08),
+        radius: between(1.5, 2.6),
       }),
     ),
   }
@@ -200,11 +206,11 @@ export const buildTimeline = (seed: number): Timeline => {
       y: -0.64 + between(-0.07, 0.07),
     }),
   )
-  // Whoever flares sits just off the middle, so the flash reads as theirs
-  // and the bucket tips away from them, toward the open side.
+  // Whoever kicks sits just off the middle, so the flash reads as theirs
+  // and the bucket goes over away from them, toward the open side.
   const flarer = next() < 0.5 ? 1 : 3
 
-  // The gaps between drops before the flare, uneven, scaled so the last one
+  // The gaps between drops before the kick, uneven, scaled so the last one
   // lands on time.
   const gaps = Arr.map(Arr.range(1, BEFORE - 1), () => between(0.7, 1.3))
   const total = Arr.reduce(gaps, 0, (sum, gap) => sum + gap)
@@ -221,28 +227,28 @@ export const buildTimeline = (seed: number): Timeline => {
   let last = -1
   const before = Arr.map(starts, (start): Drop => {
     last = pick(everyone, last)
-    return { _tag: 'Drop', from: last, start, lands: start + FALL, across: between(-0.55, 0.55) }
+    return { _tag: 'Drop', from: last, start, lands: start + FALL, across: between(-0.6, 0.6) }
   })
-  // After the flare, only the others give, and slowly.
+  // After the kick, only the others give, and slowly.
   const after = Arr.map(AFTER_LANDS, (at): Drop => {
     last = pick(others, last)
     const lands = at + between(-0.15, 0.15)
     return { _tag: 'Drop', from: last, start: lands - FALL, lands, across: between(-0.5, 0.5) }
   })
 
-  const flare = makeFlare(people, flarer, FLARE, 1, seed * 31 + 7)
+  const kick = makeFlare(people, flarer, FLARE, KICK_SHARE, seed * 31 + 7)
   return {
     seed,
     people,
-    events: Arr.sort([...before, ...after, flare], byTime),
+    events: Arr.sort([...before, ...after, kick], byTime),
     flarer,
-    end: after[AFTER - 2]!.lands + SETTLED,
+    end: after[AFTER - 1]!.lands + REST,
   }
 }
 
-// The run with more flares in it, at these times, each tipping out this
-// share of what's there. Whoever gave last before each one is who flares,
-// and the most a run holds is MAX_FLARES.
+// The run with more kicks in it, at these times, each spilling this share
+// of the water that's there. Whoever gave last before each one is who
+// kicks, and the most a run holds is MAX_FLARES.
 export const withFlares = (timeline: Timeline, times: ReadonlyArray<number>, share = 0.5): Timeline => {
   const room = MAX_FLARES - flaresOf(timeline).length
   const added = Arr.map(Arr.take(times, Math.max(0, room)), (at, i) => {
@@ -255,55 +261,46 @@ export const withFlares = (timeline: Timeline, times: ReadonlyArray<number>, sha
   return { ...timeline, events: Arr.sort([...timeline.events, ...added], byTime) }
 }
 
-// How much of a course has spread, once its drop lands.
-const spreadOf = (drop: Drop, time: number) => clamp01((time - drop.lands) / SPREAD)
-// How far through its spill a flare is.
+// How much of a drop's water has joined the rest.
+const joinedOf = (drop: Drop, time: number) => smooth((time - drop.lands) / JOIN)
+// How far through its spill a kick is.
 export const spillOf = (flare: Flare, time: number) => smooth((time - flare.at - SPILL_START) / SPILL_FOR)
-// How far over a flare has the bucket, from 0 standing to 1 as far as it
-// goes.
-export const tipOf = (flare: Flare, time: number): number => {
-  const since = time - flare.at
-  if (since < TIP_START) return 0
-  if (since < RIGHT_START) return easeOut((since - TIP_START) / TIP_FOR)
-  return 1 - smooth((since - RIGHT_START) / RIGHT_FOR)
+
+// How far over a kick has the bucket, from 0 standing to 1 at the top of
+// its lurch: over fast, then rocking back on its edge, smaller each time,
+// until it's still.
+export const lurchOf = (flare: Flare, time: number): number => {
+  const since = time - flare.at - HIT
+  if (since <= 0) return 0
+  if (since < LURCH_FOR) return easeOut(since / LURCH_FOR)
+  const s = since - LURCH_FOR
+  return Math.exp(-2.6 * s) * Math.abs(Math.cos((Math.PI * s) / ROCK_FOR)) * (1 - smooth((s - 1.3) / 0.4))
 }
 
-// A course in the bucket: whose drop it was, and how much of it is there.
-export interface Course {
-  readonly drop: Drop
-  readonly amount: number
-}
+// How far a kick of this share pushes the bucket over, in radians.
+export const lurchAngle = (share: number) => LURCH * Math.min(1, 0.45 + share)
 
-// What's in the bucket at a moment, as a stack of courses from the base
-// up: every drop that's landed, less what each flare tipped out of the top
-// of whatever was there when it went over.
-export const coursesAt = (timeline: Timeline, time: number): ReadonlyArray<Course> =>
-  Arr.reduce(timeline.events, [] as ReadonlyArray<Course>, (stack, event) => {
-    if (eventTime(event) > time) return stack
-    if (event._tag === 'Drop') return [...stack, { drop: event, amount: spreadOf(event, time) }]
-    const held = Arr.reduce(stack, 0, (sum, course) => sum + course.amount)
-    let lose = held * event.share * spillOf(event, time)
-    return Arr.filter(
-      Arr.map(Arr.reverse(stack), course => {
-        const taken = Math.min(course.amount, lose)
-        lose -= taken
-        return { ...course, amount: course.amount - taken }
-      }),
-      course => course.amount > 1e-6,
-    ).reverse()
+// How much water is in the bucket, in drops: every drop that's landed,
+// less what each kick spilled of whatever was there when it went over.
+export const fillAt = (timeline: Timeline, time: number): number =>
+  Arr.reduce(timeline.events, 0, (water, event) => {
+    if (eventTime(event) > time) return water
+    return event._tag === 'Drop'
+      ? water + joinedOf(event, time)
+      : water * (1 - event.share * spillOf(event, time))
   })
 
-// How full the bucket is, in courses.
-export const fillAt = (timeline: Timeline, time: number): number =>
-  Arr.reduce(coursesAt(timeline, time), 0, (sum, course) => sum + course.amount)
-
-// The most it's held, up to now: it peaks the moment before a flare.
+// The most it's held, up to now: it peaks the moment before a kick.
 export const peakAt = (timeline: Timeline, time: number): number =>
   Arr.reduce(
     Arr.filter(flaresOf(timeline), flare => flare.at <= time),
     fillAt(timeline, time),
     (most, flare) => Math.max(most, fillAt(timeline, flare.at)),
   )
+
+// Where the water's surface sits at its middle, in the bucket's own frame,
+// for this much water.
+export const levelOf = (water: number): number => INNER_BASE - water * RISE
 
 // What's on screen at one moment, in world units.
 export interface FramePerson {
@@ -313,7 +310,7 @@ export interface FramePerson {
   readonly grown: number
   // Brightens as they let a drop go.
   readonly giving: number
-  // Their last flare's heat, from 1 as it happens to what stays, or 0.
+  // Their last kick's heat, from 1 as it happens to what stays, or 0.
   readonly heat: number
 }
 
@@ -324,14 +321,21 @@ export interface FrameDrop {
   readonly tail: readonly [number, number]
 }
 
-// A course of the fill, counted up from the base in the bucket's own
-// frame. The top one can be part spilled or still spreading.
-export interface FrameCourse {
-  readonly from: number
-  readonly level: number
+// A drop's ripple on the surface: where across it landed, in the bucket's
+// own frame, and how long ago.
+export interface Ripple {
+  readonly x: number
+  readonly age: number
+}
+
+// The water, in the bucket's own frame: its level at the middle, the tilt
+// of its surface (how far it rises per unit to the right), and the ripples
+// on it.
+export interface Water {
   readonly amount: number
-  // 1 as it lands, fading to nothing over a second.
-  readonly fresh: number
+  readonly level: number
+  readonly slope: number
+  readonly ripples: ReadonlyArray<Ripple>
 }
 
 export interface FrameBead {
@@ -342,10 +346,11 @@ export interface FrameBead {
   readonly flying: boolean
 }
 
-// A spill's puddle on the floor, from the mouth outward.
+// A spill's puddle on the floor, and how fresh it is.
 export interface FramePuddle {
   readonly from: number
   readonly to: number
+  readonly fresh: number
 }
 
 export interface FrameFlash {
@@ -355,18 +360,28 @@ export interface FrameFlash {
   readonly share: number
 }
 
+// The kick itself: a short strike from whoever kicked to the bucket's wall.
+export interface FrameStrike {
+  readonly from: readonly [number, number]
+  readonly to: readonly [number, number]
+  // How far along it's reached, and how much is left of it.
+  readonly reach: number
+  readonly strength: number
+}
+
 export interface Frame {
   readonly people: ReadonlyArray<FramePerson>
   readonly drops: ReadonlyArray<FrameDrop>
-  readonly courses: ReadonlyArray<FrameCourse>
+  readonly water: Water
   readonly beads: ReadonlyArray<FrameBead>
   readonly puddles: ReadonlyArray<FramePuddle>
   readonly flashes: ReadonlyArray<FrameFlash>
+  readonly strikes: ReadonlyArray<FrameStrike>
   // The bucket's pose: how far over it is, and which way.
   readonly angle: number
   readonly side: 1 | -1
   readonly grown: number
-  // How full it is, and the most it held, in courses.
+  // How full it is, and the most it held, in drops.
   readonly fill: number
   readonly peak: number
 }
@@ -391,28 +406,60 @@ export const halfAt = (y: number): number => {
   return BUCKET.baseHalf + (BUCKET.rimHalf - BUCKET.baseHalf) * t - BUCKET.wall
 }
 
-// The bucket's pose: whichever flare has it furthest over, tipped as far
-// as that flare's share.
+// The surface at x across, in the bucket's own frame: the tilted level,
+// plus every ripple's ring moving out from where its drop landed, fading
+// as it goes.
+export const surfaceAt = (water: Water, x: number): number => {
+  const ripple = Arr.reduce(water.ripples, 0, (sum, { x: x0, age }) => {
+    const front = 0.06 + 0.32 * age
+    const d = Math.abs(x - x0) - front
+    const fade = Math.exp(-2.4 * age) * (1 - smooth((age - RIPPLE_FOR + 0.5) / 0.5))
+    // A dip where it lands, then a ring of small waves moving out.
+    const dip = 0.018 * Math.exp(-((x - x0) ** 2) / 0.002) * Math.exp(-12 * age)
+    return sum + dip + 0.011 * fade * Math.cos(d * 40) * Math.exp(-(d * d) / 0.006)
+  })
+  return water.level - water.slope * x + ripple
+}
+
+// The bucket's pose: whichever kick has it furthest over.
 const poseAt = (timeline: Timeline, time: number): { readonly angle: number; readonly side: 1 | -1 } =>
   Arr.reduce(flaresOf(timeline), { angle: 0, side: 1 as 1 | -1 }, (pose, flare) => {
-    const angle = TIP_ANGLE * Math.min(1, 0.35 + flare.share) * tipOf(flare, time)
+    const angle = lurchAngle(flare.share) * lurchOf(flare, time)
     return angle > pose.angle ? { angle, side: flare.side } : pose
   })
 
-// Where a drop falls from its teammate to the fill: across toward the
+// How the water tilts in the bucket: level in the world while the bucket's
+// over, plus a slosh after each kick, and the faintest one after each drop.
+const slopeAt = (timeline: Timeline, time: number, angle: number, side: 1 | -1): number => {
+  const level = Math.tan(angle * side)
+  const slosh = Arr.reduce(timeline.events, 0, (sum, event) => {
+    if (event._tag === 'Flare') {
+      const s = time - event.at - HIT
+      if (s <= 0) return sum
+      const fade = Math.exp(-1.9 * s) * (1 - smooth((s - 2.2) / 0.6))
+      return sum + event.side * 0.32 * Math.min(1, event.share * 1.6) * fade * Math.sin((2 * Math.PI * s) / 0.9)
+    }
+    const age = time - event.lands
+    if (age <= 0 || age > RIPPLE_FOR) return sum
+    const fade = Math.exp(-2.2 * age) * (1 - smooth((age - RIPPLE_FOR + 0.5) / 0.5))
+    return sum - Math.sign(event.across) * 0.035 * fade * Math.sin((2 * Math.PI * age) / 0.6)
+  })
+  return level + slosh
+}
+
+// Where a drop falls from its teammate to the surface: across toward the
 // bucket, and faster as it goes, like something falling.
-const dropPoint = (timeline: Timeline, drop: Drop, fill: number, u: number): readonly [number, number] => {
+const dropPoint = (timeline: Timeline, drop: Drop, level: number, u: number): readonly [number, number] => {
   const person = timeline.people[drop.from]!
-  const surface = BUCKET.base - fill * COURSE
-  const x = BUCKET.x + drop.across * halfAt(surface)
+  const x = BUCKET.x + drop.across * halfAt(level)
   const top = person.y + 0.05
-  return [person.x + (x - person.x) * smooth(u), top + (surface - top) * u * u]
+  return [person.x + (x - person.x) * smooth(u), top + (level - top) * u * u]
 }
 
 export const frameAt = (timeline: Timeline, time: number): Frame => {
   const { angle, side } = poseAt(timeline, time)
-  const stack = coursesAt(timeline, time)
-  const fill = Arr.reduce(stack, 0, (sum, course) => sum + course.amount)
+  const fill = fillAt(timeline, time)
+  const level = levelOf(fill)
   const drops = dropsOf(timeline)
   const flares = Arr.filter(flaresOf(timeline), flare => flare.at <= time)
 
@@ -424,7 +471,7 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     })
     const heat = Option.match(
       Arr.findLast(flares, flare => flare.from === id),
-      { onNone: () => 0, onSome: flare => 0.75 + 0.25 * Math.exp(-(time - flare.at) * 3) },
+      { onNone: () => 0, onSome: flare => 0.75 + 0.25 * (1 - smooth((time - flare.at) / 0.8)) },
     )
     return { id, x: person.x, y: person.y, grown: smooth((time - id * 0.06) / POP), giving, heat }
   })
@@ -432,42 +479,42 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
   const falling = Arr.flatMap(drops, (drop): ReadonlyArray<FrameDrop> => {
     if (time < drop.start || time >= drop.lands) return []
     const u = (time - drop.start) / FALL
-    const [x, y] = dropPoint(timeline, drop, fill, u)
-    return [{ x, y, tail: dropPoint(timeline, drop, fill, Math.max(0, u - 0.12)) }]
+    // Aim at the surface as it will be once this drop's in.
+    const at = levelOf(fill + 0.5)
+    const [x, y] = dropPoint(timeline, drop, at, u)
+    return [{ x, y, tail: dropPoint(timeline, drop, at, Math.max(0, u - 0.12)) }]
   })
 
-  const courses = Arr.map(
-    stack,
-    ({ drop, amount }, level): FrameCourse => ({
-      from: drop.from,
-      level,
-      amount,
-      fresh: 1 - clamp01((time - drop.lands) / 1),
-    }),
-  )
+  const ripples = Arr.flatMap(drops, (drop): ReadonlyArray<Ripple> => {
+    const age = time - drop.lands
+    return age < 0 || age > RIPPLE_FOR ? [] : [{ x: drop.across * halfAt(level), age }]
+  })
 
   const beads = Arr.flatMap(flares, (flare): ReadonlyArray<FrameBead> => {
-    const pose = posed(TIP_ANGLE * Math.min(1, 0.35 + flare.share), flare.side)
-    const over = pose([BUCKET.x, BUCKET.rim])
+    const full = lurchAngle(flare.share)
+    // The lip on the low side, where the water goes over.
+    const lip = (lean: number) => posed(lean, flare.side)([BUCKET.x + flare.side * BUCKET.rimHalf, BUCKET.rim])
+    const over = lip(full)
     return Arr.flatMap(flare.beads, (bead): ReadonlyArray<FrameBead> => {
       const start = flare.at + bead.delay
       if (time < start) return []
       const u = clamp01((time - start) / bead.flight)
-      // From the mouth where it was as the bead left, out to the floor.
-      const lean = TIP_ANGLE * Math.min(1, 0.35 + flare.share) * tipOf(flare, start)
-      const [mx, my] = posed(lean, flare.side)([BUCKET.x + bead.along * BUCKET.rimHalf, BUCKET.rim])
-      const lx = over[0] + flare.side * (0.06 + bead.reach * flare.share)
+      const [mx, my] = lip(full * lurchOf(flare, start))
+      const lx = over[0] + flare.side * bead.reach
       const x = mx + (lx - mx) * u
-      const y = my + (FLOOR - my) * u * u - 0.1 * Math.sin(Math.PI * u) * (1 - u)
-      return [{ x, y, radius: bead.radius, flying: u < 1 }]
+      const y = my + (FLOOR - my) * u * u - bead.lift * Math.sin(Math.PI * u) * (1 - u)
+      return [{ x, y: Math.min(FLOOR, y), radius: bead.radius, flying: u < 1 }]
     })
   })
 
+  // The puddle runs out from the foot of the bucket, past where the beads
+  // land, and dulls a little as it settles.
   const puddles = Arr.map(flares, (flare): FramePuddle => {
-    const over = posed(TIP_ANGLE * Math.min(1, 0.35 + flare.share), flare.side)([BUCKET.x, BUCKET.rim])
-    const spread = smooth((time - flare.at - SPILL_START) / (SPILL_FOR + 0.3))
-    const reach = (0.06 + 0.42 * flare.share) * spread
-    return { from: over[0] - flare.side * 0.08 * spread, to: over[0] + flare.side * reach }
+    const since = time - flare.at - SPILL_START
+    const spread = smooth(since / (SPILL_FOR + 0.35))
+    const foot = BUCKET.x + flare.side * (BUCKET.baseHalf + 0.03)
+    const reach = (0.12 + 0.7 * flare.share) * spread
+    return { from: foot, to: foot + flare.side * reach, fresh: 1 - smooth((since - 0.6) / 1.2) }
   })
 
   const flashes = Arr.flatMap(flares, (flare): ReadonlyArray<FrameFlash> => {
@@ -476,13 +523,30 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     return progress < 1 ? [{ x: from.x, y: from.y, progress, share: flare.share }] : []
   })
 
+  // The strike lands on the wall facing whoever kicked, high up.
+  const strikes = Arr.flatMap(flares, (flare): ReadonlyArray<FrameStrike> => {
+    const since = time - flare.at
+    if (since >= 0.4) return []
+    const from = timeline.people[flare.from]!
+    const wall = posed(0, flare.side)([BUCKET.x - flare.side * (BUCKET.rimHalf - 0.03), BUCKET.rim + 0.18])
+    return [
+      {
+        from: [from.x, from.y],
+        to: wall,
+        reach: easeOut(since / HIT),
+        strength: 1 - smooth((since - HIT) / (0.4 - HIT)),
+      },
+    ]
+  })
+
   return {
     people,
     drops: falling,
-    courses,
+    water: { amount: fill, level, slope: slopeAt(timeline, time, angle, side), ripples },
     beads,
     puddles,
     flashes,
+    strikes,
     angle,
     side,
     grown: smooth(time / POP),

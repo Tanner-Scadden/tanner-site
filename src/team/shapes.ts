@@ -2,35 +2,40 @@
 // coloured like the rest of the sheet. Both renderers draw exactly this.
 //
 // The bucket is drawn like a part on a technical drawing: thin outline, a
-// lip at the rim and its near edge, a dashed centreline, and the floor it stands
-// on, hatched underneath. What's in it is a stack of gold courses, one per
-// drop, the newest bright as it lands. Once something's been lost, a dashed
-// high-water line and a small level mark stay at the most it ever held.
+// lip at the rim and its near edge, a dashed centreline, and the floor it
+// stands on, hatched underneath. The water in it is drawn the way a
+// section drawing shows a liquid: close horizontal hatching for the body,
+// cut off by a brighter surface line that ripples where each drop lands
+// and settles back. Once some has been lost, a dashed high-water line and
+// a small level mark stay at the most it ever held.
 //
 // The teammates are a row of dots, linked only to their neighbours. A drop
-// is a gold bead with a short streak. A flare is the post's red: a flash
-// ring from whoever flared, a ring that stays round them, and the spill,
-// red beads and a puddle on the floor where the bucket went over.
+// is a gold bead with a short streak, and a small ring where it hits. A
+// kick is the post's red: a flash from whoever kicked, a strike to the
+// bucket, a ring that stays round them, and the spill, red beads and a
+// puddle on the floor beside the bucket.
 //
-// Pointing at a teammate picks them out: a ring goes round them, and their
-// courses in the bucket stay bright while the rest dims.
+// Pointing at a teammate picks them out: a ring goes round them, and the
+// rest of the team dims.
 
 import { Array as Arr, Option } from 'effect'
 
 import type { Dot, Line, Point, Rgba, Shapes } from '../blog/animation/scene.ts'
 import {
-  AFTER,
-  BEFORE,
   BOUNDS,
   BUCKET,
-  COURSE,
   FLOOR,
   type Frame,
+  INNER_BASE,
   MAX_FLARES,
   PEOPLE,
+  RIPPLE_FOR,
   SPRAY,
+  easeOut,
   halfAt,
+  levelOf,
   posed,
+  surfaceAt,
 } from './bucket.ts'
 
 type Rgb = readonly [number, number, number]
@@ -47,16 +52,22 @@ const HATCHES = 16
 const RIM_ARC = 12
 const CENTRELINE = 7
 const HIGH_WATER = 9
-const MAX_COURSES = BEFORE + AFTER
+// The water's surface is drawn in this many pieces, and its body hatched
+// no closer than this, in world units, so the line count has a ceiling.
+const SURFACE = 28
+const BODY_STEP = 0.02
+const BODY = Math.ceil((INNER_BASE - BUCKET.rim) / BODY_STEP) + 12
+// The most drops in the air or rippling at once.
+const MAX_DROPS = 8
 
 // The floor and its hatching, the bucket's outline, lip, near rim and
-// centreline, the high-water mark, every course, a streak per drop, the
-// neighbour links, and a puddle per flare.
+// centreline, the high-water mark, the water's body and surface, a streak
+// per drop, the neighbour links, and a puddle per kick.
 export const MAX_LINES =
-  1 + HATCHES + 6 + RIM_ARC + CENTRELINE + HIGH_WATER + 3 + MAX_COURSES + MAX_COURSES + (PEOPLE - 1) + MAX_FLARES
-// Everyone, a giving ring and a flare ring each, every flash, every drop,
-// every bead, and the picked ring.
-export const MAX_DOTS = PEOPLE * 3 + MAX_FLARES + MAX_COURSES + MAX_FLARES * SPRAY + 1
+  1 + HATCHES + 6 + RIM_ARC + CENTRELINE + HIGH_WATER + 3 + BODY + SURFACE + MAX_DROPS + (PEOPLE - 1) + MAX_FLARES * 2
+// Everyone, a giving ring and a kick ring each, every flash and strike
+// ring, every drop and its splash rings, every bead, and the picked ring.
+export const MAX_DOTS = PEOPLE * 3 + MAX_FLARES * 2 + MAX_DROPS * 3 + MAX_FLARES * SPRAY + 1
 
 const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], Math.min(1, Math.max(0, alpha))]
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
@@ -64,7 +75,6 @@ const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
   a[1] + (b[1] - a[1]) * t,
   a[2] + (b[2] - a[2]) * t,
 ]
-const easeOut = (t: number) => 1 - (1 - t) ** 3
 
 // Scale and centre the world box into a canvas this big.
 export const projection = (width: number, height: number) => {
@@ -133,7 +143,7 @@ export const shapesOf = (
 
   // The bucket: walls, base, and a doubled lip at the rim. Tinted red
   // while it's over.
-  const over = Math.min(1, frame.angle / 0.6)
+  const over = Math.min(1, frame.angle / 0.25)
   const ink = mix(LINE, mix(LINE, ALARM, 0.55), over)
   const outline = rgba(ink, 0.85 * g)
   const { base, rim, baseHalf, rimHalf } = BUCKET
@@ -157,53 +167,118 @@ export const shapesOf = (
     line(at(a), at(b), 1, rgba(LINE, 0.12 * g)),
   )
 
-  // The fill: a course for each drop, bright as it lands.
-  const levelOf = (level: number) => base - BUCKET.wall * 0.6 - (level + 0.5) * COURSE
-  const courses = Arr.map(frame.courses, course => {
-    const y = levelOf(course.level)
-    const half = halfAt(y) * Math.min(1, course.amount)
-    const colour = mix(GOLD, WARM, course.fresh * 0.7)
-    return line(
-      at([-half, y]),
-      at([half, y]),
-      COURSE * scale * 0.58,
-      faded(rgba(colour, (0.78 + 0.22 * course.fresh) * Math.min(1, course.amount * 2)), mine(course.from)),
-    )
+  // The water. Nothing above the rim, and nothing at all once it's gone.
+  const { water } = frame
+  const top = rim + 0.01
+  const surfaceY = (x: number) => Math.min(INNER_BASE, Math.max(top, surfaceAt(water, x)))
+  const wet = water.amount > 0.05
+  // The body: hatching parallel to the surface, from just under it down
+  // to the floor of the bucket, each line cut by the walls and the floor.
+  // The inside half-width is P - Q y, so a line y = c - m x meets the right
+  // wall at x = (P - Q c) / (1 - Q m) and the left at (Q c - P) / (1 + Q m).
+  const step = Math.max(BODY_STEP, 3.6 / scale)
+  const Q = (BUCKET.rimHalf - BUCKET.baseHalf) / (BUCKET.base - BUCKET.rim)
+  const P = halfAt(0) - 0.004
+  const m = water.slope
+  const body = wet
+    ? Arr.flatMap(Arr.range(0, BODY - 1), (i): ReadonlyArray<Line> => {
+        const c = water.level + step * (i + 0.7)
+        let lo = (Q * c - P) / (1 + Q * m)
+        let hi = (P - Q * c) / (1 - Q * m)
+        // Above the floor of the bucket: c - m x <= INNER_BASE.
+        if (m > 1e-9) lo = Math.max(lo, (c - INNER_BASE) / m)
+        else if (m < -1e-9) hi = Math.min(hi, (c - INNER_BASE) / m)
+        else if (c > INNER_BASE) return []
+        // And below the rim, where the surface is held to it.
+        if (m > 1e-9) hi = Math.min(hi, (c - top) / m)
+        else if (m < -1e-9) lo = Math.max(lo, (c - top) / m)
+        if (hi - lo < 0.012) return []
+        // Fainter with depth, so the surface reads first.
+        const depth = Math.min(1, (step * i) / 0.3)
+        return [line(at([lo, c - m * lo]), at([hi, c - m * hi]), 1, rgba(GOLD, (0.5 - 0.22 * depth) * g))]
+      })
+    : []
+  const edge = halfAt(levelOf(water.amount)) - 0.004
+  // Kept inside the walls where the surface tilts toward the narrower
+  // part of the bucket.
+  const points = Arr.map(Arr.range(0, SURFACE), i => {
+    const x = -edge + (2 * edge * i) / SURFACE
+    const y = surfaceY(x)
+    const inside = halfAt(y) - 0.004
+    return at([Math.max(-inside, Math.min(inside, x)), y])
   })
+  const surface = wet
+    ? Arr.map(Arr.zip(points, Arr.drop(points, 1)), ([a, b]) => line(a, b, 1.8, rgba(mix(GOLD, WARM, 0.35), 0.95 * g)))
+    : []
 
   // The high-water mark, once some of it's been lost: dashed across at the
   // most it held, and a small level triangle on the wall.
   const lost = Math.min(1, Math.max(0, (frame.peak - frame.fill - 0.5) / 2)) * (1 - over)
-  const peakY = levelOf(frame.peak - 0.5)
+  const peakY = levelOf(frame.peak)
   const peakHalf = halfAt(peakY) + BUCKET.wall
   const highWater =
     lost > 0
-    ? [
-        ...Arr.map(dashed([-peakHalf, peakY], [peakHalf, peakY], HIGH_WATER, 0.5), ([a, b]) =>
-          line(at(a), at(b), 1, rgba(GOLD, 0.45 * lost)),
-        ),
-        ...(() => {
-          const tip: Point = [peakHalf + 0.07, peakY]
-          const l: Point = [peakHalf + 0.03, peakY - 0.06]
-          const r: Point = [peakHalf + 0.11, peakY - 0.06]
-          const c = rgba(GOLD, 0.55 * lost)
-          return [line(at(l), at(r), 1, c), line(at(r), at(tip), 1, c), line(at(tip), at(l), 1, c)]
-        })(),
-      ]
-    : []
+      ? [
+          ...Arr.map(dashed([-peakHalf, peakY], [peakHalf, peakY], HIGH_WATER, 0.5), ([a, b]) =>
+            line(at(a), at(b), 1, rgba(GOLD, 0.5 * lost)),
+          ),
+          ...(() => {
+            const tip: Point = [peakHalf + 0.07, peakY]
+            const l: Point = [peakHalf + 0.03, peakY - 0.06]
+            const r: Point = [peakHalf + 0.11, peakY - 0.06]
+            const c = rgba(GOLD, 0.6 * lost)
+            return [line(at(l), at(r), 1, c), line(at(r), at(tip), 1, c), line(at(tip), at(l), 1, c)]
+          })(),
+        ]
+      : []
 
-  const streaks = Arr.map(frame.drops, drop =>
-    line(px(drop.tail), px([drop.x, drop.y]), 1.5, rgba(GOLD, 0.45)),
-  )
+  const streaks = Arr.map(frame.drops, drop => line(px(drop.tail), px([drop.x, drop.y]), 1.5, rgba(GOLD, 0.45)))
+
+  // A small ring where each drop hits, and a second, later and wider.
+  const splashes = Arr.flatMap(water.ripples, (ripple): ReadonlyArray<Dot> => {
+    const [x, y] = at([ripple.x, surfaceY(ripple.x)])
+    return Arr.flatMap([0, 0.14], (delay): ReadonlyArray<Dot> => {
+      const t = (ripple.age - delay) / 0.7
+      if (t <= 0 || t >= 1 || ripple.age > RIPPLE_FOR) return []
+      return [{ x, y, radius: 2 + 11 * easeOut(t), glow: 0, ring: 1, color: rgba(WARM, 0.55 * (1 - t) ** 2) }]
+    })
+  })
 
   // Neighbours only, faint: a row, not a web.
   const links = Arr.map(Arr.zip(frame.people, Arr.drop(frame.people, 1)), ([a, b]) =>
     line(px([a.x, a.y]), px([b.x, b.y]), 1, faded(rgba(LINE, 0.14 * Math.min(a.grown, b.grown)), unpicked)),
   )
 
-  const puddles = Arr.map(frame.puddles, puddle =>
-    line(px([puddle.from, FLOOR - 0.008]), px([puddle.to, FLOOR - 0.008]), 3, rgba(ALARM, 0.75)),
-  )
+  // The spill: a puddle on the floor, bright while it's fresh, with a
+  // thinner sheen along its top.
+  const puddles = Arr.flatMap(frame.puddles, (puddle): ReadonlyArray<Line> => {
+    if (Math.abs(puddle.to - puddle.from) < 0.005) return []
+    return [
+      line(px([puddle.from, FLOOR - 0.008]), px([puddle.to, FLOOR - 0.008]), 3, rgba(ALARM, 0.55 + 0.3 * puddle.fresh)),
+      line(
+        px([puddle.from + (puddle.to - puddle.from) * 0.15, FLOOR - 0.022]),
+        px([puddle.from + (puddle.to - puddle.from) * 0.7, FLOOR - 0.022]),
+        1,
+        rgba(ALARM, 0.25 + 0.35 * puddle.fresh),
+      ),
+    ]
+  })
+
+  // The kick: a red strike from whoever kicked to the wall, and a ring
+  // where it lands.
+  const strikes = Arr.flatMap(frame.strikes, (strike): ReadonlyArray<Line> => {
+    if (strike.strength <= 0) return []
+    const to: Point = [
+      strike.from[0] + (strike.to[0] - strike.from[0]) * strike.reach,
+      strike.from[1] + (strike.to[1] - strike.from[1]) * strike.reach,
+    ]
+    return [line(px(strike.from), px(to), 2, rgba(ALARM, 0.8 * strike.strength))]
+  })
+  const impacts = Arr.flatMap(frame.strikes, (strike): ReadonlyArray<Dot> => {
+    if (strike.reach < 1 || strike.strength <= 0) return []
+    const [x, y] = px(strike.to)
+    return [{ x, y, radius: 4 + 14 * (1 - strike.strength), glow: 0, ring: 2, color: rgba(ALARM, strike.strength) }]
+  })
 
   const flashes = Arr.map(frame.flashes, (flash): Dot => {
     const [x, y] = px([flash.x, flash.y])
@@ -230,7 +305,7 @@ export const shapesOf = (
     }
   })
   // A small ring as someone lets a drop go, and one that stays round
-  // whoever flared.
+  // whoever kicked.
   const giving = Arr.flatMap(frame.people, (person): ReadonlyArray<Dot> => {
     if (person.giving <= 0.02) return []
     const [x, y] = px([person.x, person.y])
@@ -250,11 +325,11 @@ export const shapesOf = (
     const [x, y] = px([bead.x, bead.y])
     return {
       x,
-      y: bead.flying ? y : y - bead.radius,
-      radius: bead.radius,
+      y: bead.flying ? y : y - bead.radius * 0.6,
+      radius: bead.flying ? bead.radius : bead.radius * 0.8,
       glow: bead.flying ? 5 : 0,
       ring: 0,
-      color: rgba(ALARM, bead.flying ? 0.95 : 0.8),
+      color: rgba(ALARM, bead.flying ? 0.95 : 0.6),
     }
   })
 
@@ -274,13 +349,25 @@ export const shapesOf = (
       ...hatches,
       ...links,
       ...centreline,
+      ...body,
       ...nearRim,
-      ...courses,
+      ...surface,
       ...highWater,
       ...walls,
       ...puddles,
       ...streaks,
+      ...strikes,
     ],
-    dots: [...flashes, ...giving, ...people, ...marked, ...beads, ...drops, ...Option.toArray(halo)],
+    dots: [
+      ...flashes,
+      ...giving,
+      ...people,
+      ...marked,
+      ...splashes,
+      ...impacts,
+      ...beads,
+      ...drops,
+      ...Option.toArray(halo),
+    ],
   }
 }
