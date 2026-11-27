@@ -83,12 +83,12 @@ export const beSomeoneWorthCalling: Post = {
       ' is a whole book on doing this well.',
     ),
     h.p(
-      h.strong('When someone needs help, jump in.'),
+      h.strong('Be the first to jump in.'),
       ' Fix problems as you find them. Answer the question in Slack. If you don’t know how to help, tell them they’re not alone, and that you’re one call or text away.',
     ),
     h.p(
       h.strong('Give back to open source.'),
-      ' There is nothing more thankless than maintaining open source. Maintainers get far more bug reports and demands than thanks. When a tool you use has a bug or is missing something, open a PR instead of hacking around it. I’ve sent fixes to Effect, TanStack Router and SolidStart, and nobody asked me to.',
+      ' Maintaining open source is thankless. Maintainers hear far more complaints than thanks. When a tool you use has a bug or is missing something, open a PR instead of hacking around it.',
     ),
     h.p(
       h.strong('Believe in yourself.'),
