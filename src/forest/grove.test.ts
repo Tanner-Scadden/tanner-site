@@ -11,12 +11,12 @@ import {
   MAX_SEGMENTS,
   MAX_TREES,
   PLANT_SETTLE,
-  ROOTS,
   buildTimeline,
   frameAt,
   landingOf,
   plantedIn,
 } from './grove.ts'
+import { ROOT_PIECES } from './roots.ts'
 import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
 
 const SEEDS = Arr.range(1, 12)
@@ -57,7 +57,7 @@ describe('grove timeline', () => {
       assert.isAtMost(trees.length, MAX_TREES)
       for (const tree of trees) {
         assert.isAtMost(tree.segments.length, MAX_SEGMENTS)
-        assert.strictEqual(tree.roots.length, ROOTS)
+        assert.isAtMost(tree.roots.pieces.length, ROOT_PIECES)
         assert.isAtMost(tree.leaves.length, tree.segments.length)
       }
     }
@@ -228,6 +228,56 @@ describe('grove frames', () => {
     const end = frameAt(timeline, timeline.end).branches
     assert.isTrue(Arr.some(end, branch => branch.root && branch.bond > 0.5))
     assert.isTrue(Arr.every(end, branch => branch.bond === 0 || branch.root))
+  })
+
+  it('grows each tree a deep, wide root system, every one different', () => {
+    for (const seed of SEEDS) {
+      const { trees, end } = buildTimeline(seed)
+      const frame = frameAt({ ...buildTimeline(seed), end }, end)
+      for (const [id, tree] of trees.entries()) {
+        // Only its own roots: reaching roots are drawn at a fixed depth.
+        const own = Arr.filter(frame.branches, b => b.root && b.tree === id && b.bond === 0)
+        if (own.length === 0) continue
+        const tips = Arr.map(own, b => b.to)
+        const depth = Arr.reduce(tips, 0, (m, [, y]) => Math.max(m, y - GROUND))
+        const span = Arr.reduce(tips, 0, (m, [x]) => Math.max(m, x)) - Arr.reduce(tips, 0, (m, [x]) => Math.min(m, x))
+        const mature = end - tree.sprout > 8
+        if (mature) {
+          // The deepest root goes down at least about as far as the tree's
+          // crown is wide in its trunk, and the laterals spread wider.
+          assert.isAbove(depth, 0.32 * tree.scale, `seed ${seed} tree ${id} depth`)
+          assert.isAbove(span, 0.7 * tree.scale, `seed ${seed} tree ${id} span`)
+        }
+        // Their tips point all across the downward fan, not a few ways.
+        const angles = Arr.map(tree.roots.pieces, p => Math.atan2(p.to[1] - GROUND, p.to[0] - tree.x))
+        const spread = Math.max(...angles) - Math.min(...angles)
+        assert.isAbove(spread, 1.6, `seed ${seed} tree ${id} spread`)
+        // And they fork, more than once over.
+        assert.isTrue(Arr.some(tree.roots.pieces, p => p.order >= 2), `seed ${seed} tree ${id} forks`)
+      }
+      // No two trees' roots are the same shape.
+      const shapes = Arr.map(trees, tree =>
+        Arr.join(
+          Arr.map(tree.roots.pieces, p => `${(p.to[0] - tree.x).toFixed(4)},${p.to[1].toFixed(4)}`),
+          ';',
+        ),
+      )
+      assert.strictEqual(new Set(shapes).size, shapes.length, `seed ${seed}`)
+    }
+  })
+
+  it('knots every grown tree of the grove to a neighbour in gold', () => {
+    for (const seed of SEEDS) {
+      const timeline = buildTimeline(seed)
+      const end = frameAt(timeline, timeline.end).branches
+      const bonded = new Set(Arr.map(Arr.filter(end, b => b.root && b.bond > 0.5), b => b.tree))
+      // The first tree and the grove all stand long enough to have met.
+      for (const id of Arr.range(0, GROVE)) assert.isTrue(bonded.has(id), `seed ${seed} tree ${id}`)
+      // The tie strengthens the longer it holds.
+      const strongest = (t: number) =>
+        Arr.reduce(frameAt(timeline, t).branches, 0, (m, b) => Math.max(m, b.root ? b.bond : 0))
+      assert.isAbove(strongest(timeline.end), strongest(timeline.end - 4))
+    }
   })
 })
 

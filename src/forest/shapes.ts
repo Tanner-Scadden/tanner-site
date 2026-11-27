@@ -19,10 +19,8 @@ import {
   HATCH_GAP,
   MAX_SEGMENTS,
   MAX_TREES,
-  ROOTS,
-  ROOT_FORKS,
-  ROOT_STEPS,
 } from './grove.ts'
+import { REACH_LINES, ROOT_PIECES } from './roots.ts'
 
 type Rgb = readonly [number, number, number]
 
@@ -33,17 +31,16 @@ const WARM: Rgb = [1, 0.94, 0.8]
 
 // The most a frame draws: the ground and its hatching, every branch and
 // root, a wisp per seed; every leaf, a seed and a landing ring each.
-// Roots are paths: ROOT_STEPS lines and a rootlet per fork. Each tree has
-// its own ROOTS, plus two reaching roots (its own, and its neighbour's
-// reaching back).
-const ROOT_LINES = ROOT_STEPS + ROOT_FORKS
-export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + (ROOTS + 2) * ROOT_LINES) + MAX_TREES
+// Each tree has its own roots, up to ROOT_PIECES lines, plus two reaching
+// roots: its own, and its neighbour's reaching back.
+export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + ROOT_PIECES + 2 * REACH_LINES) + MAX_TREES
 export const MAX_DOTS = MAX_TREES * MAX_SEGMENTS + MAX_TREES * 2
 
 // How much of itself the rest of the grove keeps while a tree's picked.
 const DIMMED = 0.55
 
 const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], alpha]
+const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]
 
 // Scale and centre the world box into a canvas this big.
 export const projection = (width: number, height: number) => {
@@ -102,13 +99,16 @@ export const shapesOf = (
 
   const branches = Arr.map(frame.branches, (branch): Line => {
     const lit = isPicked(branch.tree)
-    const alpha = branch.root ? 0.32 + 0.45 * branch.bond : 0.78
-    // Roots that have knotted with a neighbour's turn gold.
-    const tint = lit ? WARM : branch.bond > 0 ? GOLD : LINE
+    // Roots are fainter than the crowns, so the crowns lead, except where
+    // they've knotted with a neighbour's: those turn gold and brighten as
+    // the tie strengthens.
+    const alpha = branch.root ? 0.3 + 0.62 * branch.bond : 0.78
+    const tint = lit ? WARM : branch.root ? mix(LINE, GOLD, Math.min(1, branch.bond * 3)) : LINE
+    const thinnest = branch.root ? 0.7 + 0.5 * branch.bond : 0.9
     return {
       from: px(branch.from),
       to: px(branch.to),
-      width: Math.max(0.9, branch.width * scale) + (lit ? 0.5 : 0),
+      width: Math.max(thinnest, branch.width * scale) + (lit ? 0.5 : 0),
       color: rgba(tint, (lit ? Math.min(1, alpha + 0.15) : alpha) * keep(branch.tree)),
     }
   })

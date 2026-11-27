@@ -24,11 +24,17 @@
 
 import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
+import { REACH_RATE, type RootSystem, drawReach, drawRoots, reachLengthOf, rootSystemOf } from './roots.ts'
+
 // The world is a box this wide and tall around the middle of the canvas,
 // in world units, with y pointing down like the canvas.
 export const BOUNDS = { x: 1.6, y: 0.9 } as const
-// Where the ground is.
-export const GROUND = 0.6
+// Where the ground is: high enough that what grows under it gets a fair
+// share of the sheet.
+export const GROUND = 0.27
+// How deep a root can go, and how far out.
+const FLOOR = BOUNDS.y - 0.04
+const SIDE = BOUNDS.x - 0.02
 // Nothing a tree draws goes past this, so its crown stays on the sheet.
 const MARGIN = { x: 1.54, top: -0.84 } as const
 
@@ -39,7 +45,6 @@ export const LATE = 4
 export const MAX_PLANTS = 6
 export const MAX_TREES = 1 + GROVE + LATE + MAX_PLANTS
 export const MAX_SEGMENTS = 96
-export const ROOTS = 3
 export const HATCH_GAP = 0.07
 export const HATCHES = Math.floor((BOUNDS.x * 2) / HATCH_GAP) + 1
 
@@ -123,7 +128,7 @@ export interface Tree {
   readonly scale: number
   readonly levels: number
   readonly segments: ReadonlyArray<Segment>
-  readonly roots: ReadonlyArray<Segment>
+  readonly roots: RootSystem
   readonly leaves: ReadonlyArray<Leaf>
   // How far the furthest tip is from the root.
   readonly reach: number
@@ -220,18 +225,7 @@ const shapeOf = (next: () => number, levels: number, lean: number) => {
       })
     }
   }
-  const roots = Arr.makeBy(
-    ROOTS,
-    (k): Segment => ({
-      parent: -1,
-      depth: 0,
-      angle: Math.PI / 2 + (k - 1) * (0.7 + next() * 0.3) + (next() - 0.5) * 0.2,
-      length: 0.05 + next() * 0.04,
-      width: 0.01,
-      start: 0,
-    }),
-  )
-  return { segments, roots }
+  return { segments }
 }
 
 // Where every tip of a tree is at rest, from its root.
@@ -255,7 +249,7 @@ interface TreeSpec {
 // Grows a tree's shape and fits it on the sheet: it moves in from the
 // edges, and shrinks if it'd be too tall.
 const makeTree = (next: () => number, spec: TreeSpec): Tree => {
-  const { segments: unit, roots: unitRoots } = shapeOf(next, spec.levels, (next() - 0.5) * 0.14)
+  const { segments: unit } = shapeOf(next, spec.levels, (next() - 0.5) * 0.14)
   const tips = restTips(unit)
   const left = Arr.reduce(tips, 0, (m, [x]) => Math.min(m, x)) - 0.06
   const right = Arr.reduce(tips, 0, (m, [x]) => Math.max(m, x)) + 0.06
@@ -269,7 +263,16 @@ const makeTree = (next: () => number, spec: TreeSpec): Tree => {
     start: segment.start * scale,
   })
   const segments = Arr.map(unit, scaled)
-  const roots = Arr.map(unitRoots, scaled)
+  // Its roots are grown after the crown, from the same seed, so a tree
+  // planted anywhere gets a root system of its own.
+  const roots = rootSystemOf(next, {
+    x,
+    ground: GROUND,
+    scale,
+    trunk: segments[0]!.width,
+    floor: FLOOR,
+    side: SIDE,
+  })
   const reach = Arr.reduce(segments, 0, (m, s) => Math.max(m, s.start + s.length))
   // Leaves open at the tips of the outermost twigs.
   const leaves = Arr.flatMap(segments, (segment, i): ReadonlyArray<Leaf> => {
@@ -583,16 +586,12 @@ const SEED_SIZE = 0.016
 const TAIL = 0.05
 const SEED_FADE = 0.6
 
-// Roots keep growing long after the crown is done: the tree's own roots
-// get longer for this long after it's grown, and each tree reaches a root
-// toward its nearest older neighbour at this speed, from halfway through
-// its growth. Where two meet, they knot together over BOND seconds.
-const ROOTS_DEEPEN = 6
-const ROOT_RATE = 0.07
-const ROOT_DEPTH = 0.08
-const BOND = 2
-
-const reachingFrom = (tree: Tree) => tree.sprout + tree.grow * 0.5
+// Each tree reaches a root toward its nearest older neighbour from a third
+// of the way through its growth, and the neighbour reaches back. Where they
+// meet they knot together, and the tie strengthens for as long as it holds.
+const reachingFrom = (tree: Tree) => tree.sprout + tree.grow * 0.35
+// Trees closer than this meet off to one side.
+const MEET_GAP = 0.2
 
 // The tree it reaches its roots toward: the nearest that came up before it.
 const neighbourOf = (trees: ReadonlyArray<Tree>, id: number): number => {
@@ -603,79 +602,6 @@ const neighbourOf = (trees: ReadonlyArray<Tree>, id: number): number => {
     if (best < 0 || Math.abs(other.x - tree.x) < Math.abs(trees[best]!.x - tree.x)) best = j
   }
   return best
-}
-
-// NOTE: roots are drawn as paths, not sticks. Each is sampled in short
-// steps along its length, so it can wander, taper from the trunk to its
-// tip, and send little rootlets off as it goes. Only the part grown so far
-// is drawn, so a root only ever gets longer.
-export const ROOT_STEPS = 8
-const ROOTLETS = [0.3, 0.55, 0.8] as const
-export const ROOT_FORKS = ROOTLETS.length
-const ROOTLET = 0.035
-
-// A point on a reaching root, `d` along it. It dives under the ground, then
-// wanders on toward the neighbour. The wander fades out at `half`, so both
-// roots of a pair arrive at the same spot.
-const reachingPoint = (x: number, dir: number, half: number, phase: number, d: number): Point => {
-  const wander = 0.018 * Math.sin((Math.PI * d) / half) * Math.sin(d * 21 + phase)
-  return [x + dir * d, GROUND + ROOT_DEPTH * (1 - Math.exp(-d / 0.045)) + wander]
-}
-
-// A path from `at(0)` to `at(length)` in short steps, thinning toward its
-// tip, plus a rootlet off each of `forks` once it's grown past them.
-const rootPath = (
-  tree: number,
-  at: (d: number) => Point,
-  length: number,
-  full: number,
-  width: number,
-  bond: number,
-  outward: number,
-): ReadonlyArray<FrameBranch> => {
-  if (length <= 0) return []
-  const taper = (d: number) => width * (1 - 0.65 * Math.min(1, d / full)) * (1 + bond)
-  const out: Array<FrameBranch> = []
-  for (let k = 0; k < ROOT_STEPS; k++) {
-    const a = (length * k) / ROOT_STEPS
-    const b = (length * (k + 1)) / ROOT_STEPS
-    out.push({ tree, from: at(a), to: at(b), width: taper(a), root: true, bond })
-  }
-  for (const [k, fork] of ROOTLETS.entries()) {
-    const d = full * fork
-    const grown = clamp01((length - d) / (full * 0.25))
-    if (grown <= 0) continue
-    const [fx, fy] = at(d)
-    const side = k % 2 === 0 ? 1 : -0.4
-    out.push({
-      tree,
-      from: [fx, fy],
-      to: [fx + outward * ROOTLET * 0.6 * grown, fy + ROOTLET * (0.6 + 0.4 * side) * grown],
-      width: taper(d) * 0.55,
-      root: true,
-      bond,
-    })
-  }
-  return out
-}
-
-// A reaching root, from the trunk toward a neighbour `half` away.
-const rootRun = (
-  tree: number,
-  x: number,
-  dir: number,
-  half: number,
-  length: number,
-  bond: number,
-): ReadonlyArray<FrameBranch> =>
-  rootPath(tree, d => reachingPoint(x, dir, half, tree * 1.7, d), length, half, 0.009, bond, dir)
-
-// One of a tree's own roots: it fans out from the trunk and curls downward.
-const ownRoot = (x: number, angle: number, length: number) => (d: number): Point => {
-  const curl = 0.9 * (d / Math.max(length, 1e-6)) ** 2 * length
-  // Never deeper than the bottom of the sheet.
-  const y = Math.min(GROUND + Math.sin(angle) * d + curl * 0.4, BOUNDS.y - 0.04)
-  return [x + Math.cos(angle) * d + Math.sign(Math.cos(angle)) * curl * 0.3, y]
 }
 
 export const frameAt = (timeline: Timeline, time: number): Frame => {
@@ -716,14 +642,8 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
       right = Math.max(right, to[0])
       top = Math.min(top, to[1])
     }
-    for (const root of tree.roots) {
-      const deepen = 1 + 1.2 * easeInOut((time - tree.sprout - tree.grow) / ROOTS_DEEPEN)
-      const full = root.length * (1 + 1.2)
-      const drawn = Math.min(root.length, root.length * pose.grown * 2.5) * deepen
-      const width = root.width * (0.3 + 0.7 * pose.grown) * deepen
-      branches.push(
-        ...rootPath(id, ownRoot(tree.x, root.angle, full), drawn, full, width, 0, Math.sign(Math.cos(root.angle))),
-      )
+    for (const root of drawRoots(tree.roots, time - tree.sprout, tree.scale)) {
+      branches.push({ tree: id, ...root, root: true, bond: 0 })
     }
     for (const [i, leaf] of tree.leaves.entries()) {
       const open = easeInOut((time - leaf.born) / LEAF_OPEN)
@@ -749,13 +669,29 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
     const other = neighbourOf(trees, id)
     if (other < 0) continue
     const them = trees[other]!
-    const half = Math.abs(them.x - tree.x) / 2
-    const dir = Math.sign(them.x - tree.x)
-    const lengthOf = (t: Tree) => Num.clamp((time - reachingFrom(t)) * ROOT_RATE, { minimum: 0, maximum: half })
-    const met = Math.max(reachingFrom(tree), reachingFrom(them)) + half / ROOT_RATE
-    const bond = easeInOut((time - met) / BOND)
-    branches.push(...rootRun(id, tree.x, dir, half, lengthOf(tree), bond))
-    branches.push(...rootRun(other, them.x, -dir, half, lengthOf(them), bond))
+    // They meet halfway between, or off to the side, toward the middle of
+    // the sheet, if they stand so close there's no room between them.
+    const gap = them.x - tree.x
+    const middle = (tree.x + them.x) / 2
+    const meetX = Math.abs(gap) < MEET_GAP ? middle - (Math.sign(middle) || 1) * MEET_GAP * 0.6 : middle
+    const reachOf = (t: Tree) => {
+      const distance = Math.abs(meetX - t.x)
+      const raw = Num.clamp((time - reachingFrom(t)) * REACH_RATE, { minimum: 0, maximum: reachLengthOf(distance) })
+      return { x: t.x, dir: Math.sign(meetX - t.x) || 1, distance, raw, arrives: reachingFrom(t) + distance / REACH_RATE }
+    }
+    const mine = reachOf(tree)
+    const theirs = reachOf(them)
+    // Neither runs on past the meeting point until the other's got there,
+    // and the tie holds from when they meet.
+    const together = Math.max(0, Math.min(mine.raw - mine.distance, theirs.raw - theirs.distance))
+    const held = time - Math.max(mine.arrives, theirs.arrives)
+    const pair = { ground: GROUND, held, seed: id * 7919 + other }
+    const draw = (r: typeof mine, twist: number) =>
+      drawReach({ ...pair, ...r, twist, length: Math.min(r.raw, r.distance) + together })
+    const reaching = draw(mine, 1)
+    const back = draw(theirs, -1)
+    for (const root of reaching) branches.push({ tree: id, ...root, root: true })
+    for (const root of back) branches.push({ tree: other, ...root, root: true })
   }
 
   const seeds: Array<FrameSeed> = []
