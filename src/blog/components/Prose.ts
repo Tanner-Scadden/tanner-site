@@ -1,20 +1,51 @@
-import type { View } from '@effect/ui'
+import { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
 
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
-import { blueprint, fonts, media, post, syntax } from '../../styles/tokens.stylex.ts'
+import { blueprint, fonts, media, post, syntax, widths } from '../../styles/tokens.stylex.ts'
 import { type CodeLang, LANG_NAMES } from '../highlight.ts'
 import { CopyCode, HighlightCode } from '../mounts/CodeMounts.ts'
+import { flow } from './prose.stylex.ts'
 
-// NOTE: the few blocks a post needs beyond plain tags. Everything else is
-// just `h.p`, `h.h2`, `h.ul`, `h.blockquote` and friends, which prose.css
-// styles.
+// NOTE: a post's body is written with plain tags, `h.p`, `h.h2`, `h.ul`,
+// `h.blockquote` and friends, and gets them from `proseTags(h)`: the same
+// `h`, with those tags already carrying the post's styles. So every element
+// is styled by its own classes, and an author never writes one. The blocks
+// below are for what plain tags can't say.
+const plainOf = new WeakMap<object, unknown>()
+
+export const proseTags = <M>(h: Html.H<M>): Html.H<M> => {
+  // Everything it doesn't restyle, `el`, `id` and the other tags, comes
+  // from `h`.
+  const tags: Html.H<M> = Object.create(h)
+  Object.defineProperties(tags, {
+    p: { value: View.shorthand(sx(h.p, prose.block)) },
+    h2: { value: View.shorthand(sx(h.h2, prose.h2)) },
+    h3: { value: View.shorthand(sx(h.h3, prose.h3)) },
+    ul: { value: View.shorthand(sx(h.ul, prose.block, prose.list)) },
+    ol: { value: View.shorthand(sx(h.ol, prose.block, prose.list)) },
+    li: { value: View.shorthand(sx(h.li, prose.item)) },
+    blockquote: { value: View.shorthand(sx(h.blockquote, prose.block, prose.quote)) },
+    a: { value: View.shorthand(sx(h.a, base.link, prose.link)) },
+    strong: { value: View.shorthand(sx(h.strong, prose.strong)) },
+    code: { value: View.shorthand(sx(h.code, prose.code)) },
+    hr: { value: sx(h.hr, prose.rule) },
+  })
+  plainOf.set(tags, h)
+  return tags
+}
+
+// The `h` that `proseTags` restyled, for a block that draws its own tags.
+const plain = <M>(h: Html.H<M>): Html.H<M> => (plainOf.get(h) as Html.H<M> | undefined) ?? h
 
 // A margin note, drawn like a callout on a drawing: a label and a box.
 export const Note = <M>(h: Html.H<M>, label: string, ...children: View.Children<M, never>) =>
-  sx(h.aside, styles.note).children(sx(h.small, styles.noteLabel).children(label), h.div(...children))
+  sx(h.aside, prose.block, styles.note).children(
+    sx(h.small, styles.noteLabel).children(label),
+    sx(h.div, styles.noteBody).children(...children),
+  )
 
 // A code listing, highlighted, with a copy button. The tab shows `file` if
 // given, else the language.
@@ -22,7 +53,13 @@ export const Code = <M>(
   h: Html.H<M>,
   { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file?: string },
 ) =>
-  sx(h.figure, styles.code).children(
+  Listing(plain(h), { code, lang, file })
+
+const Listing = <M>(
+  h: Html.H<M>,
+  { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file?: string | undefined },
+) =>
+  sx(h.figure, prose.block, styles.code).children(
     sx(h.figcaption, styles.tab).children(
       h.span(file ?? LANG_NAMES[lang]),
       sx(h.button, base.button, styles.copy, stylex.defaultMarker())
@@ -46,10 +83,80 @@ export const Figure = <M>(
   h: Html.H<M>,
   { src, alt, caption }: { readonly src: string; readonly alt: string; readonly caption?: string },
 ) =>
-  h.figure.children(
+  sx(h.figure, prose.block).children(
     sx(h.img, styles.image).attrs({ src, alt, loading: 'lazy' }),
     caption !== undefined && sx(h.figcaption, styles.caption).children(caption),
   )
+
+// NOTE: blocks sit `flow.gap` apart. A heading's negative bottom margin
+// collapses into the next block's gap, so what follows a heading sits
+// closer: 1.2em less 0.4em of the body size is 0.8em.
+const prose = stylex.create({
+  block: { marginTop: { default: flow.gap, ':first-child': 0 } },
+  h2: {
+    fontFamily: fonts.display,
+    fontWeight: 800,
+    fontSize: 26,
+    lineHeight: 1.2,
+    fontStretch: widths.slight,
+    color: post.bright,
+    marginTop: '2.2em',
+    marginBottom: `calc(-0.4 * ${flow.size})`,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid',
+    borderBottomColor: post.rule,
+  },
+  h3: {
+    fontFamily: fonts.display,
+    fontWeight: 700,
+    fontSize: 20,
+    lineHeight: 1.3,
+    fontStretch: widths.hint,
+    color: post.bright,
+    marginTop: '1.8em',
+    marginBottom: `calc(-0.4 * ${flow.size})`,
+  },
+  list: { paddingLeft: '1.4em' },
+  item: {
+    marginTop: { default: '.4em', ':first-child': 0 },
+    '::marker': { color: blueprint.hi },
+  },
+  quote: {
+    borderLeftWidth: 2,
+    borderLeftStyle: 'solid',
+    borderLeftColor: blueprint.hi,
+    paddingTop: 2,
+    paddingBottom: 2,
+    paddingLeft: 22,
+    color: post.inkDim,
+    fontStyle: 'italic',
+  },
+  link: {
+    textDecorationThickness: { default: '1px', ':hover': '2px' },
+    textUnderlineOffset: 3,
+  },
+  strong: { fontWeight: 700, color: post.bright },
+  code: {
+    fontFamily: fonts.mono,
+    fontWeight: 400,
+    fontSize: '.84em',
+    lineHeight: 'normal',
+    backgroundColor: post.tint,
+    paddingBlock: 1,
+    paddingInline: 5,
+  },
+  // A break: a rule with a tick at each end.
+  rule: {
+    borderStyle: 'none',
+    height: 9,
+    marginBlock: '2.4em',
+    backgroundImage: `linear-gradient(${post.rule}, ${post.rule}), linear-gradient(${post.rule}, ${post.rule}), linear-gradient(${post.rule}, ${post.rule})`,
+    backgroundPosition: 'center, left, right',
+    backgroundSize: '100% 1px, 1px 100%, 1px 100%',
+    backgroundRepeat: 'no-repeat',
+  },
+})
 
 const styles = stylex.create({
   note: {
@@ -59,6 +166,8 @@ const styles = stylex.create({
     paddingBlock: 16,
     paddingInline: 20,
   },
+  // A note's paragraphs sit closer.
+  noteBody: { [flow.gap]: '.8em' },
   noteLabel: {
     display: 'block',
     fontFamily: fonts.mono,
@@ -167,7 +276,8 @@ const styles = stylex.create({
     backgroundPosition: '-1px 11px',
     backgroundAttachment: 'local',
   },
-  listing: { backgroundColor: 'transparent', padding: 0, fontSize: 'inherit' },
+  // A <code> takes the browser's monospace unless it's told otherwise.
+  listing: { fontFamily: fonts.mono, fontWeight: 400, fontSize: 'inherit', lineHeight: 'normal' },
 
   image: {
     display: 'block',

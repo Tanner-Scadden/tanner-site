@@ -1,5 +1,3 @@
-import '../../blog/prose.css'
-
 import type { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
@@ -9,8 +7,11 @@ import { sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
 import { type Post, formatDate } from '#domain/Post'
 
+import { proseTags } from '../../blog/components/Prose.ts'
+import { flow } from '../../blog/components/prose.stylex.ts'
 import { neighboursOf, sheetOf } from '../../blog/posts.ts'
 import { blogRoute, href, postRoute } from '../../routes.ts'
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, post as ink, widths } from '../../styles/tokens.stylex.ts'
 import { BlogBar } from './BlogPage.ts'
@@ -33,16 +34,14 @@ export const PostPage = <M>(h: Html.H<M>, post: Post) => {
         ),
       ),
       sx(h.div, styles.paper).children(
-        sx(h.div, styles.prose)
-          .attr('data-prose', '')
-          .children(...post.body(h)),
+        sx(h.div, styles.prose).children(...post.body(proseTags(h))),
       ),
     ),
     sx(h.nav, styles.pager)
       .attr('aria-label', 'More posts')
       .children(
         Pager(h, BLOG.newer, newer, false),
-        sx(h.a, styles.cell, styles.all).attr('href', href(blogRoute)).children(BLOG.back),
+        sx(h.a, base.link, styles.cell, styles.all).attr('href', href(blogRoute)).children(BLOG.back),
         Pager(h, BLOG.older, older, true),
       ),
   )
@@ -58,7 +57,7 @@ const Pager = <M>(h: Html.H<M>, label: string, post: Option.Option<Post>, older:
   Option.match(post, {
     onNone: () => sx(h.span, styles.cell),
     onSome: post =>
-      sx(h.a, styles.cell, styles.link, older && styles.older)
+      sx(h.a, base.link, styles.cell, styles.link, older && styles.older)
         .attr('href', href(postRoute(post.slug)))
         .children(
           sx(h.small, styles.pagerLabel).children(label),
@@ -117,17 +116,14 @@ const styles = stylex.create({
     paddingBottom: { default: 72, [media.narrowScreen]: 44, [media.print]: 16 },
     paddingInline: { default: 24, [media.narrowScreen]: 20, [media.print]: 0 },
   },
-  // prose.css styles the tags inside, from these.
+  // The body type: a reading size, a short line.
   prose: {
-    '--prose-ink-dim': ink.inkDim,
-    '--prose-rule': ink.rule,
-    '--prose-bright': ink.bright,
-    '--prose-tint': ink.tint,
+    [flow.size]: { default: '18px', [media.narrow]: '17px' },
     maxWidth: 680,
     marginInline: 'auto',
     fontFamily: fonts.reading,
     fontWeight: 400,
-    fontSize: { default: 18, [media.narrow]: 17 },
+    fontSize: flow.size,
     lineHeight: 1.75,
     fontStretch: widths.normal,
   },

@@ -19,6 +19,7 @@ import { House } from '../house/components/House.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
 import { BLOG_OPEN } from '../blog/posts.ts'
 import { SiteRoute, blogRoute, href, restRoute } from '../routes.ts'
+import { base } from '../styles/base.ts'
 import { sx } from '../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../styles/tokens.stylex.ts'
 import { Work } from '../work/components/Work.ts'
@@ -174,10 +175,10 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   sx(h.div, sheet.bar).children(
     h.span('TANNER SCADDEN'),
     sx(h.nav, sheet.nav).children(
-      sx(h.a, sheet.navLink).attr('href', '#work').children('WORK'),
-      sx(h.a, sheet.navLink).attr('href', '#oss').children('OPEN SOURCE'),
-      sx(h.a, sheet.navLink).attr('href', '#outside').children(PERSONAL_LIFE),
-      BLOG_OPEN && sx(h.a, sheet.navLink).attr('href', href(blogRoute)).children('BLOG'),
+      sx(h.a, base.link, sheet.navLink).attr('href', '#work').children('WORK'),
+      sx(h.a, base.link, sheet.navLink).attr('href', '#oss').children('OPEN SOURCE'),
+      sx(h.a, base.link, sheet.navLink).attr('href', '#outside').children(PERSONAL_LIFE),
+      BLOG_OPEN && sx(h.a, base.link, sheet.navLink).attr('href', href(blogRoute)).children('BLOG'),
     ),
     EggCounter(h, eggs),
   )
@@ -199,7 +200,7 @@ const Hero = <M>(
   sx(h.header, sheet.hero, styles.hero).children(
     h.div(
       sx(h.h1, sheet.title, styles.greeting).children(GREETING),
-      sx(h.p, styles.thesis)
+      sx(h.p, base.focus, styles.thesis)
         .attrs({ role: 'button', tabindex: '0' })
         .on('click', clicked)
         .on('keydown', pressed(clicked), { preventDefault: true })
@@ -222,7 +223,7 @@ const OpenSource = <M>(h: Html.H<M>) =>
       sx(h.ul, styles.projects).children(
         ...Arr.map(OPEN_SOURCE, project =>
           sx(h.li, styles.project).children(
-            sx(h.a, styles.projectLink, stylex.defaultMarker())
+            sx(h.a, base.link, styles.projectLink, stylex.defaultMarker())
               .attrs({ href: project.href, target: '_blank', rel: 'noopener noreferrer' })
               .children(
                 h.span(project.name),
@@ -240,7 +241,7 @@ const Outside = <M>(h: Html.H<M>) =>
     Callout(h, 3, PERSONAL_LIFE),
     sx(h.p, sheet.prose).children(
       "I've always played games, and for a few years I ",
-      h.a.attr('href', href(restRoute)).children('played them professionally'),
+      sx(h.a, base.link).attr('href', href(restRoute)).children('played them professionally'),
       ': Arena of Valor with Allegiance, then Wild Rift with Sentinels, and made it to worlds three times. These days I mostly build them, sometimes with my family.',
     ),
     sx(h.p, sheet.prose).children(
@@ -258,24 +259,24 @@ const Footer = <M>(h: Html.H<M>, clickedWebGpu: M) =>
       sx(h.small, styles.footNote).children('ELSEWHERE'),
       ...Arr.flatMap(ELSEWHERE, (link, i) => [
         i > 0 && ' · ',
-        h.a.attr('href', link.href).children(link.label),
+        sx(h.a, base.link).attr('href', link.href).children(link.label),
       ]),
     ),
     sx(h.div, styles.cell).children(
       sx(h.small, styles.footNote).children('THIS SITE'),
       'Effect UI + ',
-      sx(h.span, styles.egg)
+      sx(h.span, base.focus, styles.egg)
         .attrs({ role: 'button', tabindex: '0', [PENS_START]: '' })
         .on('click', clickedWebGpu)
         .on('keydown', pressed(clickedWebGpu), { preventDefault: true })
         .children('WebGPU'),
       ' on Cloudflare · ',
-      sx(h.a, styles.source)
+      sx(h.a, base.link, styles.source)
         .attrs({ href: SITE_REPO_URL, target: '_blank', rel: 'noopener noreferrer' })
         .children('source ↗'),
     ),
     sx(h.div, styles.cell, styles.doorCell).children(
-      sx(h.a, styles.door, stylex.defaultMarker())
+      sx(h.a, base.link, styles.door, stylex.defaultMarker())
         .attr('href', href(SiteRoute.Manor()))
         .attr('aria-label', 'Open the hidden room')
         .children(

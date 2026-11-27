@@ -2,6 +2,7 @@ import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
 
 import { homeRoute, href } from '../../routes.ts'
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, manor, media, paper, rest } from '../../styles/tokens.stylex.ts'
 import type { ToastState } from '../machines/Toast.ts'
@@ -116,6 +117,7 @@ export const Dock = <M>(
   const text = news ? toast.text : toast.last
   return sx(
     h.a,
+    base.link,
     styles.toast,
     styles.on,
     styles.dock,

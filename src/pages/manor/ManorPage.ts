@@ -20,6 +20,7 @@ import { Workshop } from '../../manor/components/Workshop.ts'
 import type { RattlesState } from '../../manor/machines/Rattles.ts'
 import { panel } from '../../manor/panel.ts'
 import { homeRoute, href, restRoute, roomRoute } from '../../routes.ts'
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { fonts, manor, media } from '../../styles/tokens.stylex.ts'
 
@@ -234,7 +235,7 @@ export const ManorPage = <M>(
       sx(h.div, styles.wrap, upset && styles.quaking).children(
         sx(h.div, styles.head).children(
           h.span('SCADDEN MANOR'),
-          sx(h.a, styles.back).attr('href', href(homeRoute)).children('BACK'),
+          sx(h.a, base.link, styles.back).attr('href', href(homeRoute)).children('BACK'),
         ),
         sx(h.h1, styles.title).children('YOU FOUND THE MANOR'),
         sx(h.nav, styles.rooms, upset && styles.roomsBroken)
@@ -243,6 +244,7 @@ export const ManorPage = <M>(
             ...Arr.map(ROOMS, r =>
               sx(
                 h.a,
+                base.link,
                 styles.room,
                 r === room && styles.roomOn,
                 upset && styles.roomBroken,
@@ -265,7 +267,7 @@ export const ManorPage = <M>(
         room === 'trophy' && TrophyRoom(h),
         room === 'workshop' && Workshop(h, { props: { reducedMotion } }),
         sx(h.div, styles.play).children(
-          sx(h.a, styles.playLink)
+          sx(h.a, base.link, styles.playLink)
             .attrs({ href: MUNCH_MANOR_URL, target: '_blank', rel: 'noopener' })
             .children('PLAY MUNCH MANOR ↗'),
           h.span('Free, in your browser, up to 4 players.'),
@@ -313,6 +315,6 @@ const TrophyRoom = <M>(h: Html.H<M>) =>
         ),
       ),
     sx(h.p, panel.aside).children(
-      sx(h.a, panel.asideLink).attr('href', href(restRoute)).children(TROPHY_REST),
+      sx(h.a, base.link, panel.asideLink).attr('href', href(restRoute)).children(TROPHY_REST),
     ),
   )

@@ -4,6 +4,7 @@ import * as stylex from '@stylexjs/stylex'
 
 import { HOUSE } from '#content/home'
 
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, media } from '../../styles/tokens.stylex.ts'
 import { HouseDrawing } from '../mounts/HouseDrawing.ts'
@@ -50,7 +51,7 @@ export const House = <M>(h: Html.H<M>, still: boolean, played: M) =>
   )
 
 const Room = <M>(h: Html.H<M>, name: RoomName, target: string) =>
-  sx(h.a, styles.room, styles.link, rooms[name])
+  sx(h.a, base.link, styles.room, styles.link, rooms[name])
     .attrs({ href: target, 'data-room': name })
     .children(sx(h.b, styles.name, styles.pencilled).children(HOUSE.rooms[name].name))
 

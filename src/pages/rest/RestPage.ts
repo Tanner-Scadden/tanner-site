@@ -5,6 +5,7 @@ import { Array as Arr } from 'effect'
 import { REST_FACTS, SHOTS } from '#content/rest'
 
 import { homeRoute, href } from '../../routes.ts'
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { fonts, media, rest, widths } from '../../styles/tokens.stylex.ts'
 
@@ -127,7 +128,7 @@ export const RestPage = <M>(h: Html.H<M>) =>
       sx(h.div, styles.wrap).children(
         sx(h.div, styles.bar).children(
           h.span('REPLAY · 2018 → 2022'),
-          sx(h.a, styles.back).attr('href', href(homeRoute)).children('GG, BACK TO WORK'),
+          sx(h.a, base.link, styles.back).attr('href', href(homeRoute)).children('GG, BACK TO WORK'),
         ),
         sx(h.h1, styles.title).children('REST'),
         sx(h.div, styles.sub).children(
