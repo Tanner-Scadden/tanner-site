@@ -391,8 +391,12 @@ const resized = (canvas: HTMLCanvasElement): Stream.Stream<Input> =>
 const sources = (canvas: HTMLCanvasElement): ReadonlyArray<Stream.Stream<Input>> => [
   Stream.fromEventListener<PointerEvent>(window, 'pointermove', { passive: true }).pipe(
     Stream.filter(event => event.pointerType === 'mouse'),
+    // Over a block that's interactive in its own right, like a blog
+    // animation, the sheet keeps still, as if the cursor had left.
     Stream.map(event =>
-      Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } }),
+      event.target instanceof Element && event.target.closest('[data-blueprint-quiet]') !== null
+        ? Input.Left()
+        : Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } }),
     ),
   ),
   Stream.fromEventListener(document.documentElement, 'pointerleave').pipe(

@@ -5,9 +5,10 @@
 
 import type { Post } from '#domain/Post'
 
+import { beSomeoneWorthCalling } from './posts/be-someone-worth-calling.ts'
 import { styleGuide } from './posts/style-guide.ts'
 
-export const PUBLISHED: ReadonlyArray<Post> = []
+export const PUBLISHED: ReadonlyArray<Post> = [beSomeoneWorthCalling]
 
 // Drafts show under `bun run dev` only. A build swaps the list for an empty
 // one, so a draft's words never ship.

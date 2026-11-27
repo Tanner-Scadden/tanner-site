@@ -62,6 +62,8 @@ export const post = stylex.defineVars({
   codeGrid: { default: 'rgba(200, 222, 255, 0.06)', '@media print': 'transparent' },
   copied: '#9be3b0',
   failed: '#ff8a80',
+  // Harm, in a blog animation.
+  alarm: '#ff6b61',
 })
 
 // Shiki's token colors, for the code listings.

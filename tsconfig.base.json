@@ -187,7 +187,9 @@
               "src/Site.ts",
               "src/pages/**/*.ts",
               "src/components/*.ts",
-              "src/*/components/*.ts"
+              "src/*/components/*.ts",
+              "src/blog/animation/*.ts",
+              "src/network/*.ts"
             ],
             "options": {
               "diagnosticSeverity": {
@@ -203,7 +205,9 @@
               "src/work/webgpu/shaders.ts",
               "src/house/webgpu/renderer.ts",
               "src/house/webgpu/shaders.ts",
-              "src/house/webgpu/sprites.ts"
+              "src/house/webgpu/sprites.ts",
+              "src/blog/animation/webgpu/painters.ts",
+              "src/blog/animation/webgpu/shaders.ts"
             ],
             "options": {
               "diagnosticSeverity": {
