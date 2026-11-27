@@ -126,17 +126,19 @@ export const GREETING = "Hey, I'm Tanner 👋"
 
 export const WELCOME = "Come on in and click around. There's a few Easter eggs."
 
-// The third section of the page, about life away from the keyboard.
+// The fourth section of the page, about life away from the keyboard.
 export const PERSONAL_LIFE = 'PERSONAL LIFE'
 
 // NOTE: the floor plan next to the greeting. Each room is a section of the
-// page; D-13 stays shut, like the door at the bottom of the sheet.
+// page, in page order: the library is the blog. D-13 stays shut, like the
+// door at the bottom of the sheet.
 export const HOUSE = {
   sheet: 'SHEET A-1 · THE HOUSE',
   rooms: {
-    work: { name: '01 WORK' },
-    oss: { name: '02 OPEN SOURCE' },
-    outside: { name: `03 ${PERSONAL_LIFE}` },
+    library: { name: '01 LIBRARY' },
+    work: { name: '02 WORK' },
+    oss: { name: '03 OPEN SOURCE' },
+    outside: { name: `04 ${PERSONAL_LIFE}` },
     locked: { name: 'D-13', note: 'CLOSED' },
   },
 } as const

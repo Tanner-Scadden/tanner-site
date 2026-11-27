@@ -83,7 +83,7 @@ export interface HouseSettings {
 // NOTE: matches `struct View` in the shaders.
 const VIEW_FLOATS = 32
 const MAX_PIXEL_RATIO = 2
-const MAX_WALLS = 56
+const MAX_WALLS = 64
 const MAX_ROOMS = ROOM_ORDER.length
 // Five dots a paw print.
 const MAX_DOTS = PRINTS * 2 * 5
@@ -113,6 +113,7 @@ const measure = (canvas: HTMLCanvasElement, plan: HTMLElement): Plan => {
   const room = (name: string) => plan.querySelector(`[data-room="${name}"]`)
   const measured = planFor({
     house: rectOf(plan, origin),
+    library: rectOf(room('library'), origin),
     work: rectOf(room('work'), origin),
     oss: rectOf(room('oss'), origin),
     outside: rectOf(room('outside'), origin),

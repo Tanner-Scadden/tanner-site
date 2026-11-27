@@ -10,7 +10,7 @@ import { blueprint, media } from '../../styles/tokens.stylex.ts'
 import { HouseDrawing } from '../mounts/HouseDrawing.ts'
 import { houseMarker } from './house.stylex.ts'
 
-type RoomName = 'work' | 'oss' | 'outside'
+type RoomName = 'library' | 'work' | 'oss' | 'outside'
 
 // NOTE: in a browser with WebGPU the house starts out `data-gpu="starting"`,
 // with its CSS walls and labels already aside, so the plan doesn't show and
@@ -20,7 +20,8 @@ type RoomName = 'work' | 'oss' | 'outside'
 // too.
 const WEBGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
 
-// NOTE: a floor plan of the page. Each room jumps to its section. With
+// NOTE: a floor plan of the page. Each room jumps to its section, the
+// library to the blog. With
 // WebGPU the walls are drafted in and Teddy and Rain move in; without it the
 // CSS walls show and the house is empty. The renderer finds the plan by
 // `data-plan` and each room by `data-room`, to measure them. It reports each
@@ -38,6 +39,7 @@ export const House = <M>(h: Html.H<M>, still: boolean, played: M) =>
     sx(h.nav, styles.plan)
       .attrs({ 'aria-label': 'Floor plan of this page', 'data-plan': '' })
       .children(
+        Room(h, 'library', '#blog'),
         Room(h, 'work', '#work'),
         Room(h, 'oss', '#oss'),
         Room(h, 'outside', '#outside'),
@@ -105,7 +107,9 @@ const styles = stylex.create({
   // plan into 3D with its walls, from its own corner.
   plan: {
     display: 'grid',
-    gridTemplateColumns: '150fr 55fr 75fr',
+    // The library, Work and Open Source across the back; Personal Life and
+    // D-13 at the front.
+    gridTemplateColumns: '85fr 105fr 35fr 75fr',
     gridTemplateRows: '1.3fr 1fr',
     aspectRatio: '28 / 19',
     borderWidth: 2.5,
@@ -166,18 +170,19 @@ const styles = stylex.create({
     outlineStyle: { default: null, ':focus-visible': 'dashed' },
     outlineOffset: { default: null, ':focus-visible': -4 },
   },
-  locked: { gridColumn: 3, color: blueprint.hi },
+  locked: { gridColumn: 4, color: blueprint.hi },
   name: { fontSize: { default: 12, [media.narrow]: 10 }, letterSpacing: '.08em' },
   note: { fontSize: 8, letterSpacing: '.12em', color: blueprint.hi },
 })
 
 // Where each room sits on the plan, and the walls it draws.
 const rooms = stylex.create({
-  work: { gridColumn: 1, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
-  oss: { gridColumnStart: 2, gridColumnEnd: 4, borderBottomWidth: 1.5 },
+  library: { gridColumn: 1, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
+  work: { gridColumn: 2, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
+  oss: { gridColumnStart: 3, gridColumnEnd: 5, borderBottomWidth: 1.5 },
   outside: {
     gridColumnStart: 1,
-    gridColumnEnd: 3,
+    gridColumnEnd: 4,
     borderRightWidth: 1.5,
     justifyContent: 'flex-start',
     paddingTop: 14,

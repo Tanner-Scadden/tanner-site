@@ -8,8 +8,10 @@ import {
   PRINTS,
   PRINT_LIFE,
   REST_FRAME,
+  ROOMS,
   SKETCH_MS,
   WALK_FRAMES,
+  type Door,
   type Pets,
   type Plan,
   type Point,
@@ -28,15 +30,18 @@ import {
   stepPets,
 } from './house.ts'
 
-// A 280 x 190 house like the mock: Work and Open Source on top, Outside
-// Work and D-13 below.
+// A 280 x 190 house like the plan: the library, Work and Open Source at the
+// back, Personal Life and D-13 at the front.
 const rooms: Rooms = {
   house: { x: 20, y: 20, w: 280, h: 190 },
-  work: { x: 20, y: 20, w: 150, h: 108 },
-  oss: { x: 170, y: 20, w: 130, h: 108 },
-  outside: { x: 20, y: 128, w: 205, h: 82 },
-  locked: { x: 225, y: 128, w: 75, h: 82 },
+  library: { x: 20, y: 20, w: 80, h: 108 },
+  work: { x: 100, y: 20, w: 98, h: 108 },
+  oss: { x: 198, y: 20, w: 102, h: 108 },
+  outside: { x: 20, y: 128, w: 210, h: 82 },
+  locked: { x: 230, y: 128, w: 70, h: 82 },
 }
+// A spot up in Work.
+const inWork = { x: 150, y: 50 }
 const plan = planFor(rooms)
 
 const inside = ({ x, y }: Point, r: { x: number; y: number; w: number; h: number }) =>
@@ -76,8 +81,28 @@ describe('planFor', () => {
     const dashed = Arr.filter(plan.walls, w => w.dash > 0)
     assert.isAbove(dashed.length, 0)
     assert.isTrue(Arr.every(dashed, w => w.rise === 0))
-    const door = Arr.filter(plan.walls, w => w.rise > 0 && w.rise < 1)
+    // The door stands a little short of the walls; the bookcases lower still.
+    const door = Arr.filter(plan.walls, w => w.rise > 0.8 && w.rise < 1)
     assert.strictEqual(door.length, 1)
+  })
+
+  it('stands bookcases in the library, lower than the walls', () => {
+    const shelves = Arr.filter(
+      plan.walls,
+      w => w.rise > 0 && w.rise < 0.8 && inside(w.from, rooms.library) && inside(w.to, rooms.library),
+    )
+    assert.isAbove(shelves.length, 4)
+    // Against the walls, clear of the doorway into Work.
+    const toLibrary: ReadonlyArray<Door> = Arr.filter(plan.doors, d => d.between.includes('library'))
+    const mouths = Arr.flatMap(toLibrary, d => d.mouths)
+    assert.strictEqual(mouths.length, 2)
+    assert.isTrue(
+      Arr.every(shelves, w => Arr.every(mouths, m => distance(m, w.from) > 8 && distance(m, w.to) > 8)),
+    )
+  })
+
+  it('fits every wall in what the renderer draws', () => {
+    assert.isAtMost(plan.walls.length, 64)
   })
 
   it('keeps the yard inside Personal Life', () => {
@@ -118,6 +143,10 @@ describe('draftOf', () => {
     )
   })
 
+  it('fills the library in first, like the page', () => {
+    assert.strictEqual(ROOMS[0], 'library')
+  })
+
   it('is already drawn when motion is reduced', () => {
     const still = draftOf({ since: 0, still: true })
     assert.strictEqual(still.sketch, 1)
@@ -138,13 +167,13 @@ describe('the pets', () => {
   })
 
   it('Teddy comes over to the pointer and sits by it', () => {
-    const pointer = { x: 60, y: 50 }
+    const pointer = inWork
     const later = run(initialPets(plan, 3), { ms: 6000, pointer })
     assert.isAtMost(distance(later.teddy.at, pointer), 14)
   })
 
   it('Teddy play-bows and barks once he catches the pointer', () => {
-    const pointer = { x: 60, y: 50 }
+    const pointer = inWork
     const later = run(initialPets(plan, 3), { ms: 6000, pointer })
     assert.isTrue(later.teddy.alert)
     assert.strictEqual(frameOf(later.teddy), ALERT_FRAME)
@@ -158,7 +187,7 @@ describe('the pets', () => {
 
   it('Rain ignores the pointer, but sometimes sits up to watch it', () => {
     // A pointer up in Work: Teddy goes, Rain stays in the yard.
-    const pointer = { x: 60, y: 50 }
+    const pointer = inWork
     const later = run(initialPets(plan, 5), { ms: 20_000, pointer })
     assert.isTrue(inside(later.rain.at, plan.yard))
     const home = restingPets(plan)
@@ -221,7 +250,7 @@ describe('the pets', () => {
 
   it('sit still when motion is reduced', () => {
     const home = restingPets(plan)
-    const later = run(home, { ms: 3000, still: true, pointer: { x: 60, y: 50 } })
+    const later = run(home, { ms: 3000, still: true, pointer: inWork })
     assert.deepStrictEqual(later.teddy.at, home.teddy.at)
     assert.deepStrictEqual(later.rain.at, home.rain.at)
   })
@@ -241,10 +270,11 @@ describe('the pets', () => {
   it('keep their place in the yard when the house resizes', () => {
     const bigger: Plan = planFor({
       house: { x: 40, y: 40, w: 560, h: 380 },
-      work: { x: 40, y: 40, w: 300, h: 216 },
-      oss: { x: 340, y: 40, w: 260, h: 216 },
-      outside: { x: 40, y: 256, w: 410, h: 164 },
-      locked: { x: 450, y: 256, w: 150, h: 164 },
+      library: { x: 40, y: 40, w: 160, h: 216 },
+      work: { x: 200, y: 40, w: 196, h: 216 },
+      oss: { x: 396, y: 40, w: 204, h: 216 },
+      outside: { x: 40, y: 256, w: 420, h: 164 },
+      locked: { x: 460, y: 256, w: 140, h: 164 },
     })
     const moved = movePets(restingPets(plan), { from: plan, to: bigger })
     assert.isTrue(inside(moved.teddy.at, bigger.yard))
@@ -280,6 +310,17 @@ describe('the pets', () => {
     // And back to the yard once it's gone.
     const home = walkThrough(later, 8000, null)
     assert.strictEqual(areaOf(plan, home.teddy.at), 'outside')
+  })
+
+  it('Teddy goes through Work into the library, round the bookcases', () => {
+    // Up in the library's back corner, among the books.
+    const pointer = { x: 26, y: 26 }
+    const later = walkThrough(initialPets(plan, 3), 8000, pointer)
+    assert.strictEqual(areaOf(plan, later.teddy.at), 'library')
+    assert.isTrue(later.teddy.alert)
+    // He stays clear of the bookcases.
+    assert.isAbove(later.teddy.at.x, rooms.library.x + 7.5)
+    assert.isAbove(later.teddy.at.y, rooms.library.y + 7.5)
   })
 
   it('Teddy waits at the door of D-13, since it stays closed', () => {

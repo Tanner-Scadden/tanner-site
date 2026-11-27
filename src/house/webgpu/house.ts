@@ -2,6 +2,10 @@
 // out, so the walls, the drafting and the pets are testable without a GPU.
 // The renderer only draws what these return.
 //
+// The library at the back left is the blog. Its bookcases stand along its
+// back and side walls, drawn like the walls, only lower, with their books
+// standing between the shelf ends.
+//
 // The plan is drafted once: first the whole blueprint is sketched at once,
 // every wall a faint fine line, then the rooms fill in one after another and
 // the walls fill out to their full weight. Then the house rises into 3D (see
@@ -31,6 +35,7 @@ export interface Rect {
 // The house and its rooms, in CSS px from the canvas's corner.
 export interface Rooms {
   readonly house: Rect
+  readonly library: Rect
   readonly work: Rect
   readonly oss: Rect
   readonly outside: Rect
@@ -52,7 +57,7 @@ export interface Wall {
 }
 
 // The rooms a pet can be in, and the porch outside the front door.
-export type Area = 'work' | 'oss' | 'outside' | 'locked' | 'porch'
+export type Area = 'library' | 'work' | 'oss' | 'outside' | 'locked' | 'porch'
 
 // A gap in a wall the pets can walk through: a spot just inside each side,
 // so going from one to the other crosses the gap straight on.
@@ -92,6 +97,12 @@ const OUTER = 2.4
 const INNER = 1.6
 const THIN = 0.8
 const ARC_STEPS = 10
+// The bookcases: how far off the wall they stand, how deep they are, how
+// many books (bays) each holds, and how tall they stand next to a wall.
+const SHELF_OFF = 2.5
+const SHELF_DEPTH = 5
+const SHELF_BAYS = 5
+const SHELF_RISE = 0.55
 
 const pt = (x: number, y: number): Point => ({ x, y })
 
@@ -129,17 +140,40 @@ const inset = (r: Rect, by: number): Rect => ({
   h: Math.max(0, r.h - 2 * by),
 })
 
+// A bookcase along a wall, from `from` to `to`, standing `SHELF_DEPTH` into
+// the room along `into`: its front, then its uprights, ends included. The
+// uprights stand a little uneven, like books of different heights.
+const bookcase = (from: Point, to: Point, into: Point): ReadonlyArray<Wall> => {
+  const off = (p: Point, by: number) => pt(p.x + into.x * by, p.y + into.y * by)
+  const shelf = { alpha: 0.75, rise: SHELF_RISE }
+  return [
+    wall(off(from, SHELF_OFF + SHELF_DEPTH), off(to, SHELF_OFF + SHELF_DEPTH), THIN, shelf),
+    ...Arr.makeBy(SHELF_BAYS + 1, i => {
+      const at = pt(from.x + ((to.x - from.x) * i) / SHELF_BAYS, from.y + ((to.y - from.y) * i) / SHELF_BAYS)
+      const end = i === 0 || i === SHELF_BAYS
+      return wall(off(at, SHELF_OFF), off(at, SHELF_OFF + SHELF_DEPTH), THIN, {
+        alpha: 0.75,
+        rise: end ? SHELF_RISE : SHELF_RISE * (i % 2 === 0 ? 0.8 : 0.65),
+      })
+    }),
+  ]
+}
+
+// How far the bookcases take up the library's back and side.
+const SHELVED = SHELF_OFF + SHELF_DEPTH
+
 // Every wall of the house, in the order the pens draft them: the outside
-// walls clockwise from the front door, the inside walls, the doors, and the
-// locked room's cross last.
+// walls clockwise from the front door, the inside walls, the doors, the
+// library's bookcases, and the locked room's cross last.
 export const planFor = (rooms: Rooms): Plan => {
-  const { house, work, outside, locked } = rooms
+  const { house, library, work, outside, locked } = rooms
   const left = house.x
   const top = house.y
   const right = house.x + house.w
   const bottom = house.y + house.h
   const middle = work.y + work.h
   const split = work.x + work.w
+  const stacks = library.x + library.w
   const lockX = locked.x
 
   const doorWidth = Math.min(30, outside.w * 0.3)
@@ -150,6 +184,9 @@ export const planFor = (rooms: Rooms): Plan => {
   const hallLeft = work.x + work.w * 0.35
   const sideWidth = Math.min(24, work.h * 0.3)
   const sideTop = work.y + work.h * 0.45
+  // The library's doorway into Work, a little lower, clear of the shelves.
+  const stacksWidth = Math.min(24, library.h * 0.3)
+  const stacksTop = library.y + library.h * 0.5
 
   const walls: ReadonlyArray<Wall> = [
     // The outside, clockwise from the front door.
@@ -164,6 +201,9 @@ export const planFor = (rooms: Rooms): Plan => {
     // Between Work and Open Source, with a doorway.
     wall(pt(split, top), pt(split, sideTop), INNER),
     wall(pt(split, sideTop + sideWidth), pt(split, middle), INNER),
+    // Between the library and Work, with a doorway.
+    wall(pt(stacks, top), pt(stacks, stacksTop), INNER),
+    wall(pt(stacks, stacksTop + stacksWidth), pt(stacks, middle), INNER),
     // The locked room.
     wall(pt(lockX, middle), pt(lockX, bottom), INNER),
     // The front door, open, and its swing. The door stands a little shorter
@@ -172,6 +212,9 @@ export const planFor = (rooms: Rooms): Plan => {
     ...swing(pt(doorLeft, bottom), doorWidth, -Math.PI / 2, 0),
     // The doorway's swing into Personal Life.
     ...swing(pt(hallLeft, middle), hallWidth, 0, Math.PI / 2),
+    // The library's bookcases: along the back wall, then down the side.
+    ...bookcase(pt(library.x + SHELF_OFF, top), pt(stacks - SHELF_OFF, top), pt(0, 1)),
+    ...bookcase(pt(left, top + SHELVED + SHELF_OFF), pt(left, middle - SHELF_OFF), pt(1, 0)),
     // D-13, crossed out.
     wall(
       pt(locked.x + 8, locked.y + 8),
@@ -196,6 +239,7 @@ export const planFor = (rooms: Rooms): Plan => {
     { between: ['outside', 'porch'], mouths: across((doorLeft + doorRight) / 2, bottom, 0, 1) },
     { between: ['work', 'outside'], mouths: across(hallLeft + hallWidth / 2, middle, 0, 1) },
     { between: ['work', 'oss'], mouths: across(split, sideTop + sideWidth / 2, 1, 0) },
+    { between: ['library', 'work'], mouths: across(stacks, stacksTop + stacksWidth / 2, 1, 0) },
   ]
 
   // The open front door stands in Personal Life, hinged at the wall.
@@ -228,11 +272,12 @@ const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
 // off the walls otherwise.
 const STEP_IN = 10
 const WALL_GAP = 7
-// Also the order the rooms fill in.
-export const ROOMS = ['work', 'oss', 'outside', 'locked'] as const
+// Also the order the rooms fill in: page order, so the library first.
+export const ROOMS = ['library', 'work', 'oss', 'outside', 'locked'] as const
 export type Room = (typeof ROOMS)[number]
 // The rooms Teddy can get into. D-13 is closed.
-const OPEN: ReadonlyArray<Room> = ['work', 'oss', 'outside']
+const OPEN: ReadonlyArray<Room> = ['library', 'work', 'oss', 'outside']
+const isOpen = (area: Area): area is Room => Arr.contains(OPEN, area)
 
 const within = (p: Point, r: Rect): boolean =>
   p.x >= r.x - 0.01 && p.x <= r.x + r.w + 0.01 && p.y >= r.y - 0.01 && p.y <= r.y + r.h + 0.01
@@ -247,8 +292,14 @@ export const areaOf: {
   ),
 )
 
-// Where in a room a pet can stand without touching a wall.
-const floorOf = (plan: Plan, room: Room): Rect => inset(plan.rooms[room], WALL_GAP)
+// Where in a room a pet can stand without touching a wall, or in the
+// library, a bookcase.
+const floorOf = (plan: Plan, room: Room): Rect => {
+  const floor = inset(plan.rooms[room], WALL_GAP)
+  return room === 'library'
+    ? { x: floor.x + SHELVED, y: floor.y + SHELVED, w: Math.max(0, floor.w - SHELVED), h: Math.max(0, floor.h - SHELVED) }
+    : floor
+}
 
 const nearest = (p: Point, points: ReadonlyArray<Point>): Point =>
   Arr.reduce(points, p, (best, q) => (best === p || distance(p, q) < distance(p, best) ? q : best))
@@ -260,7 +311,7 @@ export const reachable: {
   (plan: Plan, p: Point): Point
 } = dual(2, (plan: Plan, p: Point): Point => {
   const area = areaOf(plan, p)
-  return area === 'work' || area === 'oss' || area === 'outside'
+  return isOpen(area)
     ? clampTo(p, floorOf(plan, area))
     : nearest(p, Arr.map(OPEN, room => clampTo(p, floorOf(plan, room))))
 })
