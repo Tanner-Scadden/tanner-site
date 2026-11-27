@@ -35,7 +35,7 @@ page, so there's no new copy to write or approve.
 Start the dev server if it isn't running (`bun run dev --port 5199`), then:
 
 ```sh
-bun run card <slug> --figure 2 --interact 1 --wait 2600
+bun run card post <slug> --figure 2 --interact 1 --wait 2600
 ```
 
 | Flag | Meaning | Default |
@@ -47,6 +47,9 @@ bun run card <slug> --figure 2 --interact 1 --wait 2600
 | `--wait` | Milliseconds to let it play before the shot. | `2600` |
 | `--out` | Where to write the card. | `public/og/<slug>.png` |
 | `--url` | The dev server. | `http://localhost:5199` |
+
+`bun run card --help`, or `bun run card post --help`, lists them too. The
+script is an Effect CLI (`effect/cli`) run on Bun.
 
 The script logs the post's figures by what their INTERACT does, so you can
 check `--figure` points at the right one. It needs Google Chrome installed,
@@ -92,7 +95,7 @@ The home page, /blog and posts without a card share the site's card,
 `src/content/home.ts`) and the house. When any of those change, remake it:
 
 ```sh
-bun run card --home
+bun run card home
 ```
 
 Then update the alt text in both places it lives, `index.html` (both

@@ -27,6 +27,7 @@
   "devDependencies": {
     "@babel/core": "7",
     "@babel/eslint-parser": "7",
+    "@effect/platform-bun": "4.1.4",
     "@effect/tsgo": "0.67.5",
     "@effect/vitest": "4.1.4",
     "@stylexjs/eslint-plugin": "0.19.2",
