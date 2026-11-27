@@ -212,7 +212,7 @@ struct Wall {
   path: vec4f,
   // width, reveal, gold, dash
   look: vec4f,
-  // alpha, rise, unused
+  // alpha, rise, base (how far off the floor it starts), unused
   more: vec4f,
 }
 
@@ -235,8 +235,9 @@ const SKETCH_ALPHA = 0.55;
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
   let w = walls[i];
-  // Nothing of it is sketched yet.
-  if (w.look.y <= 0.0) { return hidden(i); }
+  // Nothing of it is sketched yet, or it's off the floor, like a shelf
+  // board, and leaves no line on it.
+  if (w.look.y <= 0.0 || w.more.z > 0.0) { return hidden(i); }
   let lo = min(w.path.xy, w.path.zw) - MARGIN;
   let hi = max(w.path.xy, w.path.zw) + MARGIN;
   var out: Out;
@@ -330,7 +331,8 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> PanelOu
   let q = QUAD[v];
   let u = mix(-BLEED, len * w.look.y + BLEED, q.x);
   let z = mix(-BLEED, h + BLEED, q.y);
-  out.position = project(vec3f(a + ab / len * u, z));
+  // A shelf board or a book on it starts partway up.
+  out.position = project(vec3f(a + ab / len * u, z + view.height * w.more.z));
   out.uv = vec2f(u, z);
   return out;
 }

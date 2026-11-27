@@ -43,8 +43,8 @@ const rooms: Rooms = {
 }
 // A spot up in Work.
 const inWork = { x: 150, y: 50 }
-// How tall the bookcases' ends stand; every book is shorter.
-const CASE = 0.72
+// How tall the bookcase stands; everything on its shelves is lower.
+const CASE = 0.9
 const plan = planFor(rooms)
 
 const inside = ({ x, y }: Point, r: { x: number; y: number; w: number; h: number }) =>
@@ -84,27 +84,53 @@ describe('planFor', () => {
     const dashed = Arr.filter(plan.walls, w => w.dash > 0)
     assert.isAbove(dashed.length, 0)
     assert.isTrue(Arr.every(dashed, w => w.rise === 0))
-    // The door stands a little short of the walls; the bookcases lower still.
-    const door = Arr.filter(plan.walls, w => w.rise > 0.8 && w.rise < 1)
+    // The door stands a little short of the walls.
+    const door = Arr.filter(
+      plan.walls,
+      w => w.rise > 0.8 && w.rise < 1 && !inside(w.from, rooms.library),
+    )
     assert.strictEqual(door.length, 1)
   })
 
-  // Everything standing in the library that isn't a wall: the books and
-  // the bookcase ends.
+  // Everything standing in the library that isn't a wall: the bookcase's
+  // ends and boards, and the books.
   const furniture = Arr.filter(
     plan.walls,
-    w => w.rise > 0 && w.rise < 0.8 && inside(w.from, rooms.library) && inside(w.to, rooms.library),
+    w => w.rise > 0 && w.rise < 1 && inside(w.from, rooms.library) && inside(w.to, rooms.library),
   )
+  // The boards run the length of the case; the ends stand its full height.
+  const boards = Arr.filter(furniture, w => w.rise <= 0.06 && distance(w.from, w.to) > rooms.library.w * 0.8)
+  const books = Arr.filter(furniture, w => w.rise !== CASE && !boards.includes(w))
 
-  it('fills the library\'s shelves with books of different heights', () => {
-    // Books are short panels on the shelf, so they show as spines. The
-    // bookcase ends stand taller.
-    const books = Arr.filter(furniture, w => w.rise < CASE)
-    assert.isAtLeast(books.length, 20)
-    // Uneven, with a few gold spines and one lying flat on each shelf.
+  it('stands a bookcase in the library, with a board under each shelf', () => {
+    assert.strictEqual(Arr.filter(furniture, w => w.rise === CASE && w.base === 0).length, 2)
+    // A kick board on the floor, one between the shelves, and one on top.
+    assert.strictEqual(boards.length, 3)
+    assert.strictEqual(Arr.filter(boards, w => w.base > 0).length, 2)
+    assert.isTrue(Arr.every(boards, w => w.base + w.rise <= CASE + 1e-9))
+  })
+
+  it('fills its two shelves with books of different heights', () => {
+    // Books are short panels on the shelf, so they show as spines.
+    assert.isAtLeast(books.length, 16)
+    // On two shelves: some on the floor of the case, some on the board.
+    assert.strictEqual(new Set(Arr.map(books, w => w.base)).size, 2)
+    // Uneven, with a few gold spines and one lying flat.
     assert.isAtLeast(new Set(Arr.map(books, w => w.rise)).size, 8)
     assert.isAtLeast(Arr.filter(books, w => w.gold === 1).length, 4)
-    assert.strictEqual(Arr.filter(books, w => w.rise < 0.2).length, 2)
+    assert.strictEqual(Arr.filter(books, w => w.rise < 0.15).length, 1)
+  })
+
+  it('keeps every book on its shelf, under the board above', () => {
+    for (const book of books) {
+      assert.isAtMost(book.base + book.rise, CASE)
+      for (const board of boards) {
+        assert.isFalse(
+          book.base < board.base + board.rise && book.base + book.rise > board.base,
+          'a book runs through a board',
+        )
+      }
+    }
   })
 
   it('keeps the library\'s furniture clear of its doorway', () => {
