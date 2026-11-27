@@ -38,31 +38,31 @@ export const HATCH_GAP = 0.07
 export const HATCHES = Math.floor((BOUNDS.x * 2) / HATCH_GAP) + 1
 
 // The ground draws out from the middle over this long.
-const GROUND_DRAW = 1.6
+const GROUND_DRAW = 1
 // The first seed: when it starts to fall, and how long it takes.
-const FIRST_FALL = 0.3
-const FIRST_FLIGHT = 4.2
+const FIRST_FALL = 0.2
+const FIRST_FLIGHT = 2.2
 // How long a seed rests on the ground before it sprouts.
-const REST = 0.5
+const REST = 0.3
 // How long the first tree takes to grow.
-const FIRST_GROW = 7
+const FIRST_GROW = 3.5
 // The first tree's seeds: the first release, the gap between them, and
 // how long they're in the air.
-const FIRST_RELEASE = 13
-const RELEASE_GAP = 0.45
-const FLIGHT = { min: 3, spread: 0.8 } as const
-const GROVE_GROW = { min: 5, spread: 0.8 } as const
+const FIRST_RELEASE = 6.5
+const RELEASE_GAP = 0.25
+const FLIGHT = { min: 1.6, spread: 0.4 } as const
+const GROVE_GROW = { min: 2.8, spread: 0.4 } as const
 // The grove's own seeds, so the last frame still has something coming.
-const LATE_RELEASES = [23.2, 23.8, 25.8, 26.6] as const
-const LATE_FLIGHTS = [2.4, 2.6, 4.2, 4.2] as const
-const SAPLING_GROW = 6
+const LATE_RELEASES = [12.2, 12.6, 13.6, 14] as const
+const LATE_FLIGHTS = [1.4, 1.5, 2.4, 2.4] as const
+const SAPLING_GROW = 3.2
 // How long a leaf takes to open, a blossom to brighten before its seed
 // lets go, and a landing ring to spread.
-export const LEAF_OPEN = 0.6
-export const BLOSSOM = 1.2
+export const LEAF_OPEN = 0.4
+export const BLOSSOM = 0.8
 export const RING = 1.2
 // When everything that's going to happen in a run has happened.
-export const END = 28
+export const END = 15
 
 // Mulberry32: a small seeded generator, so a run replays from its seed.
 const random = (seed: number) => {
