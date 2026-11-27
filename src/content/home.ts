@@ -10,6 +10,8 @@ export interface Job {
   readonly problem: string
   readonly approach: string
   readonly result: string
+  // The colour of the wave that runs through this job, if not the usual gold.
+  readonly wave?: string
 }
 
 export const WORK: ReadonlyArray<Job> = [
@@ -67,6 +69,8 @@ export const WORK: ReadonlyArray<Job> = [
     approach:
       'A deterministic simulation: the server runs the same game as every client, and any run replays from its seed.',
     result: 'Anyone can jump in with friends for free, on a laptop or a phone.',
+    // Its own zombie green.
+    wave: '#7ce36b',
   },
 ]
 
