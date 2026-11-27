@@ -1,17 +1,20 @@
 import { Command, Component, Head, Router, Subscription, UiSchema } from '@effect/ui'
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
-import { Effect, Layer, Schema, Stream, String as Str } from 'effect'
+import { Effect, Layer, Option, Schema, Stream, String as Str } from 'effect'
 
 import { EggId } from '#domain/Egg'
 
 import { Blueprint } from './blueprint/components/Blueprint.ts'
 import { Outbreak } from './blueprint/components/Outbreak.ts'
+import { findPost } from './blog/posts.ts'
 import { Gpu, GpuEvent } from './blueprint/machines/Gpu.ts'
 import { Eggs, EggsEvent } from './eggs/machines/Eggs.ts'
 import { beforePrint } from './eggs/subscriptions/beforePrint.ts'
 import { devtools } from './eggs/subscriptions/devtools.ts'
 import { Zombies } from './horde/components/Zombies.ts'
 import { Horde, HordeEvent, zombiesOf } from './horde/machines/Horde.ts'
+import { BlogPage } from './pages/blog/BlogPage.ts'
+import { PostPage } from './pages/blog/PostPage.ts'
 import { HomePage } from './pages/HomePage.ts'
 import { ManorPage } from './pages/manor/ManorPage.ts'
 import { NotFoundPage } from './pages/NotFoundPage.ts'
@@ -95,6 +98,8 @@ const roomColorOf = (page: PageState): { readonly name: string; readonly color: 
     Home: () => BLUEPRINT,
     Manor: () => MANOR,
     Rest: () => REST,
+    Blog: () => BLUEPRINT,
+    Post: () => BLUEPRINT,
     NotFound: () => BLUEPRINT,
   })
 
@@ -110,6 +115,12 @@ const titleOf = (page: PageState): string =>
         ? 'The Manor · Tanner Scadden'
         : `${Str.capitalize(room)} · The Manor · Tanner Scadden`,
     Rest: () => 'Rest · Tanner Scadden',
+    Blog: () => 'Blog · Tanner Scadden',
+    Post: ({ slug }) =>
+      Option.match(findPost(slug), {
+        onNone: () => 'Blog · Tanner Scadden',
+        onSome: post => `${post.title} · Tanner Scadden`,
+      }),
     NotFound: () => 'Not found · Tanner Scadden',
   })
 
@@ -132,6 +143,13 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
       })
     case 'Rest':
       return RestPage(h)
+    case 'Blog':
+      return BlogPage(h)
+    case 'Post':
+      return Option.match(findPost(model.page.slug), {
+        onNone: () => NotFoundPage(h),
+        onSome: post => PostPage(h, post),
+      })
     case 'NotFound':
       return NotFoundPage(h)
   }
@@ -185,7 +203,10 @@ export const SiteNoDeps = SiteDef.make({
       Zombies(h, zombiesOf(model.horde), id => SiteMessage.ClickedZombie({ id })),
       // The counter only shows on pages that show the pens.
       roomColorOf(model.page) === BLUEPRINT && Outbreak(h, model.gpu),
-      model.page._tag === 'Home' ? Toast(h, model.toast) : Dock(h, model.toast),
+      // The hidden pages dock the toast as the way home; the blog keeps it.
+      roomColorOf(model.page) === BLUEPRINT && model.page._tag !== 'NotFound'
+        ? Toast(h, model.toast)
+        : Dock(h, model.toast),
     ),
 })
 
