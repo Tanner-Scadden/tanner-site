@@ -6,11 +6,6 @@
 // are a warm white, and light up when you help the person they came with.
 // Everyone further out is the sheet's faint line colour.
 //
-// When you jump, the network dims so the calls stand out. A call is a gold
-// spark that leaves a gold trail behind it, and whoever made it keeps a
-// gold ring, so the finished frame still shows who called and how the call
-// found you.
-//
 // Pointing at someone picks them out: their links and the people on the
 // other end stay bright, a ring goes round them, and the rest dims.
 //
@@ -26,7 +21,6 @@ import {
   type Frame,
   type FrameDot,
   type FrameEdge,
-  MAX_CALLS,
   MAX_EDGES,
   MAX_NODES,
   MAX_TEARS,
@@ -41,20 +35,16 @@ const WARM: Rgb = [1, 0.94, 0.8]
 // The post's red, #ff6b61.
 const RED: Rgb = [1, 0.42, 0.38]
 
-// The most a frame draws: every link plus a trail per link a call crosses,
-// and everyone, plus rings, callers' rings, sparks and the picked ring.
-// Each bad interaction adds its ripple, the two torn ends and a ring.
-export const MAX_LINES = MAX_EDGES + MAX_CALLS * 6 + MAX_TEARS * 3
-export const MAX_DOTS = MAX_NODES + MAX_CALLS * 4 + 16 + MAX_TEARS * 3
+// The most a frame draws: every link, and everyone, plus rings, sparks
+// and the picked ring. Each bad interaction adds its ripple, the two torn
+// ends and a ring.
+export const MAX_LINES = MAX_EDGES + MAX_TEARS * 3
+export const MAX_DOTS = MAX_NODES + 16 + MAX_TEARS * 3
 
 // How much of itself a branch keeps once a bad interaction has cost you it.
 const CUT = 0.28
 const cutKeep = (cut: number) => 1 - (1 - CUT) * cut
 const kept = ([r, g, b, a]: Rgba, cut: number): Rgba => [r, g, b, a * cutKeep(cut)]
-
-// How much of itself the network keeps once you've jumped.
-const QUIET = 0.45
-const HELPED_QUIET = 0.75
 
 const rgba = (rgb: Rgb, alpha: number): Rgba => [rgb[0], rgb[1], rgb[2], alpha]
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
@@ -78,8 +68,6 @@ const edgeStyle = (edge: FrameEdge): { readonly width: number; readonly color: R
 }
 
 const dotStyle = (dot: FrameDot): { readonly radius: number; readonly glow: number; readonly color: Rgba } => {
-  if (dot.caller && dot.kind !== 'you') return { radius: 4.5, glow: 10, color: rgba(GOLD, 1) }
-  if (dot.relayed) return { radius: 4.2, glow: 6, color: rgba(GOLD, 0.95) }
   switch (dot.kind) {
     case 'you':
       return { radius: 7, glow: 14, color: rgba(GOLD, 1) }
@@ -147,10 +135,6 @@ export const shapesOf = (
     })
   const shown = (id: number) => Option.isNone(picked) || near.has(id)
   const faded = ([r, g, b, a]: Rgba, keep: boolean): Rgba => [r, g, b, keep ? a : a * DIMMED]
-  // Once you've jumped, everything but you and the calls steps back.
-  // The people you helped step back less: they're the net.
-  const hushOf = (keep: number) => 1 - (1 - keep) * frame.quiet
-  const hushed = ([r, g, b, a]: Rgba, keep: number): Rgba => [r, g, b, a * hushOf(keep)]
 
   const links = Arr.map(frame.edges, (edge): Line => {
     const style = edgeStyle(edge)
@@ -162,25 +146,11 @@ export const shapesOf = (
       color: kept(
         lit
           ? [style.color[0], style.color[1], style.color[2], Math.max(style.color[3], 0.85)]
-          : faded(hushed(style.color, edge.kind === 'yours' ? HELPED_QUIET : QUIET), touches(edge)),
+          : faded(style.color, touches(edge)),
         edge.cut,
       ),
     }
   })
-
-  const trails = Arr.map(
-    frame.trails,
-    (trail): Line => ({
-      from: px(trail.from),
-      to: px(trail.to),
-      width: 2.5,
-      // Pointing at whoever called keeps their whole call lit.
-      color: kept(
-        faded(rgba(GOLD, 0.95), touches(trail) || Option.exists(picked, id => id === trail.caller)),
-        trail.cut,
-      ),
-    }),
-  )
 
   const rings = Arr.map(frame.rings, (ring): Dot => {
     const [x, y] = px([ring.x, ring.y])
@@ -188,39 +158,29 @@ export const shapesOf = (
     return {
       x,
       y,
-      radius: ring.big ? 10 + 110 * t : 6 + 30 * t,
+      radius: 6 + 30 * t,
       glow: 0,
-      ring: ring.big ? 2 : 1.5,
+      ring: 1.5,
       color: ring.alarm === true
         ? rgba(RED, 0.8 * (1 - ring.progress))
-        : faded(rgba(GOLD, (ring.big ? 0.6 : 0.75) * (1 - ring.progress)), Option.isNone(picked)),
+        : faded(rgba(GOLD, 0.75 * (1 - ring.progress)), Option.isNone(picked)),
     }
   })
 
   const people = Arr.map(frame.dots, (dot): Dot => {
     const style = dotStyle(dot)
     const [x, y] = px([dot.x, dot.y])
-    // You glow a little brighter with every call that reaches you.
-    const glow = dot.kind === 'you' ? style.glow + 4 * frame.answered : style.glow
-    const stays = dot.kind === 'you' || dot.caller || dot.relayed
     return {
       x,
       y,
       radius: style.radius * dot.grown,
-      glow: glow * dot.grown * (1 - dot.cut),
+      glow: style.glow * dot.grown * (1 - dot.cut),
       ring: 0,
       color: kept(
-        faded(stays ? style.color : hushed(style.color, dot.kind === 'met' ? HELPED_QUIET : QUIET), shown(dot.id)),
+        faded(style.color, shown(dot.id)),
         dot.cut,
       ),
     }
-  })
-
-  // A ring round everyone who called, so the end still says who did.
-  const callers = Arr.flatMap(frame.dots, (dot): ReadonlyArray<Dot> => {
-    if (!dot.caller || dot.kind === 'you') return []
-    const [x, y] = px([dot.x, dot.y])
-    return [{ x, y, radius: 9, glow: 0, ring: 1.5, color: kept(faded(rgba(GOLD, 0.85), shown(dot.id)), dot.cut) }]
   })
 
   const halo = Option.flatMap(picked, id =>
@@ -231,7 +191,7 @@ export const shapesOf = (
         return {
           x,
           y,
-          radius: dotStyle(dot).radius + (dot.caller ? 9 : 5),
+          radius: dotStyle(dot).radius + 5,
           glow: 0,
           ring: 1.5,
           color: rgba(WARM, 0.9),
@@ -267,7 +227,7 @@ export const shapesOf = (
   })
 
   return {
-    lines: [...links, ...trails, ...ripples, ...snaps],
-    dots: [...rings, ...people, ...callers, ...Option.toArray(halo), ...sparks, ...heads],
+    lines: [...links, ...ripples, ...snaps],
+    dots: [...rings, ...people, ...Option.toArray(halo), ...sparks, ...heads],
   }
 }

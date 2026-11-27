@@ -23,10 +23,7 @@ export const networkScene: Scene = {
     {
       id: 'good',
       label: 'HIGH IMPACT',
-      // The second sentence names the late beat, since the canvas has no
-      // words of its own.
-      caption:
-        "Network over time as you have high impact on people's lives. When you jump, the calls come back through it.",
+      caption: "Network over time as you have high impact on people's lives.",
       tone: 'hi',
     },
   ],
