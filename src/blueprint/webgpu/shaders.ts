@@ -24,7 +24,7 @@ const MINOR = 24.0;
 const MAJOR = 120.0;
 const LENS_RADIUS = 140.0;
 // Below 1, so the lens magnifies smoothly and never folds over itself.
-const LENS_STRENGTH = 0.14;
+const LENS_STRENGTH = 0.09;
 
 // A soft magnifier at the pointer: the screen point p shows the page at
 // p - lensOffset(p), so the lines spread a little around the cursor.
@@ -73,8 +73,8 @@ fn fs(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let major = lines(doc, MAJOR);
   let minor = lines(doc, MINOR);
   var color = PAPER;
-  color = mix(color, INK, minor * (0.05 + 0.05 * near));
-  color = mix(color, INK, major * (0.14 + 0.16 * near));
+  color = mix(color, INK, minor * (0.05 + 0.025 * near));
+  color = mix(color, INK, major * (0.14 + 0.08 * near));
   // While the flow runs, the major lines warm up a little.
   color = mix(color, HIGHLIGHT, major * 0.06 * frame.flow);
   return vec4f(color, 1.0);
