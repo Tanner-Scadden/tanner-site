@@ -5,7 +5,7 @@
 // The plan is drafted once: pens trace every wall one after another, then
 // the front door swings in. Then the house rises into 3D (see ./view), and
 // once it's up, Teddy and Rain move in through the front door. Teddy wanders
-// the Outside Work room, chases the pointer whenever it's on the house, and
+// the Personal Life room, chases the pointer whenever it's on the house, and
 // play-bows and barks once he catches it. Rain ignores it and does her own
 // thing: mostly naps, sometimes sits up to watch it, and bolts when Teddy
 // gets too close. With motion reduced the house is simply up, and the pets
@@ -153,7 +153,7 @@ export const planFor = (rooms: Rooms): Plan => {
     wall(pt(left, top), pt(right, top), OUTER),
     wall(pt(right, top), pt(right, bottom), OUTER),
     wall(pt(right, bottom), pt(doorRight, bottom), OUTER),
-    // Down the middle, with a doorway from Work into Outside Work.
+    // Down the middle, with a doorway from Work into Personal Life.
     wall(pt(left, middle), pt(hallLeft, middle), INNER),
     wall(pt(hallLeft + hallWidth, middle), pt(right, middle), INNER),
     // Between Work and Open Source, with a doorway.
@@ -165,7 +165,7 @@ export const planFor = (rooms: Rooms): Plan => {
     // than the walls.
     wall(pt(doorLeft, bottom), pt(doorLeft, bottom - doorWidth), THIN, { alpha: 0.8, rise: 0.82 }),
     ...swing(pt(doorLeft, bottom), doorWidth, -Math.PI / 2, 0),
-    // The doorway's swing into Outside Work.
+    // The doorway's swing into Personal Life.
     ...swing(pt(hallLeft, middle), hallWidth, 0, Math.PI / 2),
     // D-13, crossed out.
     wall(
@@ -193,7 +193,7 @@ export const planFor = (rooms: Rooms): Plan => {
     { between: ['work', 'oss'], mouths: across(split, sideTop + sideWidth / 2, 1, 0) },
   ]
 
-  // The open front door stands in Outside Work, hinged at the wall.
+  // The open front door stands in Personal Life, hinged at the wall.
   const obstacles: ReadonlyArray<Obstacle> = [
     {
       from: pt(doorLeft, bottom),

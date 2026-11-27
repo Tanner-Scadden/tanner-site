@@ -15,7 +15,7 @@ export const EGG_NAMES: Record<EggId, string> = {
 // at where to look without giving the egg away.
 export const EGG_HINTS: Record<EggId, string> = {
   manor: 'Every blueprint has a door. Check the bottom corner.',
-  worlds: 'Read about my life outside work. One phrase leads somewhere.',
+  worlds: 'Read about my personal life. One phrase leads somewhere.',
   thesis: 'The big line up top could be simpler. Give it a click.',
   konami: 'Old games had a secret code. It starts ↑ ↑ ↓ ↓.',
   console: 'Developers, open your tools. Someone left a note.',

@@ -88,23 +88,15 @@ a.house-room:focus-visible { outline: 2px dashed var(--hi); outline-offset: -4px
 .house-room[data-room="outside"] { grid-column: 1 / 3; border-right: 1.5px solid var(--line); justify-content: flex-start; padding-top: 14px }
 .house-room.locked { grid-column: 3; color: var(--hi) }
 .house-room.locked small { color: var(--hi); font-size: 8px }
-.house figcaption { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 10px; letter-spacing: .14em }
-.house .here { color: var(--hi); display: inline-flex; align-items: center; gap: 8px; margin-left: calc(28% - 4px) }
-.house .here::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hi) }
-.house .pets { display: none; gap: 14px; color: var(--dim) }
-.house .pets span { display: inline-flex; align-items: center; gap: 6px }
-.house .pets .teddy::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #f5ecdd; box-shadow: inset -2px -1px 0 #e2c19b }
-.house .pets .rain::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #717b88; box-shadow: 0 0 0 1px #d2d9e2 }
 /* while WebGPU draws the plan, the CSS walls step aside and the labels
    wait for the pens */
 .house[data-gpu="on"] .plan, .house[data-gpu="on"] .house-room { border-color: transparent }
 /* the renderer tips the plan into 3D with the walls, from its own corner */
 .house[data-gpu="on"] .plan { transform-origin: 0 0; will-change: transform }
 .house[data-gpu="on"] .plan::after { display: none }
-.house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] figcaption, .house[data-gpu="on"] .sheet-no { transition: opacity .6s ease-out; opacity: 0 }
-.house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] figcaption, .house[data-gpu="on"][data-drawn] .sheet-no { opacity: 1 }
-.house[data-gpu="on"] .pets { display: inline-flex }
-@media (prefers-reduced-motion: reduce) { .house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] figcaption, .house[data-gpu="on"] .sheet-no { transition: none } }
+.house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] .sheet-no { transition: opacity .6s ease-out; opacity: 0 }
+.house[data-gpu="on"][data-drawn] .house-room > *, .house[data-gpu="on"][data-drawn] .sheet-no { opacity: 1 }
+@media (prefers-reduced-motion: reduce) { .house[data-gpu="on"] .house-room > *, .house[data-gpu="on"] .sheet-no { transition: none } }
 .hero .thesis:focus-visible { outline: 2px dashed var(--hi); outline-offset: 4px }
 
 .job { display: grid; grid-template-columns: 200px 1fr; gap: 28px; padding: 30px 0; border-bottom: 1px dashed var(--faint) }
