@@ -9,7 +9,7 @@ import { blogRoute, href, postRoute } from '../../routes.ts'
 import { BlogBar } from './BlogPage.ts'
 
 // NOTE: /blog/:slug. The title block sits on the blueprint like the corner
-// of a drawing; the body is printed on paper so it's easy to read.
+// of a drawing; the body gets a deeper panel with no grid behind the text.
 export const PostPage = <M>(h: Html.H<M>, post: Post) => {
   const sheet = sheetOf(post)
   const { newer, older } = neighboursOf(post)

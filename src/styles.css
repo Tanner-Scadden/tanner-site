@@ -373,8 +373,7 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 @media (prefers-reduced-motion: reduce) { .manor.broken .mw, .dlg.upset { animation: none } }
 
 /* the blog: set B of the drawings. The index is a drawing register; a post
-   keeps its title block on the blueprint and prints its body on paper, dark
-   ink at a reading size, so long posts are easy on the eyes. */
+   is a title block over a quieter panel of the blueprint for the body. */
 .blog .top nav a:first-child, .post .top nav a:first-child { margin-left: 0 }
 .blog .hero .intro { margin-top: 18px; max-width: 560px; color: var(--dim) }
 .register { list-style: none }
@@ -401,29 +400,28 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 .title-block dt { font-size: 9.5px; letter-spacing: .18em; color: var(--dim) }
 .title-block dd { font-size: 12px; letter-spacing: .1em }
 
-/* the paper sits in the sheet like a print pinned to the board */
-.paper { --ink: #1b2330; --ink-dim: #4a5566; --blue: #0f3b78; --rule: #d6cfbd; margin: 0 40px 44px; background: #f6f2e8; color: var(--ink); border: 1px solid var(--line); box-shadow: 8px 8px 0 rgba(0, 0, 0, .25); padding: 64px 24px 72px }
+/* the body sits in a deeper panel of the blueprint, so the grid steps back
+   behind long text: bright ink, a reading size, a short line */
+.paper { --ink: #e9f1ff; --ink-dim: rgba(220, 235, 255, .72); --rule: rgba(200, 222, 255, .22); margin: 0 40px 44px; background: #0b3166; color: var(--ink); border: 1px solid var(--line); padding: 64px 24px 72px }
 .prose { max-width: 680px; margin: 0 auto; font: 400 18px/1.75 Archivo, system-ui, sans-serif; font-stretch: 100% }
 .prose > * + * { margin-top: 1.2em }
-.prose a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 3px }
+.prose a { color: var(--hi); text-decoration-thickness: 1px; text-underline-offset: 3px }
 .prose a:hover { text-decoration-thickness: 2px }
-.prose :focus-visible { outline-color: var(--blue) }
-.prose strong { font-weight: 700 }
-.prose h2 { font: 800 26px/1.2 Archivo, sans-serif; font-stretch: 108%; color: var(--blue); margin-top: 2.2em; padding-bottom: 10px; border-bottom: 1px solid var(--rule) }
-.prose h3 { font: 700 20px/1.3 Archivo, sans-serif; font-stretch: 104%; margin-top: 1.8em }
+.prose strong { font-weight: 700; color: #fff }
+.prose h2 { font: 800 26px/1.2 Archivo, sans-serif; font-stretch: 108%; color: #fff; margin-top: 2.2em; padding-bottom: 10px; border-bottom: 1px solid var(--rule) }
+.prose h3 { font: 700 20px/1.3 Archivo, sans-serif; font-stretch: 104%; color: #fff; margin-top: 1.8em }
 .prose h2 + *, .prose h3 + * { margin-top: .8em }
 .prose ul, .prose ol { padding-left: 1.4em }
 .prose li + li { margin-top: .4em }
-.prose li::marker { color: var(--blue) }
-.prose blockquote { border-left: 3px solid var(--blue); padding: 2px 0 2px 22px; color: var(--ink-dim); font-style: italic }
-.prose code { font: 400 .84em "Space Mono", monospace; background: #e9e2d0; padding: 1px 5px }
+.prose li::marker { color: var(--hi) }
+.prose blockquote { border-left: 2px solid var(--hi); padding: 2px 0 2px 22px; color: var(--ink-dim); font-style: italic }
+.prose code { font: 400 .84em "Space Mono", monospace; background: rgba(200, 222, 255, .1); padding: 1px 5px }
 .prose hr { border: none; height: 9px; margin: 2.4em 0; background: linear-gradient(var(--rule), var(--rule)) center / 100% 1px no-repeat, linear-gradient(var(--rule), var(--rule)) left / 1px 100% no-repeat, linear-gradient(var(--rule), var(--rule)) right / 1px 100% no-repeat }
-.prose .note { border: 1px solid var(--blue); padding: 16px 20px; background: rgba(15, 59, 120, .04) }
-.prose .note small { display: block; font: 700 11px "Space Mono", monospace; letter-spacing: .16em; color: var(--blue); margin-bottom: 4px }
+.prose .note { border: 1px dashed var(--hi); padding: 16px 20px }
+.prose .note small { display: block; font: 700 11px "Space Mono", monospace; letter-spacing: .16em; color: var(--hi); margin-bottom: 4px }
 .prose .note p + p { margin-top: .8em }
-/* code prints as a little blueprint of its own */
-.prose .code { background: var(--blue); color: #e6efff; border: 1px solid var(--blue); margin-left: -24px; margin-right: -24px }
-.prose .code figcaption { font: 400 11px "Space Mono", monospace; letter-spacing: .1em; color: rgba(220, 235, 255, .64); padding: 8px 16px; border-bottom: 1px solid rgba(220, 235, 255, .2) }
+.prose .code { background: #072553; border: 1px solid var(--rule); margin-left: -24px; margin-right: -24px }
+.prose .code figcaption { font: 400 11px "Space Mono", monospace; letter-spacing: .1em; color: var(--ink-dim); padding: 8px 16px; border-bottom: 1px solid var(--rule) }
 .prose .code pre { overflow-x: auto; padding: 16px; font: 400 14px/1.6 "Space Mono", monospace }
 .prose .code code { background: none; padding: 0; font-size: inherit }
 .prose .fig img { display: block; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--rule) }
@@ -444,7 +442,7 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
   .title-block { padding: 36px 20px 0 }
   .title-block dl { grid-template-columns: repeat(3, 1fr) }
   .title-block dl > div { padding: 8px 10px }
-  .paper { margin: 0 0 32px; border-left: none; border-right: none; box-shadow: none; padding: 36px 20px 44px }
+  .paper { margin: 0 0 32px; border-left: none; border-right: none; padding: 36px 20px 44px }
   .prose { font-size: 17px }
   .prose .code { margin-left: -20px; margin-right: -20px; border-left: none; border-right: none }
   .pager { grid-template-columns: 1fr 1fr }
@@ -453,6 +451,8 @@ main.manor { background: #141022; color: #f3e6c8; font: 21px/1.25 VT323, monospa
 
 @media print {
   .pager, .post .top nav { display: none !important }
-  .paper { margin: 0; border: none; box-shadow: none; padding: 16px 0 }
+  .paper { --ink: #111; --ink-dim: #555; --rule: #ccc; margin: 0; border: none; background: none; padding: 16px 0 }
+  .prose strong, .prose h2, .prose h3 { color: #111 }
+  .prose .code { background: none; color: #111 }
   .title-block { padding: 0 }
 }

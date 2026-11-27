@@ -22,7 +22,7 @@ export const styleGuide: Post = {
       '. The page around it, the title block and the sheet number come from the post’s fields.',
     ),
     h.p(
-      'Body text is set large on light paper with a short line length, so a long post stays easy to read. ',
+      'Body text is set large with a short line length, on a panel with no grid behind it, so a long post stays easy to read. ',
       h.strong('Bold'),
       ' and ',
       h.em('italic'),
@@ -36,7 +36,7 @@ export const styleGuide: Post = {
       h.li('Keep items short.'),
     ),
     h.h3('A smaller heading'),
-    h.blockquote(h.p('A quote sits in its own column, with a blue rule down the side.')),
+    h.blockquote(h.p('A quote sits in its own column, with a gold rule down the side.')),
     Note(h, 'NOTE', h.p('A note is for an aside: a caveat, a tip, or something you learned the hard way.')),
     Code(
       h,
