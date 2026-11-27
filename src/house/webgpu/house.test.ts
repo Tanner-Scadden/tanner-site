@@ -130,6 +130,16 @@ describe('planFor', () => {
     assert.isTrue(Arr.every(covers, w => distance(w.from, w.to) > 2))
   })
 
+  it('leans a few books, and nothing else', () => {
+    const leaning = Arr.filter(spines, w => w.lean.x !== 0)
+    assert.isAtLeast(leaning.length, 3)
+    // Some lean each way, along the shelf.
+    assert.isTrue(Arr.some(leaning, w => w.lean.x > 0) && Arr.some(leaning, w => w.lean.x < 0))
+    assert.isTrue(Arr.every(spines, w => w.lean.y === 0))
+    const rest = Arr.filter(plan.walls, w => !books.includes(w))
+    assert.isTrue(Arr.every(rest, w => w.lean.x === 0 && w.lean.y === 0))
+  })
+
   it('keeps every book on its shelf, under the board above', () => {
     for (const book of books) {
       assert.isAtMost(book.base + book.rise, CASE)

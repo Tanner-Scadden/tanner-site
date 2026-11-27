@@ -371,7 +371,7 @@ const barkLines = (pet: Pet, at: Placed, t: number): ReadonlyArray<ReadonlyArray
   return [-0.55, 0, 0.55].map(turn => {
     const dx = Math.cos(turn) * facing
     const dy = Math.sin(turn) - 0.25
-    return [x + dx * near, y + dy * near, x + dx * far, y + dy * far, 1.6, 1, 1, 0, 1 - t * t, 0, 0, 0]
+    return [x + dx * near, y + dy * near, x + dx * far, y + dy * far, 1.6, 1, 1, 0, 1 - t * t, 0, 0, 0, 0, 0, 0, 0]
   })
 }
 
@@ -418,6 +418,10 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
           w.alpha,
           w.rise,
           w.base,
+          0,
+          w.lean.x,
+          w.lean.y,
+          0,
           0,
         ],
         i * WALL_FLOATS,

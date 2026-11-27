@@ -203,9 +203,9 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: from.xy, to.xy, then width, reveal, gold, dash, alpha, rise, and
-// two unused. Matches `struct Wall`.
-export const WALL_FLOATS = 12
+// NOTE: from.xy, to.xy, then width, reveal, gold, dash, alpha, rise, base,
+// one unused, then lean.xy and two unused. Matches `struct Wall`.
+export const WALL_FLOATS = 16
 
 const WALL_STRUCT = /* wgsl */ `
 struct Wall {
@@ -214,6 +214,8 @@ struct Wall {
   look: vec4f,
   // alpha, rise, base (how far off the floor it starts), unused
   more: vec4f,
+  // lean (how far the top shifts in plan per unit of height), unused
+  tilt: vec4f,
 }
 
 @group(0) @binding(1) var<storage, read> walls: array<Wall>;
@@ -331,8 +333,8 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> PanelOu
   let q = QUAD[v];
   let u = mix(-BLEED, len * w.look.y + BLEED, q.x);
   let z = mix(-BLEED, h + BLEED, q.y);
-  // A shelf board or a book on it starts partway up.
-  out.position = project(vec3f(a + ab / len * u, z + view.height * w.more.z));
+  // A shelf board or a book on it starts partway up, and a book can lean.
+  out.position = project(vec3f(a + ab / len * u + w.tilt.xy * z, z + view.height * w.more.z));
   out.uv = vec2f(u, z);
   return out;
 }

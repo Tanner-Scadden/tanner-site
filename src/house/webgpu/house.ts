@@ -60,6 +60,9 @@ export interface Wall {
   // 0 for everything on the floor, more for a shelf board or the books on
   // it. Anything off the floor leaves no line on it.
   readonly base: number
+  // How far its top shifts across the floor for each unit it stands up,
+  // so a book can lean on its neighbour. Zero for everything else.
+  readonly lean: Point
 }
 
 // The rooms a pet can be in, and the porch outside the front door.
@@ -127,8 +130,9 @@ const wall = (
     alpha = 0.9,
     rise = 1,
     base = 0,
-  }: { gold?: number; dash?: number; alpha?: number; rise?: number; base?: number } = {},
-): Wall => ({ from, to, width, gold, dash, alpha, rise, base })
+    lean = { x: 0, y: 0 },
+  }: { gold?: number; dash?: number; alpha?: number; rise?: number; base?: number; lean?: Point } = {},
+): Wall => ({ from, to, width, gold, dash, alpha, rise, base, lean })
 
 const distance = (a: Point, b: Point): number => Math.hypot(b.x - a.x, b.y - a.y)
 
@@ -153,14 +157,16 @@ const inset = (r: Rect, by: number): Rect => ({
 })
 
 // A shelf of books: each one's width, in shares of the shelf, how tall it
-// stands as a share of the room on its shelf, and whether its spine is gold.
-// A height of 0 is a gap. Uneven on purpose, so the row reads as books, not
-// a fence: a few tall ones, a gold spine here and there, a gap, and one
-// lying flat.
+// stands as a share of the room on its shelf, whether its spine is gold,
+// and how many degrees it leans along the shelf, toward its end. A height of
+// 0 is a gap. Uneven on purpose, so the row reads as a real shelf, not a
+// fence: a few tall ones, a gold spine here and there, gaps, one lying flat,
+// and a few leaning over into the gap beside them.
 interface Book {
   readonly w: number
   readonly rise: number
   readonly gold?: number
+  readonly lean?: number
 }
 const gap = (w: number): Book => ({ w, rise: 0 })
 // The bottom shelf, then the top, of the bookcase.
@@ -169,7 +175,7 @@ const BACK_SHELVES: ReadonlyArray<ReadonlyArray<Book>> = [
     { w: 2, rise: 0.8 },
     { w: 1.5, rise: 0.95 },
     { w: 2.5, rise: 0.72, gold: 1 },
-    { w: 1.5, rise: 0.88 },
+    { w: 1.5, rise: 0.88, lean: 18 },
     gap(2.5),
     { w: 2, rise: 0.92 },
     { w: 1.5, rise: 0.78 },
@@ -178,21 +184,21 @@ const BACK_SHELVES: ReadonlyArray<ReadonlyArray<Book>> = [
     // Lying flat, a short stack.
     { w: 5, rise: 0.22 },
     gap(1),
-    { w: 1.5, rise: 0.9 },
+    { w: 1.5, rise: 0.9, lean: -8 },
     { w: 2, rise: 0.76 },
   ],
   [
     { w: 1.5, rise: 0.86 },
     { w: 2, rise: 0.74, gold: 1 },
-    { w: 1.5, rise: 0.94 },
+    { w: 1.5, rise: 0.94, lean: 24 },
     gap(3),
     { w: 2.5, rise: 0.8 },
     { w: 1.5, rise: 0.9 },
     { w: 2, rise: 0.7 },
     { w: 1.5, rise: 0.84 },
     gap(2),
-    { w: 2, rise: 0.92, gold: 1 },
-    { w: 1.5, rise: 0.78 },
+    { w: 2, rise: 0.92, gold: 1, lean: -14 },
+    { w: 1.5, rise: 0.78, lean: 10 },
     gap(1.5),
   ],
 ]
@@ -216,6 +222,8 @@ const bookcase = (
 ): ReadonlyArray<Wall> => {
   const off = (p: Point, by: number) => pt(p.x + into.x * by, p.y + into.y * by)
   const along = (t: number) => pt(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t)
+  const length = distance(from, to)
+  const dir = pt((to.x - from.x) / length, (to.y - from.y) / length)
   const frame = { alpha: 0.8 }
   // How tall each shelf is, floor or board to the board above.
   const tall = CASE_RISE / SHELVES
@@ -231,7 +239,10 @@ const bookcase = (
       if (b.rise <= 0) return []
       const left = along(starts[i] ?? 0)
       const right = along((starts[i] ?? 0) + b.w / units)
-      const look = { gold: b.gold ?? 0, rise: b.rise * room, base: floor }
+      // Leaning, its top shifts along the shelf and comes down a little.
+      const angle = ((b.lean ?? 0) * Math.PI) / 180
+      const lean = pt(dir.x * Math.tan(angle), dir.y * Math.tan(angle))
+      const look = { gold: b.gold ?? 0, rise: b.rise * room * Math.cos(angle), base: floor, lean }
       return [
         // The spine, out near the front of the shelf.
         wall(off(left, SPINE), off(right, SPINE), THIN, { ...look, alpha: 0.85 }),
