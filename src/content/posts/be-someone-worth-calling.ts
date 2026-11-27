@@ -1,5 +1,6 @@
 import type { Post } from '#domain/Post'
 
+import { ForestFigure } from '../../forest/scene.ts'
 import { NetworkFigure } from '../../network/scene.ts'
 import { TeamFigure } from '../../team/scene.ts'
 
@@ -124,8 +125,9 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.blockquote(
       h.p('Unless someone like you cares a whole awful lot, nothing is going to get better. It’s not.'),
-      h.p(h.em('The Lorax')),
+      h.p(h.em('The Lorax'), ', Dr. Seuss'),
     ),
+    ForestFigure(h, { key: 'forest' }),
     h.p('Be that someone. The calls will come on their own.'),
   ],
 }
