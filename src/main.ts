@@ -7,7 +7,7 @@ import { readFoundEggs } from './eggs/storage.ts'
 import { Viewport } from './horde/services/Viewport.ts'
 import { SiteRoute } from './routes.ts'
 import { Site } from './Site.ts'
-import './styles.css'
+import './styles/reset.css'
 
 // NOTE: the devtools egg starts as plain console output on purpose: styled
 // text in the console, where Effect's logger would add its own prefix.

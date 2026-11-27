@@ -557,11 +557,12 @@ const markHouse = (house: HTMLElement, plan: HTMLElement) =>
   Effect.acquireRelease(
     Effect.sync(() => {
       house.dataset['gpu'] = 'on'
+      house.dataset['drafting'] = ''
     }),
     () =>
       Effect.sync(() => {
         delete house.dataset['gpu']
-        delete house.dataset['drawn']
+        delete house.dataset['drafting']
         plan.style.transform = ''
       }),
   )
@@ -578,7 +579,7 @@ export const runHouseDrawing = (
 ): Effect.Effect<void, GpuUnavailable, Scope.Scope> =>
   Effect.gen(function* () {
     const house = canvas.parentElement
-    const planEl = house?.querySelector<HTMLElement>('.plan') ?? null
+    const planEl = house?.querySelector<HTMLElement>('[data-plan]') ?? null
     if (house === null || planEl === null) return
     const gpu = yield* makeGpu(canvas)
 
@@ -632,7 +633,7 @@ export const runHouseDrawing = (
         }
         if (done) {
           yield* Effect.sync(() => {
-            house.dataset['drawn'] = ''
+            delete house.dataset['drafting']
           })
         }
 

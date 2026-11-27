@@ -16,16 +16,19 @@
   },
   "dependencies": {
     "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@193d2fb",
+    "@stylexjs/stylex": "0.19.2",
     "effect": "4.1.4",
     "effect-machine": "0.32.1"
   },
   "devDependencies": {
     "@effect/tsgo": "0.67.5",
     "@effect/vitest": "4.1.4",
+    "@stylexjs/unplugin": "0.19.2",
     "@webgpu/types": "^0.1.74",
     "happy-dom": "^21.0.4",
     "tsrs": "0.23.0-ts7.1.0-beta",
     "typescript": "7.0.2",
+    "unplugin": "^2.3.11",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
   },

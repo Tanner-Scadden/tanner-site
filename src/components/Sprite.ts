@@ -1,5 +1,8 @@
 import type { Html } from '@effect/ui/html'
+import * as stylex from '@stylexjs/stylex'
 import { Array as Arr } from 'effect'
+
+import { type Sx, sx } from '../styles/sx.ts'
 
 // NOTE: 16x16 pixel maps, one letter per palette color and '.' for clear.
 // Effect UI's Html has no SVG elements, so a sprite is one pixel-sized box
@@ -129,19 +132,33 @@ const spriteShadow = (spec: SpriteSpec): string => {
   return shadow
 }
 
+const styles = stylex.create({
+  sprite: (pixel: number) => ({
+    display: 'inline-block',
+    position: 'relative',
+    flex: 'none',
+    width: `${SPRITE_SIZE * pixel}px`,
+    height: `${SPRITE_SIZE * pixel}px`,
+  }),
+  // One pixel box; its box-shadow paints the rest.
+  px: (pixel: number, shadow: string) => ({
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: `${pixel}px`,
+    height: `${pixel}px`,
+    boxShadow: shadow,
+  }),
+})
+
 // A sprite `pixel` CSS pixels per sprite pixel, hidden from screen readers.
-export const Sprite = <M>(h: Html.H<M>, name: SpriteName, pixel: number) =>
-  h.span
-    .class('sprite')
+// `style` places it, for a layout that shrinks it on small screens.
+export const Sprite = <M>(
+  h: Html.H<M>,
+  name: SpriteName,
+  pixel: number,
+  style?: Sx,
+) =>
+  sx(h.span, styles.sprite(pixel), style)
     .attr('aria-hidden', 'true')
-    .style({
-      width: `${SPRITE_SIZE * pixel}px`,
-      height: `${SPRITE_SIZE * pixel}px`,
-    })
-    .children(
-      h.span.class('px').style({
-        width: `${pixel}px`,
-        height: `${pixel}px`,
-        boxShadow: spriteShadow({ name, pixel }),
-      }),
-    )
+    .children(sx(h.span, styles.px(pixel, spriteShadow({ name, pixel }))))
