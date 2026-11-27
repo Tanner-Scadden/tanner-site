@@ -18,7 +18,6 @@ export const DRAFTS: ReadonlyArray<Post> = import.meta.env.DEV ? WRITING : []
 
 export const BLOG = {
   title: 'Blog',
-  role: 'Notes from the build',
   intro: 'A collection of random thoughts I think might be good.',
   noMatch: 'No posts match that yet.',
   // The section on the home page.

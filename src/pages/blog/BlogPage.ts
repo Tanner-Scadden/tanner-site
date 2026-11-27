@@ -45,7 +45,6 @@ export const BlogPage = <M>(h: Html.H<M>) =>
     BlogBar(h, `SET B · ${POSTS.length} ${POSTS.length === 1 ? 'SHEET' : 'SHEETS'}`),
     sx(h.header, sheet.hero).children(
       sx(h.h1, sheet.title).children(BLOG.title),
-      sx(h.p, sheet.role).children(BLOG.role),
       sx(h.p, styles.intro).children(BLOG.intro),
     ),
     Section(h, 'sheets').children(BlogIndex(h, { key: 'index', fallback: () => Waiting(h) })),
