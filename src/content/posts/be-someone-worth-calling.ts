@@ -44,7 +44,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p('People rarely remember who was right. They’ll long remember how you made them feel.'),
 
-    h.h2('Trust what you’ve built'),
+    h.h2('Bet on your network'),
     h.p('Being worth calling matters most when you take a risk.'),
     h.p(
       'In 2021 I took a leap of faith and started my own thing with no clients lined up, trusting I’d figure it out with a little help from the universe.',
