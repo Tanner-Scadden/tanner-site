@@ -40,7 +40,7 @@ export const beSomeoneWorthCalling: Post = {
       'Team harmony takes months to build and a moment to lose. At all three worlds events I went to, we had subs come with us. The synergy we’d built all season wasn’t there, and hours of practice only made the team more disgruntled. We stopped being one team, and that showed on stage.',
     ),
     h.p(
-      'I’ve broken that harmony myself. After a heated game, or in the middle of an incident, it’s easy to let your frustration slip and take it out on others. It might feel righteous in that moment, but people remember it long after.',
+      'I’ve broken that harmony myself. After a heated game, or in the middle of an incident, it’s easy to let your frustration slip and take it out on others. It might feel righteous in that moment, but people remember it long after. Trust is built in drops and lost in buckets.',
     ),
     h.p(
       'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them, and the whole team gets slower and less fun. Don’t be that person, and don’t hire them.',
