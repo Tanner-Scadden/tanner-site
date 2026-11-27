@@ -7,7 +7,8 @@ Read this before you write or edit one.
 
 - Run the `blog-brainstorm` skill first. Agree on the angle and a brief
   with the author before you draft anything. Briefs live in
-  `docs/posts/<date>-<slug>-brief.md`.
+  `docs/posts/<date>-<slug>-brief.md`, which git ignores: they're working
+  notes, so they stay on the author's machine and are never committed.
 
 ## The voice
 
@@ -141,8 +142,8 @@ Every post ends with a link to its file on GitHub, so readers can see how
 it's built. The link comes from the slug, so keep the file at
 `src/content/posts/<slug>.ts`, or set `source` on the `Post` if it lives
 elsewhere. A test fails if the file isn't there. Readers will follow the
-imports into the figures too, so tidy any `NOTE` or `TODO` comments before
-it goes up.
+imports into the figures too, so the code ships clean: no `NOTE` or `TODO`
+comments, no notes to yourself, and no drafts or briefs in the repo.
 
 ## Before it goes up
 

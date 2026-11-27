@@ -13,13 +13,6 @@ import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { POSTS, isDraft, sheetOf } from '../posts.ts'
 import type { Part, Snippet } from '../search/snippet.ts'
 
-// NOTE: the drawing register: a row per post, with its sheet number, date,
-// title and summary, and the search chrome over it: the box, the count and
-// the no-match note. The blog index lists every post, with a search over
-// them (see BlogIndex.ts); the home page lists the newest few (`PostList`).
-// A search result adds the part of the post that matched, with the matched
-// words in gold.
-
 export interface Row {
   readonly post: Post
   readonly snippet: Option.Option<Snippet>

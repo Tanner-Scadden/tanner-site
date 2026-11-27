@@ -1,14 +1,5 @@
 import { Array as Arr, Option, String as Str } from 'effect'
 
-// NOTE: the Snowball English (Porter2) stemmer, after
-// https://snowballstem.org/algorithms/english/stemmer.html. It takes a
-// folded, lowercase word and returns its stem: "running" and "runs" give
-// "run", "vouching" gives "vouch". A stem isn't always a word ("happi"), but
-// every form of a word gets the same one, which is all search needs.
-//
-// Each step looks for the longest suffix it knows. If that one's condition
-// fails, the step does nothing: it never falls back to a shorter suffix.
-
 const isVowel = (c: string | undefined): boolean =>
   c === 'a' || c === 'e' || c === 'i' || c === 'o' || c === 'u' || c === 'y'
 

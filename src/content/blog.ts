@@ -1,8 +1,3 @@
-// NOTE: the blog's copy, and the list of every post. To add a post, see
-// content/posts/AGENTS.md: write it in content/posts/, add it to WRITING while
-// you work on it, then move it to PUBLISHED. Order doesn't matter; the blog
-// sorts by date.
-
 import type { Post } from '#domain/Post'
 
 import { beSomeoneWorthCalling } from './posts/be-someone-worth-calling.ts'

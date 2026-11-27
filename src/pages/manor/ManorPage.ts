@@ -24,10 +24,6 @@ import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { fonts, manor, media } from '../../styles/tokens.stylex.ts'
 
-// NOTE: the hidden Manor, at /manor (the parlour) and /manor/:room. Rattles
-// greets each room, and the Workshop runs its own replay. Cut Rattles off
-// enough times and the Manor breaks: the room doors jam and hang crooked
-// until he calms down.
 const quake = stylex.keyframes({
   '25%': { transform: 'translate(-6px, 2px)' },
   '50%': { transform: 'translate(5px, -3px)' },

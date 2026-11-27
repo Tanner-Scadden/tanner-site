@@ -1,18 +1,3 @@
-// NOTE: a frame of the network as lines and dots in CSS px, coloured like
-// the rest of the sheet. Both renderers draw exactly this, so the WebGPU
-// and 2D versions look the same.
-//
-// Gold is you and the people you've helped. The people one link past them
-// are a warm white, and light up when you help the person they came with.
-// Everyone further out is the sheet's faint line colour.
-//
-// Pointing at someone picks them out: their links and the people on the
-// other end stay bright, a ring goes round them, and the rest dims.
-//
-// A bad interaction is the post's red, and only that: a ripple runs out
-// along your link, the link tears and springs back, and a ring goes out
-// from the tear. The branch it cost you dims to a ghost.
-
 import { Array as Arr, Option } from 'effect'
 
 import { GOLD, LINE, type Projection, RED, WARM, mix, rgba } from '../../animation/kit.ts'

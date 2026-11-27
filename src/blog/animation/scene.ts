@@ -1,9 +1,3 @@
-// NOTE: what a blog animation is made of. A scene draws with lines, dots and
-// rings, in CSS px, and the kit paints them with WebGPU, or a 2D canvas when
-// there's no WebGPU. A scene never touches the canvas, the clock or the
-// controls. It only answers "what's on screen at this moment?", so any
-// moment can be scrubbed to, and the same answer paints on either renderer.
-
 import { type Array as Arr, MutableRef, Option } from 'effect'
 
 export type Rgba = readonly [number, number, number, number]

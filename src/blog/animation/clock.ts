@@ -1,8 +1,3 @@
-// NOTE: the drawing's clock, kept apart from play.ts so it can be tested
-// without a canvas. It's where a run is, whether it's playing, and the
-// interactions a reader has added to it, as plain data: each change is a
-// function from one clock to the next.
-
 import { Array as Arr, Option, Order } from 'effect'
 
 import { type Controls, FADE, HOLD } from './controls.ts'
@@ -98,4 +93,3 @@ export const startClock = (scene: Scene, controls: Controls, still: boolean): Cl
 
 export const opacityAt = (scene: Scene, clock: Clock): number =>
   1 - clamp01((clock.time - doneAt(scene, clock) - HOLD) / FADE)
-

@@ -7,14 +7,6 @@ import { postDocs } from './posts.ts'
 import { Docs, SearchRpcs } from './schema.ts'
 import { SearchPosts } from './SearchPosts.ts'
 
-// NOTE: `SearchPosts` answered by the search worker. This module, and the
-// RPC client it brings, load only once the blog index mounts: see
-// `SearchPostsLive`. If the worker can't start, fails, or takes longer than
-// `TIMEOUT` to answer (its chunk 404s, a policy blocks it, it hangs), the
-// search moves onto the page for good (see SearchLocal.ts), so the list
-// never goes blank. The first answer includes building the index, which
-// takes well under a second.
-
 const TIMEOUT = Duration.seconds(3)
 
 // The in-page search, loaded only if the worker fails.

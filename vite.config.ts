@@ -5,11 +5,6 @@ import { type Plugin, type ViteDevServer, createServer, defineConfig } from 'vit
 import type * as Blog from './src/content/blog.ts'
 import type * as Head from './src/seo/head.ts'
 
-// NOTE: writes blog.html, blog/<slug>.html and sitemap.xml next to the built
-// index.html; see src/seo/head.ts. The posts are loaded through a throwaway
-// Vite server, so their imports resolve and their StyleX compiles as in the
-// app. Only PUBLISHED posts count, so a draft never gets a page.
-// A throwaway Vite server that loads modules as the app does.
 const loader = Effect.acquireRelease(
   Effect.promise(() =>
     createServer({

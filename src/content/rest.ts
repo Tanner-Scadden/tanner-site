@@ -1,5 +1,3 @@
-// NOTE: the /rest page's copy: the playing days and the photos.
-
 export const REST_FACTS = [
   'ALLEGIANCE',
   'SENTINELS',
@@ -13,8 +11,6 @@ export interface Shot {
   readonly size: 'big' | 'mid' | 'full'
   readonly when: string
   readonly title: string
-  // NOTE: put photos in public/worlds/ and set the path here, such as
-  // 'worlds/valor-series-s1.jpg'. The gallery only shows shots with a photo.
   readonly photo?: string
 }
 

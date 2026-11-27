@@ -1,24 +1,3 @@
-// NOTE: the rules for the floor plan drawing, as plain data in and plain data
-// out, so the walls, the drafting and the pets are testable without a GPU.
-// The renderer only draws what these return.
-//
-// The library at the back left is the blog. A bookcase stands along its
-// back wall, two shelves of books of different heights, over a rug. All of
-// it is drawn like the walls, only smaller: each book is a short panel, and
-// each shelf board a thin one partway up, so once the house rises the
-// shelves show their spines.
-//
-// The plan is drafted once: first the whole blueprint is sketched at once,
-// every wall a faint fine line, then the rooms fill in one after another and
-// the walls fill out to their full weight. Then the house rises into 3D (see
-// ./view), and
-// once it's up, Teddy and Rain move in through the front door. Teddy wanders
-// the Personal Life room, chases the pointer whenever it's on the house, and
-// play-bows and barks once he catches it. Rain ignores it and does her own
-// thing: mostly naps, sometimes sits up to watch it, and bolts when Teddy
-// gets too close. With motion reduced the house is simply up, and the pets
-// sit still.
-
 import { Array as Arr, Option } from 'effect'
 import { dual } from 'effect/Function'
 

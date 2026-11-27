@@ -4,8 +4,6 @@ import * as stylex from '@stylexjs/stylex'
 import { sx } from '../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../styles/tokens.stylex.ts'
 
-// NOTE: the drawing sheet the blueprint pages sit on: its border, its title
-// block and its sections. The front page and the 404 page share them.
 export const sheet = stylex.create({
   sheet: {
     maxWidth: { default: 1080, [media.print]: 'none' },
@@ -134,8 +132,6 @@ const styles = stylex.create({
 export const Section = <M>(h: Html.H<M>, id: string) =>
   sx(h.section, styles.section).attr('id', id)
 
-// NOTE: a section heading drawn like a drawing callout: a numbered bubble,
-// the title, and a leader line out to a tick at the sheet edge.
 export const Callout = <M>(h: Html.H<M>, n: number, text: string) =>
   sx(h.h2, styles.callout).children(
     sx(h.i, styles.bubble).attr('aria-hidden', 'true').children(String(n)),

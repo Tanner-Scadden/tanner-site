@@ -15,9 +15,6 @@ const CHARS_PER_TICK = 2
 export const CUT_OFF_LIMIT = 3
 export const UPSET_MS = 3200
 
-// NOTE: Rattles, the Manor's host. He types each room's line once per visit.
-// Leaving a room before he's done cuts him off; finishing a line lets him
-// cool down. Cut him off too many times in a row and he loses it.
 export const RattlesState = State({
   Away: {},
   Typing: { room: RoomId, shown: Schema.Finite, cutOffs: Schema.Finite },

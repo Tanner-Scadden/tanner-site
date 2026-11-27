@@ -8,15 +8,6 @@ import type { Found } from './schema.ts'
 import { snippetOf } from './snippet.ts'
 import { bare, termOf } from './tokenize.ts'
 
-// NOTE: running a query against the index. Each atom resolves to the terms
-// it stands for, each with a weight: 1 for the word itself, less for a
-// prefix completion and less again for a typo match, so exact hits always
-// rank above near ones. Scores are BM25, summed across fields with a boost
-// for each: a hit in the title counts three times one in the body.
-//
-// The per-doc tallies are native maps and sets: every posting of every
-// expansion passes through them on each keystroke.
-
 const K1 = 1.2
 const B = 0.75
 const BOOSTS: readonly [number, number, number] = [3, 2, 1]

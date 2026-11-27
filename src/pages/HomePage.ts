@@ -153,9 +153,6 @@ const styles = stylex.create({
   },
 })
 
-// NOTE: the front page, at /. The thesis and the WebGPU credit are the two
-// things on it that act like buttons; the page reports their clicks, and
-// when Teddy gets someone to play.
 export const HomePage = <M>(
   h: Html.H<M>,
   options: {

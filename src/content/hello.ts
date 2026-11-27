@@ -1,7 +1,6 @@
 import { ELSEWHERE, type Link } from './home.ts'
 import { MUNCH_MANOR_URL } from './manor.ts'
 
-// NOTE: what `tanner.hello()` prints in the console. The art is ANSI Shadow.
 export const HELLO_ART: ReadonlyArray<string> = [
   '██╗  ██╗██╗██╗',
   '██║  ██║██║██║',

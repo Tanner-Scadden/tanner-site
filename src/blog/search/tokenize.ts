@@ -2,13 +2,6 @@ import { MutableHashMap, Option, String as Str } from 'effect'
 
 import { stem } from './stem.ts'
 
-// NOTE: text into terms. Words come from Unicode word boundaries, so
-// "you’re", "e-mail" and "café" split the way a reader would. Each word is
-// folded (NFKD, combining marks dropped, lowercased, curly apostrophes made
-// straight) and then stemmed, so "Running", "runs" and "run" are one term.
-// A token keeps where it sat in the source, for highlighting, and its word
-// position, for phrases.
-
 export interface Token {
   // The folded word as written: "you're", "running".
   readonly surface: string

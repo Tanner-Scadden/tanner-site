@@ -12,10 +12,6 @@ import { ToastState, Toasts, toastMachine } from '../toast/machines/Toast.ts'
 import { Keys } from './machines/Keys.ts'
 import { Page, PageState, pageOf } from './machines/Page.ts'
 
-// NOTE: the site's state lives in one actor per concern. The Site renders
-// their snapshots side by side and reports what the user did; it holds no
-// state of its own.
-
 export const SiteSnapshot = Schema.Struct({
   page: PageState,
   rattles: RattlesState,
@@ -83,10 +79,6 @@ export const siteSnapshots = Stream.unwrap(
   }),
 )
 
-// NOTE: the actors start in dependency order (toasts, then eggs, then the
-// machines that find eggs, then Rattles, who follows the page, then the
-// keyboard that drives them), and stop when the Site unmounts. The Router
-// and the Viewport are the platform's.
 export const siteActors = ({ found, reducedMotion, route }: SiteSeed) => {
   const shared = Layer.provideMerge(Eggs.layer(found), Toasts.layer)
   const machines = Layer.provideMerge(

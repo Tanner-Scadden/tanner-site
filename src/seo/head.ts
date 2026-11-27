@@ -4,13 +4,6 @@ import { dual, pipe } from 'effect/Function'
 import { BLOG } from '#content/blog'
 import { type Post, sortPosts } from '#domain/Post'
 
-// NOTE: the site is one page that renders in the browser, so every path is
-// sent the same index.html, and a link preview or a crawler would see the
-// home page's title. The build writes a copy of index.html for /blog and
-// each published post, with that page's title, description, canonical URL,
-// share tags and structured data, plus a sitemap listing them all. See the
-// `seo` plugin in vite.config.ts.
-
 export const SITE = 'https://tannerscadden.com'
 const NAME = 'Tanner Scadden'
 const IMAGE = `${SITE}/og.png`
@@ -100,10 +93,6 @@ const tag = (kind: 'meta' | 'link', key: string, valueAttr: string, value: strin
 
 const OG_LOCALE = /<meta property="og:locale" content="[^"]*" \/>/
 
-// NOTE: swaps each of index.html's head tags for the page's. Every tag has
-// to be there exactly once, so if index.html changes shape the build fails
-// rather than shipping a page with the home page's tags. The share image is
-// still the site's, so its image and alt text stay.
 export const withHead: {
   (page: Page): (html: string) => string
   (html: string, page: Page): string

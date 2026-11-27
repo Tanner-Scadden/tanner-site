@@ -10,22 +10,6 @@ import { isFull } from './clock.ts'
 import { Controls, PlayerUnavailable, type Report, SLIDER_STEPS, Started } from './controls.ts'
 import type { Scene, Variant } from './scene.ts'
 
-// NOTE: a blog animation: a scene on a canvas, its controls, and a caption.
-// `makeAnimation` turns a scene into a component a post drops in with
-// `NetworkFigure(h, { key: 'network' })`.
-//
-// The controls are play and pause, replay, a time slider that plays on from
-// wherever it's dropped, the time, and the scene's variants when it has more
-// than one. A scene that takes interactions gets an INTERACT button after
-// the time, the same in every figure; what it does is up to the scene, and
-// it's disabled once the run has `interact.max` of them. If the canvas
-// can't be drawn on at all, the controls go and the caption stays. The
-// Model is only what the controls say; the drawing keeps the clock (see
-// play.ts), and loads only once the canvas is on the page, WebGPU and all.
-//
-// The figure is marked `data-blueprint-quiet`, so the blueprint behind the
-// page stops bending around the cursor while it's over the figure.
-
 export const makeAnimation = <const Name extends string>(name: Name, scene: Scene) => {
   const Drawing = Mount.makeStream(
     `${name}Drawing`,

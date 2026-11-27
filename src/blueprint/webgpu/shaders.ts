@@ -1,8 +1,3 @@
-// NOTE: all coordinates are CSS pixels. "Doc" space is the page's own
-// coordinates (viewport + scroll), so the GPU grid lines up exactly with the
-// CSS grid on body that it replaces: a minor line every 24px, a major line
-// every 120px, each 1px wide at the start of its cell.
-
 const COMMON = /* wgsl */ `
 struct Frame {
   viewport: vec2f,
@@ -81,10 +76,8 @@ fn fs(@builtin(position) position: vec4f) -> @location(0) vec4f {
 }
 `
 
-// NOTE: a multiple of WORKGROUP, so every compute invocation has a pen.
 export const PARTICLE_COUNT = 320
 export const WORKGROUP = 64
-// NOTE: pos.xy, vel.xy, aim.xy, zombie, caught per pen. Matches `Pen`.
 export const PARTICLE_FLOATS = 8
 // Pen 0 is patient zero: a zombie from the start that never gets better.
 export const PATIENT_ZERO = 0

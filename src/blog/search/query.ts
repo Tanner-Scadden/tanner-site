@@ -2,21 +2,6 @@ import { Array as Arr, Option, String as Str } from 'effect'
 
 import { tokenize } from './tokenize.ts'
 
-// NOTE: the query language, a small subset of PlanetScale's TINQL:
-//
-//   safety net         both words (bare words are AND)
-//   "safety net"       the words in order
-//   -arena             no post with this word, or -"a phrase"
-//   arena OR league    either one
-//   vouc               the last word while typing is a prefix: vouch, vouching
-//
-// Words are folded like the text, so case, accents and curly apostrophes
-// don't matter, and curly double quotes (“safety net”, as a phone types
-// them) quote a phrase like straight ones. A word with punctuation inside,
-// like "e-mail", is a phrase of its parts. An unclosed quote runs to the end,
-// and while it's still being typed its last word is a prefix too, so
-// "safety ne already finds "safety net".
-
 export type Atom =
   | { readonly _tag: 'Word'; readonly word: string; readonly prefix: boolean }
   | { readonly _tag: 'Phrase'; readonly words: ReadonlyArray<string>; readonly prefix: boolean }

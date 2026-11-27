@@ -20,16 +20,12 @@ const KONAMI = [
   'a',
 ] as const
 
-// NOTE: keys are kept lowercased, so caps lock still counts.
 const isKonami = (keys: ReadonlyArray<string>): boolean =>
   keys.length === KONAMI.length &&
   Arr.every(keys, (key, i) => key === KONAMI[i])
 
 const lower = (key: string): string => Str.toLowerCase(key)
 
-
-// NOTE: the keyboard. It remembers the last few keys, lowercased so caps
-// lock still counts, and tells the other machines what they spell.
 export const KeysState = State({
   Listening: { recent: Schema.Array(Schema.String) },
 })

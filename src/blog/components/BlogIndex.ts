@@ -8,14 +8,6 @@ import type { Found } from '../search/schema.ts'
 import { SearchPosts, SearchPostsLive } from '../search/SearchPosts.ts'
 import { AllPosts, NoMatch, Register, ResultCount, type Row, SearchBar } from './Register.ts'
 
-// NOTE: /blog's register, with a full-text search over every post (see
-// src/blog/search/). An empty search shows every post, newest first; a
-// search shows what it found, best first, with the matching part of each.
-// `/` jumps to the search box. The page loads this module on its own (see
-// BlogPage.ts), so the search and its query code stay off every other page.
-// Until a search has answered, or if it fails, every post shows, so the
-// register is never blank.
-
 const SearchInput = Html.ref('BlogIndex.search', 'input')
 
 const Message = UiSchema.TaggedEnum({ Searched: { query: Schema.String }, PressedSlash: {} })

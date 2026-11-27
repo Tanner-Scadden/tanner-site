@@ -118,9 +118,6 @@ const styles = stylex.create({
 const levelOf = (share: number): string =>
   share < 0.05 ? 'PATIENT ZERO' : share < 0.2 ? 'OUTBREAK' : share < 0.45 ? 'HORDE' : 'OVERRUN'
 
-// NOTE: while the pens run, a wave call drops in (HERE THEY COME), then
-// settles into a counter of the zombie pens. It's only for show, so screen
-// readers skip it; the toast already says what happened.
 export const Outbreak = <M>(h: Html.H<M>, gpu: GpuState) => {
   const on = gpu._tag === 'Drafting'
   const infected = on ? gpu.infected : 0

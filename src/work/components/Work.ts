@@ -10,11 +10,6 @@ import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { WorkDrawing } from '../mounts/WorkDrawing.ts'
 import { workMarker } from './work.stylex.ts'
 
-// NOTE: selected work. WebGPU draws each job's outlines, and the first time
-// a job comes into view a wave runs through it, round each border and along
-// each arrow. Without it, or once the device is lost, the CSS borders are
-// all there is. The renderer marks the list, and finds each job by
-// `data-job` and each step by `data-step`.
 export const Work = <M>(h: Html.H<M>, still: boolean) =>
   sx(h.div, styles.work, workMarker).children(
     sx(h.canvas, styles.canvas)

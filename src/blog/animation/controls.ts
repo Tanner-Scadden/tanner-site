@@ -1,7 +1,3 @@
-// NOTE: what a blog animation's figure and its drawing say to each other.
-// Kept apart from play.ts, which brings in WebGPU and loads with the
-// drawing, so a page (or a test) can render the figure without it.
-
 import { Schema } from 'effect'
 
 export const Controls = Schema.Struct({

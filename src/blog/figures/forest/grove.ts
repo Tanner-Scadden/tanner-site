@@ -1,27 +1,3 @@
-// NOTE: the closing figure in the blog post, as data: one seed, then a
-// forest. A seed grows one whole run up front.
-//
-// The run tells it in four beats:
-//   1. A ground line draws out across the sheet, and a single gold seed
-//      drifts down onto it.
-//   2. It sprouts and grows into one tree. Branches split as they go, one
-//      leading and one reaching out to the side, and gold leaves open at
-//      their tips.
-//   3. A few of those leaves brighten, and seeds drift off them on the air
-//      to land across the ground.
-//   4. Each grows into a tree of its own, so a grove fills the frame. The
-//      first of those send seeds of their own, so the last frame has a
-//      couple of saplings coming up and a seed or two still in the air.
-//
-// Every tree is drawn by a growth front that travels out from the root
-// along each branch at once, so growth is smooth and only ever adds. The
-// trees sway a little in the wind, which only turns branches, never
-// shortens them. `frameAt` reads any moment without simulating anything.
-//
-// A reader can plant another seed (see `plantedIn`): a gold seed drifts
-// down from the top and grows a tree where it lands, which joins the grove
-// like any other, roots and all.
-
 import { Array as Arr, Number as Num, Option, Order } from 'effect'
 
 import { clamp01, random } from '../../animation/kit.ts'

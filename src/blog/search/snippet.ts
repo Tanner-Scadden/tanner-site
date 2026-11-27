@@ -6,11 +6,6 @@ import type { Part as PartSchema, Snippet as SnippetSchema } from './schema.ts'
 import type { Hit, Result } from './search.ts'
 import type { Token } from './tokenize.ts'
 
-// NOTE: the snippet under a result: the stretch of the body with the most
-// matched words in it, cut at word boundaries, with those words marked. A
-// post that matches only in its summary gets its summary back, marked
-// instead; one that matches only in its title gets no snippet.
-
 export type Part = typeof PartSchema.Type
 export type Snippet = typeof SnippetSchema.Type
 

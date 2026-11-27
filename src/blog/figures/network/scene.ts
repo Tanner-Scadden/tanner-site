@@ -1,6 +1,3 @@
-// NOTE: the network diagram as a blog animation, drawn by the kit in
-// src/blog/animation.
-
 import { Array as Arr, Option } from 'effect'
 
 import { makeAnimation } from '../../animation/Animation.ts'

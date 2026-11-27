@@ -18,8 +18,6 @@ export const Zombie = Schema.Struct({
 })
 export type Zombie = typeof Zombie.Type
 
-// NOTE: the Konami horde. It measures the window, walks in from the right,
-// and is gone once every zombie is munched or off the left edge.
 export const HordeState = State({
   Gone: {},
   Arriving: {},

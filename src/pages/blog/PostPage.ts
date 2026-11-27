@@ -16,9 +16,6 @@ import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { BlogBar } from './BlogPage.ts'
 
-// NOTE: /blog/:slug. A post is set straight on the sheet: the date over a
-// big uppercase title, the summary, then the body in the sheet's own mono
-// type, with gold for bold and links.
 export const PostPage = <M>(h: Html.H<M>, post: Post) => {
   const sheetNo = sheetOf(post)
   const { newer, older } = neighboursOf(post)

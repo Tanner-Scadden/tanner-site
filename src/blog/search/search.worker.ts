@@ -6,9 +6,6 @@ import { build } from './index.ts'
 import { Docs, SearchRpcs } from './schema.ts'
 import { searchIndex } from './search.ts'
 
-// NOTE: the search worker. It takes the posts' text as its initial message,
-// builds the index off the page's thread, and answers searches over RPC.
-
 const Handlers = SearchRpcs.toLayer(
   Effect.gen(function* () {
     const docs = yield* RpcWorker.initialMessage(Docs)

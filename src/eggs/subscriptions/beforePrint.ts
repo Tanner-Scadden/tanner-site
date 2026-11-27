@@ -1,7 +1,6 @@
 import { Subscription } from '@effect/ui'
 import { Effect, Queue, Stream } from 'effect'
 
-// NOTE: HtmlSubscription.onWindow only knows focus and blur.
 export const beforePrint = <Msg>(message: Msg) =>
   Subscription.make(
     'beforeprint',

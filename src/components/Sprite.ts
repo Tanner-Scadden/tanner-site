@@ -4,10 +4,6 @@ import { Array as Arr } from 'effect'
 
 import { sx } from '../styles/sx.ts'
 
-// NOTE: 16x16 pixel maps, one letter per palette color and '.' for clear.
-// Effect UI's Html has no SVG elements, so a sprite is one pixel-sized box
-// whose box-shadow paints the rest: pure CSS, no canvas, no mount.
-
 const PALETTE: Record<string, string> = {
   k: '#1c1426',
   w: '#f3e6c8',

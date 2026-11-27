@@ -1,11 +1,3 @@
-// NOTE: the floor plan drawing, as one scoped Effect like the blueprint. The
-// canvas sits behind the plan and owns its walls while it runs (the CSS
-// borders step aside). The rooms are measured from the DOM, the rules live
-// in ./house and the camera in ./view, and the loop only runs while the
-// house is on screen. The blueprint is sketched, then its rooms and walls
-// fill in. Once they have, the house rises into 3D,
-// and the room links get the same transform, so they stay on their floors.
-
 import { Data, Effect, Queue, Ref, type Scope, Stream } from 'effect'
 
 import {
@@ -81,7 +73,6 @@ export interface HouseSettings {
   readonly still: boolean
 }
 
-// NOTE: matches `struct View` in the shaders.
 const VIEW_FLOATS = 32
 const MAX_PIXEL_RATIO = 2
 const MAX_ROOMS = ROOM_ORDER.length
@@ -103,9 +94,6 @@ const rectOf = (el: Element | null, origin: DOMRect) => {
   return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
 }
 
-// NOTE: the plan is measured flat. Its CSS transform would skew every
-// rect, so it steps aside for the measurement and comes straight back,
-// before anything paints.
 const measure = (canvas: HTMLCanvasElement, plan: HTMLElement): Plan => {
   const transform = plan.style.transform
   plan.style.transform = ''
@@ -388,7 +376,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
   Effect.sync(() => {
     const dpr = fitCanvas(canvas, gpu.device.limits.maxTextureDimension2D)
     const { house } = plan.rooms
-    // NOTE: the order matches `struct View` in the shaders.
     gpu.viewData.set([canvas.clientWidth, canvas.clientHeight, dpr, now / 1000])
     gpu.viewData.set(columns(view.gpu), 4)
     gpu.viewData.set(
@@ -404,7 +391,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
     gpu.spriteData.fill(0)
     const walls = Math.min(plan.walls.length, MAX_WALLS)
     plan.walls.slice(0, walls).forEach((w, i) =>
-      // NOTE: the order matches `struct Wall` in the shader.
       gpu.wallData.set(
         [
           w.from.x,
@@ -430,7 +416,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
 
     ROOM_ORDER.forEach((name, i) => {
       const r = plan.rooms[name]
-      // NOTE: the order matches `struct Room` in the shader.
       gpu.roomData.set(
         [r.x, r.y, r.w, r.h, name === 'locked' ? 1 : 0, draft.rooms[i] ?? 0, 0, 0],
         i * ROOM_FLOATS,

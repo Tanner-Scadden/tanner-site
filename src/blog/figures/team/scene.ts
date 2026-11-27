@@ -1,6 +1,3 @@
-// NOTE: the team figure as a blog animation, drawn by the kit in
-// src/blog/animation.
-
 import { Array as Arr } from 'effect'
 
 import { makeAnimation } from '../../animation/Animation.ts'

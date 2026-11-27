@@ -1,20 +1,3 @@
-// NOTE: what grows under the grove. Two kinds of root:
-//
-// - A tree's own root system, grown once up front when the tree is made,
-//   like its crown. A taproot or a few deep sinkers go down, and wide
-//   laterals run out under the ground. Every root wanders as it goes and
-//   forks into finer roots, which fork again. A growth front then travels
-//   out along all of it at once, from the trunk, for the rest of the run,
-//   and the roots thicken near the trunk as they age.
-// - A reaching root, from a tree toward its nearest older neighbour, and
-//   one from that neighbour reaching back. They wander toward each other,
-//   meet, and twist around each other. Then gold spreads back along both
-//   from the knot toward the trunks, and the tie thickens and brightens the
-//   longer it holds.
-//
-// Nothing here knows about the rest of the grove. `grove.ts` says where the
-// ground is and which trees reach for which.
-
 import { Array as Arr } from 'effect'
 
 import { clamp01, random, smooth } from '../../animation/kit.ts'

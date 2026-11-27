@@ -1,8 +1,3 @@
-// NOTE: a blog animation's two shaders. Every shape is an instanced quad
-// placed in CSS px; the vertex stage turns px into clip space with the
-// canvas size in `view`, and the fragment stage antialiases the edge and
-// fades the whole frame by `view.opacity`.
-
 const VIEW = /* wgsl */ `
 struct View { size: vec2f, opacity: f32, pad: f32 };
 @group(0) @binding(0) var<uniform> view: View;

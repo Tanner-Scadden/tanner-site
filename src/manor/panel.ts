@@ -2,8 +2,6 @@ import * as stylex from '@stylexjs/stylex'
 
 import { fonts, manor, media } from '../styles/tokens.stylex.ts'
 
-// NOTE: each Manor room has its own panel under Rattles, the Workshop's
-// included, so the panel's styles are shared.
 export const panel = stylex.create({
   panel: {
     marginTop: 20,

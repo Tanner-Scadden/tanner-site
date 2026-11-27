@@ -1,24 +1,3 @@
-// NOTE: the network diagram in the blog post, as data. A seed grows one
-// whole run up front.
-//
-// The run tells the post's story in two beats:
-//   1. You start alone in the middle and help people, one at a time. Each
-//      one brings a few of their own people with them.
-//   2. Those networks keep growing without you: friends bring in friends,
-//      friends of friends meet, and neighbouring networks join up. The more
-//      people there are, the faster it grows.
-//
-// The layout is settled once for the finished network, so everyone appears
-// where they'll end up. While the run plays, a light force simulation lets
-// the network breathe around those spots without shoving anyone across the
-// canvas. It's kept as keyframes, so a slider can scrub to any moment and
-// `frameAt` reads it without simulating anything.
-//
-// A reader can add a bad interaction (see `tearsOf`): a red ripple goes out
-// from you along your link to someone you helped, and the link tears.
-// Their branch, everyone who came in through them, dims and pulls away a
-// little.
-
 import { Array as Arr, Number as Num, Option } from 'effect'
 
 import { FADE, HOLD } from '../../animation/controls.ts'

@@ -1,25 +1,3 @@
-// NOTE: the team figure in the blog post, as data. "Trust is built in drops
-// and lost in buckets." A seed lays out one whole run up front, and
-// `frameAt` reads any moment of it without simulating anything.
-//
-// The run tells it in three beats:
-//   1. Five teammates in a loose row. Now and then one of them lets fall a
-//      small gold drop, a small helpful moment, into one shared bucket of
-//      water below. Each one rings out across the surface and lifts the
-//      level a little.
-//   2. One teammate turns red and kicks the bucket. It lurches over, a
-//      good half of the water slops over the lip and splashes red on the
-//      floor, and the bucket rocks back upright with the rest sloshing.
-//   3. Drops start again, slowly and sparsely. The last one lands, the
-//      water settles and goes still, well under the mark of how full it
-//      once was.
-//
-// The run is a list of events, drops and kicks, and how much water is in
-// the bucket at any moment is a pure fold over that list. The kick at the
-// heart of the run is one entry in it, so more kicks at any time (a
-// reader's bad interaction, say) slot in with `withKicks`, and the level,
-// the spill, the slosh and the bucket's pose all follow.
-
 import { Array as Arr, Option, Order } from 'effect'
 
 import { clamp01, random, smooth } from '../../animation/kit.ts'

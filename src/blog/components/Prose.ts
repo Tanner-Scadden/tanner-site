@@ -9,11 +9,6 @@ import { type CodeLang, LANG_NAMES } from '../highlight.ts'
 import { CopyCode, HighlightCode } from '../mounts/CodeMounts.ts'
 import { flow } from './prose.stylex.ts'
 
-// NOTE: a post's body is written with plain tags, `h.p`, `h.h2`, `h.ul`,
-// `h.blockquote` and friends, and gets them from `proseTags(h)`: the same
-// `h`, with those tags already carrying the post's styles. So every element
-// is styled by its own classes, and an author never writes one. The blocks
-// below are for what plain tags can't say.
 const plainOf = new WeakMap<object, unknown>()
 
 export const proseTags = <M>(h: Html.H<M>): Html.H<M> => {
@@ -89,11 +84,6 @@ export const Figure = <M>(
     caption !== undefined && sx(h.figcaption, styles.caption).children(caption),
   )
 
-// NOTE: a post is set straight on the sheet, in its mono type, so the
-// prose takes the sheet's line color and gold. Blocks sit `flow.gap` apart.
-// A heading's negative bottom margin collapses into the next block's gap,
-// so what follows a heading sits closer: 1.1em less 0.3em of the body size
-// is 0.8em.
 const prose = stylex.create({
   block: { marginTop: { default: flow.gap, ':first-child': 0 } },
   h2: {

@@ -23,10 +23,6 @@ export const BlogBar = <M>(h: Html.H<M>, right: string) =>
     h.span(right),
   )
 
-// NOTE: the register and its search load in a chunk of their own, the first
-// time /blog is shown, so no other page carries the search. Until then, and
-// if the chunk fails to load, the same register shows every post under a
-// search box that waits.
 const BlogIndex = Component.lazy('BlogIndex', () =>
   import('../../blog/components/BlogIndex.ts').then(module => module.BlogIndex),
 )
@@ -38,8 +34,6 @@ const Waiting = <M>(h: Html.H<M>) =>
     AllPosts(h),
   )
 
-// NOTE: /blog, the index: every post in the drawing register, with a search
-// over them.
 export const BlogPage = <M>(h: Html.H<M>) =>
   sx(h.main, sheet.sheet).children(
     BlogBar(h, `SET B · ${POSTS.length} ${POSTS.length === 1 ? 'SHEET' : 'SHEETS'}`),

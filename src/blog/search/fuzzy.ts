@@ -1,10 +1,5 @@
 import { dual } from 'effect/Function'
 
-// NOTE: typo tolerance. The edit distance is optimal string alignment:
-// an insert, a delete, a substitution or swapping two neighbours each cost
-// one, so "sentinals" is one edit from "sentinels" and "clal" one from
-// "call".
-
 // How many edits a word of this length may be off by: none for short words,
 // where one edit is a different word, one from 4 letters, two from 8.
 export const editsFor = (word: string): number => (word.length >= 8 ? 2 : word.length >= 4 ? 1 : 0)

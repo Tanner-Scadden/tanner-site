@@ -1,14 +1,3 @@
-// NOTE: a frame of the grove as lines and dots in CSS px, coloured like the
-// rest of the sheet. Both renderers draw exactly this.
-//
-// The ground is drawn like a section on a drawing: a line with hatching
-// under it. Trunks, branches and roots are the sheet's pale line colour.
-// Where a tree's roots have knotted with a neighbour's, they turn gold.
-// Leaves and seeds are gold, and a leaf about to let a seed go glows.
-//
-// Pointing at a tree picks it out: its branches warm up and its leaves
-// glow, and the rest of the grove steps back a little.
-
 import { Array as Arr, Option } from 'effect'
 
 import { GOLD, LINE, type Projection, WARM, mix, rgba } from '../../animation/kit.ts'

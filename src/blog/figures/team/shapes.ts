@@ -1,23 +1,3 @@
-// NOTE: a frame of the team and their bucket as lines and dots in CSS px,
-// coloured like the rest of the sheet. Both renderers draw exactly this.
-//
-// The bucket is drawn like a part on a technical drawing: thin outline, a
-// lip at the rim and its near edge, a dashed centreline, and the floor it
-// stands on, hatched underneath. The water in it is drawn the way a
-// section drawing shows a liquid: close horizontal hatching for the body,
-// cut off by a brighter surface line that ripples where each drop lands
-// and settles back. Once some has been lost, a dashed high-water line and
-// a small level mark stay at the most it ever held.
-//
-// The teammates are a row of dots, linked only to their neighbours. A drop
-// is a gold bead with a short streak, and a small ring where it hits. A
-// kick is the post's red: a flash from whoever kicked, a strike to the
-// bucket, a ring that stays round them, and the spill, red beads and a
-// puddle on the floor beside the bucket.
-//
-// Pointing at a teammate picks them out: a ring goes round them, and the
-// rest of the team dims.
-
 import { Array as Arr, Option } from 'effect'
 
 import { GOLD, LINE, type Projection, RED, type Rgb, WARM, mix, rgba } from '../../animation/kit.ts'

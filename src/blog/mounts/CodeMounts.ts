@@ -3,9 +3,6 @@ import { Effect, Schema, Stream } from 'effect'
 
 import { CodeLang, tokenize, tokenNodes } from '../highlight.ts'
 
-// NOTE: a code block's two bits of behaviour. The view renders the <code>
-// empty, and HighlightCode fills it in. CopyCode only marks the button.
-
 // Shows the code as plain text straight away, then swaps in the highlighted
 // tokens once Shiki loads. If it can't load, the plain text stays.
 export const HighlightCode = Mount.make(

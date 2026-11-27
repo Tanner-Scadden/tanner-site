@@ -2,10 +2,6 @@ import * as stylex from '@stylexjs/stylex'
 
 import { blueprint, fonts, media, paper } from '../styles/tokens.stylex.ts'
 
-// NOTE: the document itself: the blueprint paper behind every page, and the
-// hidden pages' own colors, so overscroll, the space under short pages and
-// the mobile toolbar all match the room. Set on <html> and <body> through
-// the head, since no component draws them.
 export const documentStyles = stylex.create({
   body: {
     backgroundColor: blueprint.paper,

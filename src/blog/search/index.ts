@@ -4,16 +4,6 @@ import { dual } from 'effect/Function'
 import type { Doc as DocSchema } from './schema.ts'
 import { type Token, bare, tokenize } from './tokenize.ts'
 
-// NOTE: the inverted index: each term to its postings, which say where it
-// appears (doc, field, word positions). Three fields, title, summary and
-// body, each with its own lengths for BM25. Prefix and typo matching run on
-// the vocabulary of surface words, each pointing at the terms it was
-// indexed under, so "vouc" finds "vouching" and "sentinals" finds
-// "sentinels" before either is stemmed.
-//
-// The maps and sets here are native: building touches them once per word of
-// every post, and a search once per posting, so they're the hot path.
-
 export type FieldId = 0 | 1 | 2
 
 // A post as the index takes it. `date` is YYYY-MM-DD: ties in score go to

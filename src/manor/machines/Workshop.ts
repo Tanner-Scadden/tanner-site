@@ -5,8 +5,6 @@ import { FIRST_SEED, TURNS, nextSeed } from '../replay.ts'
 
 const REPLAY_MS = 450
 
-// NOTE: the Workshop's replay of one seed. It plays a turn at a time and
-// stops on the last one. With reduced motion every run starts at its end.
 export const WorkshopState = State({
   Playing: { seed: Schema.Finite, turn: Schema.Finite },
   Over: { seed: Schema.Finite },

@@ -1,25 +1,3 @@
-// NOTE: plays a scene on a canvas, as one scoped Effect.
-//
-// The figure's controls arrive as a stream: which variant, whether it's
-// playing, and where the slider last put it. This side owns the clock, so it
-// moves the slider itself as the run plays, and playing never re-renders the
-// page. A finished run holds, fades, and the next seed starts.
-//
-// Three tiers: WebGPU, a 2D canvas without it, and still for readers who
-// prefer reduced motion, which starts paused on the finished frame and only
-// moves when they press play or drag the slider. It only animates while the
-// canvas is on screen, and while paused it waits for the next change (the
-// controls, the reader's pointer, a resize) instead of drawing every frame.
-//
-// INTERACT is recorded here, at the clock's time, so scrubbing back before
-// it shows the world without it. Pressing it while paused applies it at
-// that moment and plays on, past the end it goes in at the end and the
-// hold waits until it's played out, and under reduced motion it goes in
-// `interact.settle` before the still frame. Restart, a new variant or the
-// next seed clears them. Clicking the drawing does the same, aimed there.
-// Once the run has `interact.max` of them, a press or a click changes
-// nothing, and the figure hears how many there are so it can say so.
-
 import { Effect, Latch, Option, Ref, Stream, String as Str } from 'effect'
 
 import { nextFrame } from '../../blueprint/webgpu/renderer.ts'

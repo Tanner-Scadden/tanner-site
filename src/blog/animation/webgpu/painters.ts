@@ -1,8 +1,3 @@
-// NOTE: the two ways a blog animation gets onto its canvas. WebGPU draws
-// every line and dot as an instanced quad. The 2D canvas draws the same
-// shapes with paths, for browsers without WebGPU. Both take the shapes of
-// one frame and a fade for the whole frame.
-
 import { Effect } from 'effect'
 
 import {

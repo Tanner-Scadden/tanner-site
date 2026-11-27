@@ -1,11 +1,3 @@
-// NOTE: the floor plan drawing. Plan space is CSS px from the canvas's
-// top-left, with z rising out of the floor; `view.m` (see ./view) takes it to
-// the screen. The floor, its strokes and the walls are drawn in plan space,
-// so they tip and rise with the house. The pets, their paw prints and
-// Teddy's barks are placed on the CPU and drawn flat on the screen, since
-// they always face the viewer. Every shape is one instanced quad a little
-// larger than itself, so a fragment only ever looks at its own shape.
-
 const COMMON = /* wgsl */ `
 struct View {
   size: vec2f,
@@ -94,9 +86,6 @@ fn hidden(i: u32) -> Out {
 }
 `
 
-// NOTE: the floor under the house, once it rises: a shade where the house
-// stands, a fine grid that fades out past its walls, and a gold sweep that
-// runs back across it as the walls go up.
 export const FLOOR = /* wgsl */ `
 ${COMMON}
 
@@ -145,14 +134,8 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: x, y, w, h, then gold, filled, and two unused. Matches `struct
-// Room`.
 export const ROOM_FLOATS = 8
 
-// NOTE: each room's floor filling in once the lines are sketched: a wash
-// that sweeps across from the corner, with a warm edge where it's
-// spreading, and faint hatching in D-13. In plan space, so it lies on the
-// floor as the house tips back.
 export const ROOMS = /* wgsl */ `
 ${COMMON}
 
@@ -203,8 +186,6 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: from.xy, to.xy, then width, reveal, gold, dash, alpha, rise, base,
-// one unused, then lean.xy and two unused. Matches `struct Wall`.
 export const WALL_FLOATS = 16
 
 const WALL_STRUCT = /* wgsl */ `
@@ -221,10 +202,6 @@ struct Wall {
 @group(0) @binding(1) var<storage, read> walls: array<Wall>;
 `
 
-// NOTE: every wall's line on the floor. All of them are sketched at once as
-// fine, faint lines, then fill out to their full weight. In plan space, so
-// with the house flat it's exactly the 2D drawing, and once it tips the
-// lines lie on the floor in perspective.
 export const STROKES = /* wgsl */ `
 ${COMMON}
 ${WALL_STRUCT}
@@ -293,11 +270,6 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: the walls standing up: each one a see-through panel over its line,
-// with a bright top edge and corners, faint section hatching, and a slow
-// scan line. The top edge glows gold while the walls rise, then cools to
-// ink. Panels are tested against the pets' depth, so a wall in front of a
-// pet tints it and a wall behind one doesn't.
 export const PANELS = /* wgsl */ `
 ${COMMON}
 ${WALL_STRUCT}
@@ -384,7 +356,6 @@ fn fs(in: PanelOut) -> @location(0) vec4f {
 }
 `
 
-// NOTE: screen-space lines, for Teddy's barks. Same layout as `struct Wall`.
 export const LINES = /* wgsl */ `
 ${COMMON}
 ${WALL_STRUCT}
@@ -414,8 +385,6 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: centre.xy, radius, ring (0 filled, otherwise the ring's width),
-// gold, alpha, and two unused. Matches `struct Dot`.
 export const DOT_FLOATS = 8
 
 export const DOTS = /* wgsl */ `
@@ -462,9 +431,6 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-// NOTE: left, top, width, height, then the sheet's column and row, flip (1
-// faces left) and alpha, then depth and three unused. Matches `struct
-// Sprite`.
 export const SPRITE_FLOATS = 12
 
 export const spritesShader = (cols: number, rows: number) => /* wgsl */ `

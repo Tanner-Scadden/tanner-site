@@ -16,9 +16,6 @@ interface Styled<E> {
   style(style: Html.Style): E
 }
 
-// NOTE: applies StyleX styles to an element builder: their atomic classes,
-// and the inline variables that dynamic styles set. Later styles win, as in
-// `stylex.props`. Use it in place of `.class` and `.style`, which it sets.
 export const sx = <E extends Styled<E>>(
   builder: { class(...tokens: ReadonlyArray<Html.ClassToken>): E },
   ...styles: ReadonlyArray<Sx>

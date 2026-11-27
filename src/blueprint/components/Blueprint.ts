@@ -7,9 +7,6 @@ import { media } from '../../styles/tokens.stylex.ts'
 import type { GpuState } from '../machines/Gpu.ts'
 import { GpuBlueprint } from '../mounts/GpuBlueprint.ts'
 
-// NOTE: WebGPU draws the grid behind the page. Until it starts, or without
-// WebGPU, the canvas is empty and the body's CSS grid shows. The renderer
-// marks a lost device with `data-gpu="lost"`.
 const styles = stylex.create({
   canvas: {
     position: 'fixed',

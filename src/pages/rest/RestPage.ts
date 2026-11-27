@@ -120,7 +120,6 @@ const sizes = stylex.create({
   full: { gridColumn: { default: 'span 6', [media.narrow]: 'span 2' }, aspectRatio: '16 / 9' },
 })
 
-// NOTE: /rest, the playing days. The gallery shows only shots with a photo.
 export const RestPage = <M>(h: Html.H<M>) =>
   sx(h.main, styles.page)
     .attr('aria-label', 'Playing days')

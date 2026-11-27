@@ -12,21 +12,8 @@ import { houseMarker } from './house.stylex.ts'
 
 type RoomName = 'library' | 'work' | 'oss' | 'outside'
 
-// NOTE: in a browser with WebGPU the house starts out `data-gpu="starting"`,
-// with its CSS walls and labels already aside, so the plan doesn't show and
-// then vanish while the GPU starts. The renderer then marks it "on" while it
-// draws, or the drawing marks it "off" if the GPU can't start, and the CSS
-// plan comes back. A lost device marks it "lost", which shows the CSS plan
-// too.
 const WEBGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
 
-// NOTE: a floor plan of the page. Each room jumps to its section, the
-// library to the blog. With WebGPU the walls are drafted in and Teddy and
-// Rain move in; without it the CSS walls show and the house is empty. The
-// renderer finds the plan by `data-plan` and each room by `data-room`, to
-// measure them. It reports each time Teddy starts playing. Without a blog
-// (`blogOpen` false, no post published) the library is still drawn, but
-// it's a room like the locked one, not a link to a section that isn't there.
 export const House = <M>(h: Html.H<M>, still: boolean, played: M, blogOpen: boolean) =>
   sx(h.figure, styles.house, houseMarker)
     .attrs(WEBGPU ? { 'data-gpu': 'starting' } : {})

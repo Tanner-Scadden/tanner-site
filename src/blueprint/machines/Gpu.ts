@@ -6,9 +6,6 @@ import { FIRST_INFECTED } from '../webgpu/shaders.ts'
 import { type Actor, started } from '../../lib/actor.ts'
 import { TOAST_MS, ToastEvent, Toasts } from '../../toast/machines/Toast.ts'
 
-// NOTE: the blueprint behind the page. It starts once, and from then on the
-// drafting pens are either resting or drawing. While they draw, the page
-// keeps count of how many are zombies.
 export const GpuState = State({
   Starting: {},
   Unsupported: {},

@@ -1,7 +1,3 @@
-// NOTE: the blueprint's frame math, as plain data in and plain data out. No
-// GPU and no DOM here, so every rule about when the page moves and when it
-// rests is testable on its own. The renderer only draws what `step` returns.
-
 import { dual } from 'effect/Function'
 
 export interface Settings {

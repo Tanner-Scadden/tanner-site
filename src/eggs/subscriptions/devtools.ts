@@ -19,8 +19,6 @@ const blank = line(['', TEXT])
 
 const withoutScheme = Str.replace(/^https?:\/\//, '')
 
-// NOTE: a little blueprint card in the console: the art, a note, the links
-// and a nudge toward the other eggs. Every line is its own styled segment.
 const printHello = (): void => {
   const width = Math.max(
     ...Arr.map(HELLO_LINKS, link => link.label.length),
@@ -69,8 +67,6 @@ const printHello = (): void => {
   )
 }
 
-// NOTE: `tanner.hello()` in the console. The function exists only while the
-// subscription runs, and each call is a message.
 export const devtools = <Msg>(message: Msg) =>
   Subscription.make(
     'devtools',

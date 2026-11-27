@@ -38,8 +38,6 @@ import {
 import { panel } from '../panel.ts'
 import { shot as shotVars } from './shot.stylex.ts'
 
-// NOTE: the replay lives as long as this component: each visit to the
-// Workshop mounts it and starts the first seed over.
 export class WorkshopActor extends Context.Service<
   WorkshopActor,
   Actor<WorkshopState, WorkshopEvent>
@@ -80,7 +78,6 @@ const WorkshopDef = Html.component({
   message: WorkshopMessage,
 })
 
-// NOTE: the board is a little arcade screen, 16 by 9 tiles.
 const shamble = stylex.keyframes({ to: { transform: 'translateY(-6%)' } })
 const hit = stylex.keyframes({ '50%': { filter: 'brightness(5) saturate(0)' } })
 const die = stylex.keyframes({
@@ -305,9 +302,6 @@ const styles = stylex.create({
 
 const pad = (n: number, width: number) => Str.padStart(width, '0')(String(n))
 
-// NOTE: the board is a little arcade screen. The survivors are the game's
-// four default crew and the zombies are its own sprites, all drawn at one
-// shared pixel size: a tile is 10 game pixels across.
 const ART = '/manor/'
 const TILE_PX = 10
 const ZOMBIE_ART: Record<ZombieKind, { readonly src: string; readonly w: number }> = {
@@ -323,8 +317,6 @@ const pct = (x: number, y: number) => ({
   y: `${((y + 0.5) / ROWS) * 100}%`,
 })
 
-// NOTE: shots leave the gun (low on the survivor's right, or left when they
-// face left) and land mid-body on the zombie. Misses fly a little wide.
 const GUN = { x: 0.3, y: -0.12 }
 const ZOMBIE_H: Record<ZombieKind, number> = { walker: 17, lid: 19, brute: 26 }
 

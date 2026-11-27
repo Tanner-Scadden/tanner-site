@@ -1,7 +1,3 @@
-// NOTE: the small helpers every figure reaches for: a seeded generator,
-// clamping and easing, the sheet's colours, and turning an aim on the
-// canvas back into the world.
-
 import { Number as Num } from 'effect'
 
 import type { Point, Rgba } from './scene.ts'

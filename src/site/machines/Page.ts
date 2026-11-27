@@ -9,10 +9,6 @@ import { findEgg } from '../../eggs/machines/Eggs.ts'
 import { type Actor, started } from '../../lib/actor.ts'
 import { SiteRoute, blogRoute, homeRoute, restRoute } from '../../routes.ts'
 
-// NOTE: the page being shown. The Router owns the URL: every page comes from
-// a route it reports, and leaving a page is a push to the Router. The Site
-// root hears each route (see `Router.subscription` in Site.ts) and hands it
-// here as `Navigated`, so the browser Router can scroll and announce.
 export const PageState = State({
   Home: {},
   Manor: { room: RoomId },

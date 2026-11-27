@@ -28,10 +28,6 @@ const siteProps = Effect.map(Router.currentRoute(SiteRoute), route => ({
   route,
 }))
 
-// NOTE: an actor stops on the scheduler it was spawned on, and TestHost's
-// only runs inside `settle`. Unmounting the Site after a test waits on its
-// actors stopping, so keep draining the scheduler for as long as the host
-// lives, or the unmount never ends.
 const drainWhileUnmounting = Layer.effectDiscard(
   Effect.gen(function* () {
     const host = yield* TestHost.TestHost

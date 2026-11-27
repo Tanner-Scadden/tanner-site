@@ -1,9 +1,5 @@
 import * as stylex from '@stylexjs/stylex'
 
-// NOTE: every color, font and breakpoint the site uses lives here. Styles
-// import these instead of writing values, so each page's palette is in one
-// place and the linter can check every value.
-
 // Each page's paper. The head reads these too, for the browser's
 // theme-color, so they're constants rather than variables.
 export const paper = stylex.defineConsts({
@@ -75,10 +71,6 @@ export const syntax = stylex.defineConsts({
   punctuation: 'rgba(220, 235, 255, 0.62)',
 })
 
-// NOTE: queries that share a property never overlap. A printed page is
-// narrower than 820px, so where a style also has a `print` value, it uses
-// the screen-only `narrowScreen` and `sheetScreen`, and paper gets `print`
-// alone.
 export const media = stylex.defineConsts({
   sheetScreen: '@media screen and (max-width: 1120px)',
   narrow: '@media (max-width: 820px)',

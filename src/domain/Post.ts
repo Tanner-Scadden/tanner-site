@@ -2,10 +2,6 @@ import type { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import { Array as Arr, Order, Schema, String as Str } from 'effect'
 
-// NOTE: a blog post. The body is an Effect UI view, written with the same `h`
-// as every other page. Its plain tags (p, h2, ul, blockquote, code) come
-// styled, so most posts need nothing else. See src/blog/components/Prose.ts
-// for how, and for the few extra blocks.
 export interface Post {
   // The URL: /blog/<slug>. Lowercase words joined by dashes.
   readonly slug: string

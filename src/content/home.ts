@@ -1,7 +1,3 @@
-// NOTE: every word the site shows lives in content/, one file per area, so
-// copy edits never touch a component. Keep it plain and specific, and no em
-// dashes. This file is the front page.
-
 export interface Job {
   readonly when: string
   readonly name: string
@@ -108,7 +104,6 @@ export interface Link {
   readonly href: string
 }
 
-// TODO(tanner): add LinkedIn once you have the URL you want here.
 export const ELSEWHERE: ReadonlyArray<Link> = [
   { label: 'github', href: 'https://github.com/Tanner-Scadden' },
   { label: 'x', href: 'https://x.com/TannerSDev' },
@@ -129,9 +124,6 @@ export const WELCOME = "Come on in and click around. There's a few Easter eggs."
 // The fourth section of the page, about life away from the keyboard.
 export const PERSONAL_LIFE = 'PERSONAL LIFE'
 
-// NOTE: the floor plan next to the greeting. Each room is a section of the
-// page, in page order: the blog is the library. D-13 stays shut, like the
-// door at the bottom of the sheet.
 export const HOUSE = {
   sheet: 'SHEET A-1 · THE HOUSE',
   rooms: {
