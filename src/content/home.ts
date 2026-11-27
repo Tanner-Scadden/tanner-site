@@ -111,10 +111,10 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
 
 // The big line up top. Each click drops a few more words, down to one.
 export const THESES = [
-  "I build engines out of other people's rules.",
-  'Engines out of rules.',
-  'Rules → engines.',
-  'Solved.',
+  'I like to build things. Mostly software, sometimes zombie games.',
+  'I like to build things.',
+  'I like to build.',
+  'Build.',
 ] as const
 
 // Under my name, where a job title would usually go.
