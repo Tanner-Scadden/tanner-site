@@ -6,12 +6,14 @@ import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
 import { Effect, Layer } from 'effect'
 
+import { BLOG } from '#content/blog'
 import { EGG_HINTS, EGG_NAMES } from '#content/eggs'
 import { RATTLES_SAYS } from '#content/manor'
+import { styleGuide } from '#content/posts/style-guide'
 import type { EggId } from '#domain/Egg'
 
 import { Viewport } from './horde/services/Viewport.ts'
-import { SiteRoute, restRoute } from './routes.ts'
+import { SiteRoute, blogRoute, postRoute, restRoute } from './routes.ts'
 import { Site } from './Site.ts'
 
 const propsFinding = (found: ReadonlyArray<EggId>) =>
@@ -58,6 +60,8 @@ describe('Site routes', () => {
       '/manor/workshop',
     )
     assert.strictEqual(SiteRoute.print(restRoute), '/rest')
+    assert.strictEqual(SiteRoute.print(blogRoute), '/blog')
+    assert.strictEqual(SiteRoute.print(postRoute('style-guide')), '/blog/style-guide')
   })
 })
 
@@ -121,6 +125,42 @@ it.layer(playLayer('/blueprints/old'), { buildPerTest: true })(
         const play = yield* HtmlPlay.make(Site, siteProps)
         yield* play.expect(Locator.text('Sheet not found')).toExist()
         assert.strictEqual(play.root.head().title, 'Not found · Tanner Scadden')
+      }).pipe(Effect.scoped),
+    )
+  },
+)
+
+// NOTE: tests run in dev mode, so the style guide draft is on the blog.
+it.layer(playLayer('/blog/style-guide'), { buildPerTest: true })(
+  'Site at /blog/style-guide',
+  it => {
+    it.effect('a post opens from its URL, and Escape goes up to the index', () =>
+      Effect.gen(function* () {
+        const play = yield* HtmlPlay.make(Site, siteProps)
+        yield* play.expect(Locator.text(styleGuide.title)).toExist()
+        yield* play.expect(Locator.text('SHEET B-01')).toExist()
+        assert.strictEqual(
+          play.root.head().title,
+          `${styleGuide.title} · Tanner Scadden`,
+        )
+
+        yield* TestGlobalEvents.fire('document', 'keydown', { key: 'Escape' })
+        yield* TestHost.settle
+        assert.strictEqual(play.root.model()?.page._tag, 'Blog')
+        yield* play.expect(Locator.text(BLOG.index)).toExist()
+        yield* play.expect(Locator.text(styleGuide.summary)).toExist()
+      }).pipe(Effect.scoped),
+    )
+  },
+)
+
+it.layer(playLayer('/blog/no-such-post'), { buildPerTest: true })(
+  'Site at /blog/no-such-post',
+  it => {
+    it.effect('a post that does not exist shows the not found sheet', () =>
+      Effect.gen(function* () {
+        const play = yield* HtmlPlay.make(Site, siteProps)
+        yield* play.expect(Locator.text('Sheet not found')).toExist()
       }).pipe(Effect.scoped),
     )
   },

@@ -19,7 +19,8 @@
     "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@193d2fb",
     "@stylexjs/stylex": "0.19.2",
     "effect": "4.1.4",
-    "effect-machine": "0.32.1"
+    "effect-machine": "0.32.1",
+    "shiki": "4.6.0"
   },
   "devDependencies": {
     "@babel/core": "7",

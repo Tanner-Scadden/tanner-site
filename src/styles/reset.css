@@ -1,7 +1,11 @@
-/* NOTE: the only plain CSS on the site: a reset, and defaults for elements
-   that no component styles. Everything else is StyleX. It sits in a layer,
-   so any StyleX rule wins over it whatever order the sheets load in. The
-   document's colors come from <body>'s StyleX class, through --link. */
+/* NOTE: plain CSS is only for elements no component styles: this reset,
+   and a blog post's body (blog/prose.css). Everything else is StyleX. Both
+   sit in layers, so any StyleX rule wins over them whatever order the
+   sheets load in. The document's colors come from <body>'s StyleX class,
+   through --link. */
+/* Whichever sheet loads first sets the layer order, so both say it. */
+@layer reset, prose;
+
 @layer reset {
   * { box-sizing: border-box; margin: 0; padding: 0 }
   html { scroll-behavior: smooth }

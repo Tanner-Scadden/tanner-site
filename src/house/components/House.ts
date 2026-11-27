@@ -11,13 +11,23 @@ import { houseMarker } from './house.stylex.ts'
 
 type RoomName = 'work' | 'oss' | 'outside'
 
+// NOTE: in a browser with WebGPU the house starts out `data-gpu="starting"`,
+// with its CSS walls and labels already aside, so the plan doesn't show and
+// then vanish while the GPU starts. The renderer then marks it "on" while it
+// draws, or the drawing marks it "off" if the GPU can't start, and the CSS
+// plan comes back. A lost device marks it "lost", which shows the CSS plan
+// too.
+const WEBGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
+
 // NOTE: a floor plan of the page. Each room jumps to its section. With
 // WebGPU the walls are drafted in and Teddy and Rain move in; without it the
-// CSS walls show and the house is empty. The renderer marks the figure, and
-// finds the plan by `data-plan` and each room by `data-room`, to measure
-// them. It reports each time Teddy starts playing.
+// CSS walls show and the house is empty. The renderer finds the plan by
+// `data-plan` and each room by `data-room`, to measure them. It reports each
+// time Teddy starts playing.
 export const House = <M>(h: Html.H<M>, still: boolean, played: M) =>
-  sx(h.figure, styles.house, houseMarker).children(
+  sx(h.figure, styles.house, houseMarker)
+    .attrs(WEBGPU ? { 'data-gpu': 'starting' } : {})
+    .children(
     sx(h.canvas, styles.canvas)
       .attr('aria-hidden', 'true')
       .onMount(HouseDrawing({ still }).pipe(Mount.map((): M => played))),
@@ -65,14 +75,21 @@ const styles = stylex.create({
       [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: 'block',
     },
   },
-  // The labels wait for the pens to draw the walls, then fade in.
+  // The labels wait for the pens to draw the walls, then fade in. They only
+  // fade in, never out.
   pencilled: {
     opacity: {
       default: 1,
+      [stylex.when.ancestor('[data-gpu="starting"]', houseMarker)]: 0,
       [stylex.when.ancestor('[data-gpu="on"][data-drafting]', houseMarker)]: 0,
     },
     transitionProperty: 'opacity',
-    transitionDuration: { default: '.6s', [media.reducedMotion]: '0s' },
+    transitionDuration: {
+      default: '.6s',
+      [stylex.when.ancestor('[data-gpu="starting"]', houseMarker)]: '0s',
+      [stylex.when.ancestor('[data-gpu="on"][data-drafting]', houseMarker)]: '0s',
+      [media.reducedMotion]: '0s',
+    },
     transitionTimingFunction: 'ease-out',
   },
   sheetNo: {
@@ -94,6 +111,7 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: {
       default: blueprint.line,
+      [stylex.when.ancestor('[data-gpu="starting"]', houseMarker)]: 'transparent',
       [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: 'transparent',
     },
     position: 'relative',
@@ -116,6 +134,7 @@ const styles = stylex.create({
       backgroundColor: blueprint.paper,
       display: {
         default: 'block',
+        [stylex.when.ancestor('[data-gpu="starting"]', houseMarker)]: 'none',
         [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: 'none',
       },
     },
@@ -134,6 +153,7 @@ const styles = stylex.create({
     borderWidth: 0,
     borderColor: {
       default: blueprint.line,
+      [stylex.when.ancestor('[data-gpu="starting"]', houseMarker)]: 'transparent',
       [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: 'transparent',
     },
     transitionProperty: 'color, background-color',

@@ -17,34 +17,13 @@ import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import { House } from '../house/components/House.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
-import { SiteRoute, href, restRoute } from '../routes.ts'
+import { BLOG_OPEN } from '../blog/posts.ts'
+import { SiteRoute, blogRoute, href, restRoute } from '../routes.ts'
 import { sx } from '../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../styles/tokens.stylex.ts'
 import { Work } from '../work/components/Work.ts'
 
 const styles = stylex.create({
-  // The top bar.
-  top: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 12,
-    position: { default: null, [media.phone]: 'relative' },
-    borderBottomWidth: 1,
-    borderBottomStyle: 'solid',
-    borderBottomColor: blueprint.rule,
-    paddingBlock: 10,
-    paddingInline: 18,
-    fontSize: 11,
-    letterSpacing: '.14em',
-  },
-  nav: { display: { default: null, [media.print]: 'none' } },
-  navLink: {
-    color: { default: blueprint.line, ':hover': blueprint.hi },
-    textDecoration: 'none',
-    marginLeft: { default: 14, ':first-child': 0 },
-  },
-
   // The hero: a hello on one side, the house on the other. The hello keeps
   // its room on paper too.
   hero: {
@@ -192,12 +171,13 @@ const pressed = <M>(message: M) => ({ key }: { readonly key: string }) =>
   key === 'Enter' || key === ' ' ? message : undefined
 
 const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
-  sx(h.div, styles.top).children(
+  sx(h.div, sheet.bar).children(
     h.span('TANNER SCADDEN'),
-    sx(h.nav, styles.nav).children(
-      sx(h.a, styles.navLink).attr('href', '#work').children('WORK'),
-      sx(h.a, styles.navLink).attr('href', '#oss').children('OPEN SOURCE'),
-      sx(h.a, styles.navLink).attr('href', '#outside').children(PERSONAL_LIFE),
+    sx(h.nav, sheet.nav).children(
+      sx(h.a, sheet.navLink).attr('href', '#work').children('WORK'),
+      sx(h.a, sheet.navLink).attr('href', '#oss').children('OPEN SOURCE'),
+      sx(h.a, sheet.navLink).attr('href', '#outside').children(PERSONAL_LIFE),
+      BLOG_OPEN && sx(h.a, sheet.navLink).attr('href', href(blogRoute)).children('BLOG'),
     ),
     EggCounter(h, eggs),
   )

@@ -35,13 +35,42 @@ export const fonts = stylex.defineConsts({
   pixel: 'Silkscreen, monospace',
   terminal: 'VT323, monospace',
   sans: 'Inter, system-ui, sans-serif',
+  // A post's body.
+  reading: 'Archivo, system-ui, sans-serif',
 })
 
 // Archivo's widths: the display type is set wide.
 export const widths = stylex.defineConsts({
+  normal: '100%',
+  slight: '108%',
   semi: '112%',
   wide: '115%',
   widest: '125%',
+})
+
+// A blog post's body: a deeper panel of the blueprint, with brighter ink,
+// and its code listings. Printing turns it into black on white too.
+export const post = stylex.defineVars({
+  paper: { default: '#0b3166', '@media print': 'transparent' },
+  ink: { default: '#e9f1ff', '@media print': '#111' },
+  inkDim: { default: 'rgba(220, 235, 255, 0.72)', '@media print': '#555' },
+  rule: { default: 'rgba(200, 222, 255, 0.22)', '@media print': '#ccc' },
+  bright: { default: '#fff', '@media print': '#111' },
+  tint: 'rgba(200, 222, 255, 0.1)',
+  codePaper: { default: '#072553', '@media print': 'transparent' },
+  codeGrid: { default: 'rgba(200, 222, 255, 0.06)', '@media print': 'transparent' },
+  copied: '#9be3b0',
+  failed: '#ff8a80',
+})
+
+// Shiki's token colors, for the code listings.
+export const syntax = stylex.defineConsts({
+  comment: 'rgba(200, 222, 255, 0.5)',
+  keyword: '#ffd166',
+  string: '#9be3b0',
+  constant: '#ffb38a',
+  function: '#8cc8ff',
+  punctuation: 'rgba(220, 235, 255, 0.62)',
 })
 
 // NOTE: queries that share a property never overlap. A printed page is

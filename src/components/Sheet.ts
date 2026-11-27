@@ -19,6 +19,27 @@ export const sheet = stylex.create({
     outlineColor: blueprint.line,
     outlineOffset: 6,
   },
+  // The bar along the top of a sheet. Its links don't print.
+  bar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
+    position: { default: null, [media.phone]: 'relative' },
+    borderBottomWidth: 1,
+    borderBottomStyle: 'solid',
+    borderBottomColor: blueprint.rule,
+    paddingBlock: 10,
+    paddingInline: 18,
+    fontSize: 11,
+    letterSpacing: '.14em',
+  },
+  nav: { display: { default: null, [media.print]: 'none' } },
+  navLink: {
+    color: { default: blueprint.line, ':hover': blueprint.hi },
+    textDecoration: 'none',
+    marginLeft: { default: 14, ':first-child': 0 },
+  },
   hero: {
     paddingTop: { default: 72, [media.narrowScreen]: 36, [media.print]: 12 },
     paddingBottom: { default: 56, [media.narrowScreen]: 36, [media.print]: 12 },
