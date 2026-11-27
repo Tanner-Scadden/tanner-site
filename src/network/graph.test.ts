@@ -1,107 +1,91 @@
 import { assert, describe, it } from '@effect/vitest'
 import { Array as Arr, Option } from 'effect'
 
-import {
-  BOUNDS,
-  HOP,
-  MAX_EDGES,
-  MAX_NODES,
-  type Mode,
-  TURN,
-  arrivalOf,
-  buildTimeline,
-  frameAt,
-  positionAt,
-  tiedAt,
-} from './graph.ts'
+import { BOUNDS, HOP, MAX_EDGES, MAX_NODES, arrivalOf, buildTimeline, frameAt, positionAt } from './graph.ts'
 import { projection, shapesOf } from './shapes.ts'
 
 const SEEDS = Arr.range(1, 12)
-const MODES: ReadonlyArray<Mode> = ['good', 'bad']
 
 describe('network timeline', () => {
   it('replays the same run from the same seed', () => {
-    assert.deepStrictEqual(buildTimeline(7, 'good').edges, buildTimeline(7, 'good').edges)
-    assert.notDeepEqual(buildTimeline(7, 'good').edges, buildTimeline(8, 'good').edges)
+    assert.deepStrictEqual(buildTimeline(7).edges, buildTimeline(7).edges)
+    assert.notDeepEqual(buildTimeline(7).edges, buildTimeline(8).edges)
   })
 
   it('stays inside its bounds and its buffer sizes', () => {
-    for (const mode of MODES) {
-      for (const seed of SEEDS) {
-        const timeline = buildTimeline(seed, mode)
-        assert.isAtMost(timeline.nodes.length, MAX_NODES)
-        assert.isAtMost(timeline.edges.length, MAX_EDGES)
-        for (const key of timeline.layout) {
-          for (let i = 0; i < key.length; i += 2) {
-            assert.isAtMost(Math.abs(key[i]!), BOUNDS.x)
-            assert.isAtMost(Math.abs(key[i + 1]!), BOUNDS.y)
-          }
+    for (const seed of SEEDS) {
+      const timeline = buildTimeline(seed)
+      assert.isAtMost(timeline.nodes.length, MAX_NODES)
+      assert.isAtMost(timeline.edges.length, MAX_EDGES)
+      for (const key of timeline.layout) {
+        for (let i = 0; i < key.length; i += 2) {
+          assert.isAtMost(Math.abs(key[i]!), BOUNDS.x)
+          assert.isAtMost(Math.abs(key[i + 1]!), BOUNDS.y)
         }
       }
     }
   })
 
-  it('only connects people who are there, never twice, and only snaps a link after it formed', () => {
-    for (const mode of MODES) {
-      for (const seed of SEEDS) {
-        const { nodes, edges } = buildTimeline(seed, mode)
-        const keys = new Set<string>()
-        for (const edge of edges) {
-          assert.notStrictEqual(edge.a, edge.b)
-          assert.isAtMost(nodes[edge.a]!.born, edge.born)
-          assert.isAtMost(nodes[edge.b]!.born, edge.born)
-          assert.isAbove(edge.cut, edge.born)
-          const key = edge.a < edge.b ? `${edge.a}:${edge.b}` : `${edge.b}:${edge.a}`
-          assert.isFalse(keys.has(key))
-          keys.add(key)
-        }
+  it('only connects people who are there, and never twice', () => {
+    for (const seed of SEEDS) {
+      const { nodes, edges } = buildTimeline(seed)
+      const keys = new Set<string>()
+      for (const edge of edges) {
+        assert.notStrictEqual(edge.a, edge.b)
+        assert.isAtMost(nodes[edge.a]!.born, edge.born)
+        assert.isAtMost(nodes[edge.b]!.born, edge.born)
+        const key = edge.a < edge.b ? `${edge.a}:${edge.b}` : `${edge.b}:${edge.a}`
+        assert.isFalse(keys.has(key))
+        keys.add(key)
       }
     }
   })
 
   it('you only ever walk a link that is whole, starting from the middle', () => {
-    for (const mode of MODES) {
-      for (const seed of SEEDS) {
-        const { edges, hops } = buildTimeline(seed, mode)
-        assert.strictEqual(hops[0]!.from, 0)
-        for (const [i, hop] of hops.entries()) {
-          if (hop.from === hop.to) continue
-          const walkable = Arr.some(
-            edges,
-            edge =>
-              edge.born <= hop.start &&
-              edge.cut > hop.start &&
-              ((edge.a === hop.from && edge.b === hop.to) || (edge.a === hop.to && edge.b === hop.from)),
-          )
-          assert.isTrue(walkable, `${mode} seed ${seed}, hop ${i}`)
-        }
+    for (const seed of SEEDS) {
+      const { edges, hops } = buildTimeline(seed)
+      assert.strictEqual(hops[0]!.from, 0)
+      for (const [i, hop] of hops.entries()) {
+        if (hop.from === hop.to) continue
+        const walkable = Arr.some(
+          edges,
+          edge =>
+            edge.born <= hop.start &&
+            ((edge.a === hop.from && edge.b === hop.to) || (edge.a === hop.to && edge.b === hop.from)),
+        )
+        assert.isTrue(walkable, `seed ${seed}, hop ${i}`)
       }
     }
   })
 
   it('grows on its own, beyond the people you meet', () => {
     for (const seed of SEEDS) {
-      const { edges } = buildTimeline(seed, 'good')
-      assert.isTrue(Arr.some(edges, edge => !edge.yours), `seed ${seed}`)
+      const { edges } = buildTimeline(seed)
+      assert.isTrue(
+        Arr.some(edges, edge => !edge.yours),
+        `seed ${seed}`,
+      )
     }
   })
 
-  it('never hurts anyone in a good run, and falls apart in a bad one', () => {
+  it('barely moves anyone once they are there', () => {
+    // People appear on their settled spot, so nobody gets shoved across the
+    // canvas as the network grows around them.
     for (const seed of SEEDS) {
-      const good = buildTimeline(seed, 'good')
-      const bad = buildTimeline(seed, 'bad')
-      assert.isFalse(Arr.some(good.hops, hop => hop.hurt))
-      assert.isTrue(Arr.some(bad.hops, hop => hop.hurt))
-      assert.isTrue(Arr.some(bad.edges, edge => Number.isFinite(edge.cut)))
-      // After the turn, fewer people are tied to you than at it.
-      const turn = bad.hops[TURN]!.start
-      assert.isBelow(tiedAt(bad, bad.end), tiedAt(bad, turn), `seed ${seed}`)
-      assert.isAbove(tiedAt(good, good.end), tiedAt(bad, bad.end), `seed ${seed}`)
+      const timeline = buildTimeline(seed)
+      for (let t = 0; t < timeline.end; t += 0.05) {
+        for (const [i, node] of timeline.nodes.entries()) {
+          if (node.born > t) continue
+          const [ax, ay] = positionAt(timeline, i, t)
+          const [bx, by] = positionAt(timeline, i, t + 0.05)
+          assert.isAtMost(Math.hypot(bx - ax, by - ay) / 0.05, 0.2, `seed ${seed}, person ${i} at ${t}`)
+        }
+      }
     }
   })
 
   it('keeps you in the middle while everyone else moves', () => {
-    const timeline = buildTimeline(3, 'good')
+    const timeline = buildTimeline(3)
     assert.deepStrictEqual(positionAt(timeline, 0, timeline.end), [0, 0])
     const [x, y] = positionAt(timeline, 1, timeline.end)
     assert.isAbove(Math.hypot(x, y), 0.1)
@@ -109,12 +93,15 @@ describe('network timeline', () => {
 })
 
 describe('network frames', () => {
-  const timeline = buildTimeline(3, 'good')
+  const timeline = buildTimeline(3)
 
   it('starts with just you', () => {
     const frame = frameAt(timeline, 0)
     assert.strictEqual(frame.edges.length, 0)
-    assert.deepStrictEqual(Arr.map(frame.dots, dot => dot.kind), ['you'])
+    assert.deepStrictEqual(
+      Arr.map(frame.dots, dot => dot.kind),
+      ['you'],
+    )
     assert.deepStrictEqual(frame.walker, [0, 0])
   })
 
@@ -142,16 +129,6 @@ describe('network frames', () => {
         assert.include(['met', 'circle'], later.dots[i]!.kind)
       }
     }
-  })
-
-  it('turns the people you hurt red, and snaps the link', () => {
-    const bad = buildTimeline(3, 'bad')
-    const hop = Arr.findFirst(bad.hops, h => h.hurt)
-    assert.isTrue(hop._tag === 'Some')
-    if (hop._tag !== 'Some') return
-    const after = frameAt(bad, arrivalOf(hop.value) + 0.2)
-    assert.strictEqual(after.dots[hop.value.to]?.kind, 'hurt')
-    assert.isTrue(Arr.some(after.edges, edge => edge.apart > 0))
   })
 
   it('picks out whoever the pointer is over, with their links', () => {
