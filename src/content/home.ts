@@ -21,10 +21,11 @@ export const WORK: ReadonlyArray<Job> = [
     href: 'https://www.vitalize.care',
     role: 'FOUNDING ENGINEER',
     problem:
-      'Hospital staffing depends on forecasts, skills, costs, union rules and many day\u2011of variables.',
+      'Hospital staffing and scheduling depend on forecasts, skills, costs, union rules and many day\u2011of variables. Money is wasted, staff burn out, and managers drown in custom processes.',
     approach:
       'Built the real-time scheduling engine and the app around it. Everything is written in Effect and runs on Effect Cluster.',
-    result: 'Used by tens of thousands of clinical staff.',
+    result:
+      'Hospitals save time and millions of dollars, schedules are fairer, and staff spend more time with patients. Used by tens of thousands of clinical staff.',
   },
   {
     when: '2022 → 2024',
@@ -32,7 +33,7 @@ export const WORK: ReadonlyArray<Job> = [
     href: 'https://www.demiplane.com',
     role: 'SENIOR FULL STACK',
     problem:
-      'Every tabletop RPG has its own rules, and each character tool was hand\u2011built.',
+      'Every tabletop RPG has its own rules, and each character tool was hand\u2011built. New games were slow to launch, and every expansion meant more custom code.',
     approach:
       'Built one shared game engine, plus a no-code editor for setting up character rules.',
     result: 'New games go live fast, expansions are easy to add, and players love the character builder.',
@@ -43,10 +44,10 @@ export const WORK: ReadonlyArray<Job> = [
     href: 'https://www.oneapp.today',
     role: 'TECH LEAD',
     problem:
-      'An ATV parts business sold on Amazon, Walmart, eBay and WooCommerce, and kept listings, stock and orders in sync by hand.',
+      'An ATV parts business sold on Amazon, Walmart, eBay and WooCommerce, and kept listings, stock and orders in sync by hand. Orders shipped wrong, fulfillment was slow, and margins were thin.',
     approach:
       'Led a team of six building automation that kept every channel in sync, sent orders to suppliers and adjusted prices on its own.',
-    result: 'Fewer shipping mistakes, faster fulfillment, higher margins, and items stayed top sellers.',
+    result: 'Fewer shipping mistakes, faster fulfillment, higher margins, and their items stayed top sellers.',
   },
   {
     when: '2019 → 2020',
@@ -54,10 +55,10 @@ export const WORK: ReadonlyArray<Job> = [
     href: 'https://gosolo.io',
     role: 'SOLAR PROPOSALS',
     problem:
-      'Getting a solar proposal took days, and each permitting packet took hours to put together.',
+      'Getting a solar proposal took days, and each permitting packet took hours to put together. Customers waited, and the team lost hours to paperwork.',
     approach:
       'Saved the local permitting (AHJ) rules, calculated the system specs, and generated the proposal and permit packet from them.',
-    result: 'Proposals went from days to minutes, and the permit packet came with them.',
+    result: 'Proposals went from days to minutes, the permit packet came with them, and the team got back to selling.',
   },
   {
     when: 'SIDE PROJECT',
