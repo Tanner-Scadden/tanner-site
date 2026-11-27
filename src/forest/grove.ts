@@ -470,6 +470,8 @@ export interface FrameBranch {
   readonly to: Point
   readonly width: number
   readonly root: boolean
+  // 0 to 1 as two trees' roots knot together where they meet.
+  readonly bond: number
 }
 
 export interface FrameLeaf {
@@ -522,6 +524,41 @@ const SEED_SIZE = 0.016
 const TAIL = 0.05
 const SEED_FADE = 0.6
 
+// Roots keep growing long after the crown is done: the tree's own roots
+// get longer for this long after it's grown, and each tree reaches a root
+// toward its nearest older neighbour at this speed, from halfway through
+// its growth. Where two meet, they knot together over BOND seconds.
+const ROOTS_DEEPEN = 6
+const ROOT_RATE = 0.07
+const ROOT_DEPTH = 0.08
+const ROOT_KNEE = 0.07
+const BOND = 2
+
+const reachingFrom = (tree: Tree) => tree.sprout + tree.grow * 0.5
+
+// The tree it reaches its roots toward: the nearest that came up before it.
+const neighbourOf = (trees: ReadonlyArray<Tree>, id: number): number => {
+  const tree = trees[id]!
+  let best = -1
+  for (const [j, other] of trees.entries()) {
+    if (other.sprout >= tree.sprout) continue
+    if (best < 0 || Math.abs(other.x - tree.x) < Math.abs(trees[best]!.x - tree.x)) best = j
+  }
+  return best
+}
+
+// A reaching root: down from the trunk, then across under the ground.
+const rootRun = (tree: number, x: number, dir: number, length: number, bond: number): ReadonlyArray<FrameBranch> => {
+  if (length <= 0) return []
+  const knee = Math.min(length, ROOT_KNEE)
+  const bend: Point = [x + dir * knee, GROUND + (ROOT_DEPTH * knee) / ROOT_KNEE]
+  const width = 0.008 * (1 + bond)
+  const down: FrameBranch = { tree, from: [x, GROUND], to: bend, width, root: true, bond }
+  return length <= knee
+    ? [down]
+    : [down, { tree, from: bend, to: [x + dir * length, GROUND + ROOT_DEPTH], width, root: true, bond }]
+}
+
 export const frameAt = (timeline: Timeline, time: number): Frame => {
   const { trees, flights } = timeline
 
@@ -548,20 +585,29 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
       const f = drawn / segment.length
       const to: Point = [lerp(base[0], tip[0], f), lerp(base[1], tip[1], f)]
       // Branches thicken as the tree grows.
-      branches.push({ tree: id, from: base, to, width: segment.width * (0.3 + 0.7 * pose.grown), root: false })
+      branches.push({
+        tree: id,
+        from: base,
+        to,
+        width: segment.width * (0.3 + 0.7 * pose.grown),
+        root: false,
+        bond: 0,
+      })
       left = Math.min(left, to[0])
       right = Math.max(right, to[0])
       top = Math.min(top, to[1])
     }
     for (const root of tree.roots) {
-      const drawn = Math.min(root.length, root.length * pose.grown * 2.5)
+      const deepen = 1 + 1.2 * easeInOut((time - tree.sprout - tree.grow) / ROOTS_DEEPEN)
+      const drawn = Math.min(root.length, root.length * pose.grown * 2.5) * deepen
       if (drawn <= 0) continue
       branches.push({
         tree: id,
         from: [tree.x, GROUND],
         to: [tree.x + Math.cos(root.angle) * drawn, GROUND + Math.sin(root.angle) * drawn],
-        width: root.width * (0.3 + 0.7 * pose.grown),
+        width: root.width * (0.3 + 0.7 * pose.grown) * deepen,
         root: true,
+        bond: 0,
       })
     }
     for (const [i, leaf] of tree.leaves.entries()) {
@@ -578,6 +624,23 @@ export const frameAt = (timeline: Timeline, time: number): Frame => {
       leaves.push({ tree: id, x, y, size: 0.0095 * leaf.size * Math.sqrt(tree.scale) * open, blossom })
     }
     trunks.push({ id, x: tree.x, grown: pose.grown, left, right, top })
+  }
+
+  // Under the ground, each tree reaches toward its nearest older neighbour,
+  // and that neighbour reaches back. They meet halfway and knot together:
+  // the longer they've stood side by side, the stronger the tie.
+  for (const [id, tree] of trees.entries()) {
+    if (time < tree.sprout) continue
+    const other = neighbourOf(trees, id)
+    if (other < 0) continue
+    const them = trees[other]!
+    const half = Math.abs(them.x - tree.x) / 2
+    const dir = Math.sign(them.x - tree.x)
+    const lengthOf = (t: Tree) => Num.clamp((time - reachingFrom(t)) * ROOT_RATE, { minimum: 0, maximum: half })
+    const met = Math.max(reachingFrom(tree), reachingFrom(them)) + half / ROOT_RATE
+    const bond = easeInOut((time - met) / BOND)
+    branches.push(...rootRun(id, tree.x, dir, lengthOf(tree), bond))
+    branches.push(...rootRun(other, them.x, -dir, lengthOf(them), bond))
   }
 
   const seeds: Array<FrameSeed> = []

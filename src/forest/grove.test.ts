@@ -205,4 +205,25 @@ describe('grove frames', () => {
     assert.isTrue(Arr.some(picked.dots, (dot, i) => dot.glow > plain.dots[i]!.glow))
     assert.deepStrictEqual(shapesOf(frame, 800, 450, Option.some([-100, -100])), plain)
   })
+
+  it('grows roots the whole way, and knots neighbours together underground', () => {
+    const rootLength = (time: number) =>
+      Arr.reduce(
+        Arr.filter(frameAt(timeline, time).branches, branch => branch.root),
+        0,
+        (sum, branch) => sum + Math.hypot(branch.to[0] - branch.from[0], branch.to[1] - branch.from[1]),
+      )
+    let last = 0
+    for (let t = 0; t <= timeline.end; t += 0.1) {
+      const length = rootLength(t)
+      assert.isAtLeast(length, last - 1e-9, `at ${t}`)
+      last = length
+    }
+    // Roots are still lengthening after the first tree's crown is done.
+    const first = timeline.trees[0]!
+    assert.isAbove(rootLength(first.sprout + first.grow + 3), rootLength(first.sprout + first.grow))
+    const end = frameAt(timeline, timeline.end).branches
+    assert.isTrue(Arr.some(end, branch => branch.root && branch.bond > 0.5))
+    assert.isTrue(Arr.every(end, branch => branch.bond === 0 || branch.root))
+  })
 })

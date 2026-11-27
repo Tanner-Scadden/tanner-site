@@ -22,7 +22,8 @@ const WARM: Rgb = [1, 0.94, 0.8]
 
 // The most a frame draws: the ground and its hatching, every branch and
 // root, a wisp per seed; every leaf, a seed and a landing ring each.
-export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + ROOTS) + MAX_TREES
+// Plus up to four lines per tree for the roots it reaches toward a neighbour.
+export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + ROOTS + 4) + MAX_TREES
 export const MAX_DOTS = MAX_TREES * MAX_SEGMENTS + MAX_TREES * 2
 
 // How much of itself the rest of the grove keeps while a tree's picked.
@@ -87,12 +88,14 @@ export const shapesOf = (
 
   const branches = Arr.map(frame.branches, (branch): Line => {
     const lit = isPicked(branch.tree)
-    const alpha = branch.root ? 0.32 : 0.78
+    const alpha = branch.root ? 0.32 + 0.45 * branch.bond : 0.78
+    // Roots that have knotted with a neighbour's turn gold.
+    const tint = lit ? WARM : branch.bond > 0 ? GOLD : LINE
     return {
       from: px(branch.from),
       to: px(branch.to),
       width: Math.max(0.9, branch.width * scale) + (lit ? 0.5 : 0),
-      color: rgba(lit ? WARM : LINE, (lit ? Math.min(1, alpha + 0.15) : alpha) * keep(branch.tree)),
+      color: rgba(tint, (lit ? Math.min(1, alpha + 0.15) : alpha) * keep(branch.tree)),
     }
   })
 
