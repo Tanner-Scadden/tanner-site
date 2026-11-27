@@ -15,7 +15,7 @@ export interface Post {
   // src/content/posts/<slug>.ts. The post links to it, so readers can see
   // how it's built.
   readonly source?: string
-  // Its card when it's shared, 1200 by 630, from public/, and what the card
+  // Its card when it's shared, 2400 by 1260, from public/, and what the card
   // shows for anyone who can't see it. Without one it shares the site's.
   readonly image?: { readonly path: string; readonly alt: string }
 }
