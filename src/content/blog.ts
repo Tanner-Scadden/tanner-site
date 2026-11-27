@@ -23,5 +23,4 @@ export const BLOG = {
   back: '← ALL POSTS',
   newer: 'NEWER',
   older: 'OLDER',
-  author: 'TANNER SCADDEN',
 } as const

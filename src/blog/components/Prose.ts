@@ -88,34 +88,34 @@ export const Figure = <M>(
     caption !== undefined && sx(h.figcaption, styles.caption).children(caption),
   )
 
-// NOTE: blocks sit `flow.gap` apart. A heading's negative bottom margin
-// collapses into the next block's gap, so what follows a heading sits
-// closer: 1.2em less 0.4em of the body size is 0.8em.
+// NOTE: a post is set straight on the sheet, in its mono type, so the
+// prose takes the sheet's line color and gold. Blocks sit `flow.gap` apart.
+// A heading's negative bottom margin collapses into the next block's gap,
+// so what follows a heading sits closer: 1.1em less 0.3em of the body size
+// is 0.8em.
 const prose = stylex.create({
   block: { marginTop: { default: flow.gap, ':first-child': 0 } },
   h2: {
     fontFamily: fonts.display,
     fontWeight: 800,
-    fontSize: 26,
+    fontSize: 22,
     lineHeight: 1.2,
-    fontStretch: widths.slight,
-    color: post.bright,
+    fontStretch: widths.semi,
+    textTransform: 'uppercase',
+    color: blueprint.line,
     marginTop: '2.2em',
-    marginBottom: `calc(-0.4 * ${flow.size})`,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomStyle: 'solid',
-    borderBottomColor: post.rule,
+    marginBottom: `calc(-0.3 * ${flow.size})`,
   },
   h3: {
     fontFamily: fonts.display,
-    fontWeight: 700,
-    fontSize: 20,
+    fontWeight: 800,
+    fontSize: 17,
     lineHeight: 1.3,
-    fontStretch: widths.hint,
-    color: post.bright,
+    fontStretch: widths.slight,
+    textTransform: 'uppercase',
+    color: blueprint.line,
     marginTop: '1.8em',
-    marginBottom: `calc(-0.4 * ${flow.size})`,
+    marginBottom: `calc(-0.3 * ${flow.size})`,
   },
   list: { paddingLeft: '1.4em' },
   item: {
@@ -123,20 +123,20 @@ const prose = stylex.create({
     '::marker': { color: blueprint.hi },
   },
   quote: {
+    marginTop: '1.8em',
+    marginBottom: '1.8em',
     borderLeftWidth: 2,
     borderLeftStyle: 'solid',
     borderLeftColor: blueprint.hi,
-    paddingTop: 2,
-    paddingBottom: 2,
-    paddingLeft: 22,
-    color: post.inkDim,
-    fontStyle: 'italic',
+    paddingLeft: 18,
+    fontSize: 18,
+    lineHeight: 1.6,
   },
   link: {
     textDecorationThickness: { default: '1px', ':hover': '2px' },
     textUnderlineOffset: 3,
   },
-  strong: { fontWeight: 700, color: post.bright },
+  strong: { fontWeight: 700, color: blueprint.hi },
   code: {
     fontFamily: fonts.mono,
     fontWeight: 400,
@@ -151,7 +151,7 @@ const prose = stylex.create({
     borderStyle: 'none',
     height: 9,
     marginBlock: '2.4em',
-    backgroundImage: `linear-gradient(${post.rule}, ${post.rule}), linear-gradient(${post.rule}, ${post.rule}), linear-gradient(${post.rule}, ${post.rule})`,
+    backgroundImage: `linear-gradient(${blueprint.faint}, ${blueprint.faint}), linear-gradient(${blueprint.faint}, ${blueprint.faint}), linear-gradient(${blueprint.faint}, ${blueprint.faint})`,
     backgroundPosition: 'center, left, right',
     backgroundSize: '100% 1px, 1px 100%, 1px 100%',
     backgroundRepeat: 'no-repeat',

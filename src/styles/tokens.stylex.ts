@@ -21,6 +21,8 @@ export const blueprint = stylex.defineVars({
   faint: { default: 'rgba(200, 222, 255, 0.14)', '@media print': '#ddd' },
   grid: 'rgba(200, 222, 255, 0.05)',
   hi: { default: '#ffd166', '@media print': '#111' },
+  // The gold at half strength, for a button's border.
+  hiSoft: 'rgba(255, 209, 102, 0.5)',
   // The gold, washed over a hovered room.
   wash: 'rgba(255, 209, 102, 0.06)',
   // The heavy rules between sections, lighter on paper.
@@ -42,7 +44,6 @@ export const fonts = stylex.defineConsts({
 // Archivo's widths: the display type is set wide.
 export const widths = stylex.defineConsts({
   normal: '100%',
-  hint: '104%',
   slight: '108%',
   semi: '112%',
   wide: '115%',
