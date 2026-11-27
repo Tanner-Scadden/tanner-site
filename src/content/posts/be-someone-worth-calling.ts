@@ -9,7 +9,7 @@ export const beSomeoneWorthCalling: Post = {
   title: 'Be Someone Worth Calling',
   date: '2026-11-27',
   summary:
-    'The best opportunities in life will come from people vouching for you in rooms you’re not in.',
+    'The best opportunities in life will come from people vouching for you.',
   image: {
     path: '/og/be-someone-worth-calling.png',
     alt: 'Be Someone Worth Calling: a network of people around you, with one branch torn away after a bad interaction.',
