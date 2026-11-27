@@ -141,8 +141,9 @@ export const playScene = (
       const shapes = now.run.shapesAt(now.time, size.width, size.height, at)
       painter.paint(shapes, size.width, size.height, opacityAt(now))
       Option.map(slider, input => {
+        // Not while the reader is holding it, or it'd fight their drag.
         const step = String(Math.round(clamp01(now.time / now.run.end) * SLIDER_STEPS))
-        if (input.value !== step) input.value = step
+        if (input.value !== step && !input.matches(':active')) input.value = step
       })
       Option.map(readout, element => {
         const text = `${clockOf(Math.min(now.time, now.run.end))} / ${clockOf(now.run.end)}`

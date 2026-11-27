@@ -13,22 +13,15 @@ import type { Scene, Variant } from './scene.ts'
 // `makeAnimation` turns a scene into a component a post drops in with
 // `NetworkFigure(h, { key: 'network' })`.
 //
-// The controls are play and pause, replay, a time slider, the scene's
-// variants when it has more than one, and a tag that says what's drawing it:
-// WEBGPU, CANVAS 2D, or STATIC for reduced motion. If the canvas can't be
-// drawn on at all, the controls go and the caption stays. The Model is only
+// The controls are play and pause, replay, a time slider that plays on from
+// wherever it's dropped, the time, and the scene's variants when it has more
+// than one. If the canvas can't be drawn on at all, the controls go and the
+// caption stays. The Model is only
 // what the controls say; the drawing keeps the clock (see play.ts), and
 // loads only once the canvas is on the page, WebGPU and all.
 //
 // The figure is marked `data-blueprint-quiet`, so the blueprint behind the
 // page stops bending around the cursor while it's over the figure.
-
-const TAG: Record<Started['renderer'] | 'pending', string> = {
-  pending: '',
-  webgpu: 'WEBGPU',
-  canvas: 'CANVAS 2D',
-  none: '',
-}
 
 export const makeAnimation = <const Name extends string>(name: Name, scene: Scene) => {
   const Drawing = Mount.makeStream(
@@ -94,7 +87,6 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       ClickedReplay: $ => $.evolve({ playing: () => true, seek: () => 0, seeks: seeks => seeks + 1 }),
       MovedSlider: ($, { value }) =>
         $.evolve({
-          playing: () => false,
           seek: () => Option.getOrElse(Num.parse(value), () => 0) / SLIDER_STEPS,
           seeks: seeks => seeks + 1,
         }),
@@ -102,7 +94,6 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     view: (h, model) => {
       const shown = variantOf(model.variant)
       const alarm = shown.tone === 'alarm'
-      const tag = model.still && model.renderer !== 'none' ? 'STATIC' : TAG[model.renderer]
       return sx(h.figure, styles.figure)
         .attr('data-blueprint-quiet', '')
         .children(
@@ -158,7 +149,6 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                         .children(variant.label),
                     ),
                   ),
-              tag !== '' && sx(h.small, styles.tag).children(tag),
             ),
           sx(h.figcaption, styles.caption).children(shown.caption),
         )
@@ -259,14 +249,6 @@ const styles = stylex.create({
   },
   alarmSlider: { accentColor: post.alarm },
   variants: { display: 'flex', gap: 6 },
-  tag: {
-    marginLeft: 'auto',
-    fontFamily: fonts.mono,
-    fontSize: 9.5,
-    lineHeight: 'normal',
-    letterSpacing: '.18em',
-    color: blueprint.dim,
-  },
   caption: {
     paddingBlock: 10,
     paddingInline: 14,
