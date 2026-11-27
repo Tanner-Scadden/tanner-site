@@ -445,6 +445,8 @@ const PERSONAL_SPACE = 24
 export const BARK_MS = 450
 const CURIOUS = 0.45
 const PLAY_SLACK = 8
+// With motion reduced, how close the pointer has to come to Teddy.
+const STILL_REACH = 30
 const ARRIVED = 0.5
 const LONGEST_STEP_S = 0.05
 
@@ -634,11 +636,22 @@ const rainPlans = (
   return [s, { ...p, target, speed: RAIN_WALK, restUntil: 0, alert: false }]
 }
 
+// With motion reduced Teddy stays put, but still play-bows, without
+// barking, while the pointer is right by him.
+const playInPlace = (p: Pet, tick: PetTick): Pet => {
+  const near = tick.pointer !== null && distance(p.at, tick.pointer) <= STILL_REACH
+  const facing =
+    near && tick.pointer !== null && Math.abs(tick.pointer.x - p.at.x) > 1
+      ? Math.sign(tick.pointer.x - p.at.x)
+      : p.facing
+  return near === p.alert && facing === p.facing ? p : { ...p, alert: near, facing }
+}
+
 export const stepPets: {
   (tick: PetTick): (pets: Pets) => Pets
   (pets: Pets, tick: PetTick): Pets
 } = dual(2, (pets: Pets, tick: PetTick): Pets => {
-  if (tick.still) return { ...pets, last: tick.now }
+  if (tick.still) return { ...pets, teddy: playInPlace(pets.teddy, tick), last: tick.now }
   const dt = pets.last === null ? 0 : Math.min((tick.now - pets.last) / 1000, LONGEST_STEP_S)
   const [s1, teddyPlan] = teddyPlans(pets.seed, pets.teddy, tick)
   const teddy = walk(teddyPlan, tick.plan, dt, tick.now)

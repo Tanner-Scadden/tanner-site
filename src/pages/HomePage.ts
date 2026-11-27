@@ -1,3 +1,4 @@
+import { Mount } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import { Array as Arr } from 'effect'
 
@@ -20,7 +21,8 @@ import { SiteRoute, href, restRoute } from '../routes.ts'
 import { WorkDrawing } from '../work/mounts/WorkDrawing.ts'
 
 // NOTE: the front page, at /. The thesis and the WebGPU credit are the two
-// things on it that act like buttons; the page reports their clicks.
+// things on it that act like buttons; the page reports their clicks, and
+// when Teddy gets someone to play.
 export const HomePage = <M>(
   h: Html.H<M>,
   options: {
@@ -28,6 +30,7 @@ export const HomePage = <M>(
     readonly thesis: string
     readonly clickedThesis: M
     readonly clickedWebGpu: M
+    readonly playedWithTeddy: M
     readonly still: boolean
   },
 ) =>
@@ -35,7 +38,7 @@ export const HomePage = <M>(
     .class('sheet')
     .children(
       TopBar(h, options.eggs),
-      Hero(h, options.thesis, options.clickedThesis, options.still),
+      Hero(h, options),
       Work(h, options.still),
       OpenSource(h),
       Outside(h),
@@ -70,7 +73,20 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
       EggCounter(h, eggs),
     )
 
-const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M, still: boolean) =>
+const Hero = <M>(
+  h: Html.H<M>,
+  {
+    thesis,
+    clickedThesis: clicked,
+    playedWithTeddy,
+    still,
+  }: {
+    readonly thesis: string
+    readonly clickedThesis: M
+    readonly playedWithTeddy: M
+    readonly still: boolean
+  },
+) =>
   h.header
     .class('hero', 'home')
     .children(
@@ -86,7 +102,7 @@ const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M, still: boolean) =>
             .children(thesis),
           h.p.class('welcome').children(WELCOME),
         ),
-      House(h, still),
+      House(h, still, playedWithTeddy),
     )
 
 const Room = <M>(
@@ -102,14 +118,14 @@ const Room = <M>(
 // NOTE: a floor plan of the page. Each room jumps to its section. With
 // WebGPU the walls are drafted in and Teddy and Rain move in; without it the
 // CSS walls show and the house is empty.
-const House = <M>(h: Html.H<M>, still: boolean) =>
+const House = <M>(h: Html.H<M>, still: boolean, played: M) =>
   h.figure
     .class('house')
     .children(
       h.canvas
         .class('house-gpu')
         .attr('aria-hidden', 'true')
-        .onMount(HouseDrawing({ still })),
+        .onMount(HouseDrawing({ still }).pipe(Mount.map((): M => played))),
       h.small.class('sheet-no').attr('aria-hidden', 'true').children(HOUSE.sheet),
       h.nav
         .class('plan')

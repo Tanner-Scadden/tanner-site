@@ -568,12 +568,13 @@ const markHouse = (house: HTMLElement, plan: HTMLElement) =>
 
 // Starts the drawing on `canvas`, which sits inside the house figure, and
 // returns once it's running. It follows `changes` and the page for as long
-// as `Scope` stays open, and fails with GpuUnavailable when this browser
-// can't run it.
+// as `Scope` stays open, runs `played` each time Teddy starts playing, and
+// fails with GpuUnavailable when this browser can't run it.
 export const runHouseDrawing = (
   canvas: HTMLCanvasElement,
   initial: HouseSettings,
   changes: Stream.Stream<HouseSettings>,
+  played: Effect.Effect<void>,
 ): Effect.Effect<void, GpuUnavailable, Scope.Scope> =>
   Effect.gen(function* () {
     const house = canvas.parentElement
@@ -648,6 +649,8 @@ export const runHouseDrawing = (
                 : initialPets(current, Math.floor(now))
               : stepPets(home, { now, plan: current, pointer: floor, still })
         yield* Ref.set(pets, moved)
+        // Down into a play bow: someone's playing with Teddy.
+        if (moved !== null && moved.teddy.alert && !(home?.teddy.alert ?? false)) yield* played
 
         yield* render(gpu, canvas, {
           plan: current,
