@@ -30,8 +30,11 @@
           "@effect/ui-kit"
         ],
         "allowedUnstableApis": [
+          "@effect/platform-browser",
           "@effect/vitest",
-          "effect/Path"
+          "effect/Path",
+          "effect/reactivity",
+          "effect/rpc"
         ],
         "diagnosticSeverity": {
           "abortControllerInEffect": "error",

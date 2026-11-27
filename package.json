@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@effect/platform-browser": "4.1.4",
     "@effect/ui": "https://pkg.pr.new/Effect-TS/ui/@effect/ui@193d2fb",
     "@stylexjs/stylex": "0.19.2",
     "effect": "4.1.4",

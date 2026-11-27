@@ -1,10 +1,12 @@
+import { Component } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
+import { Option } from 'effect'
 
 import { Section, sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
 
-import { BlogIndex } from '../../blog/components/PostList.ts'
+import { AllPosts, ResultCount, SearchBar } from '../../blog/components/PostList.ts'
 import { POSTS } from '../../blog/posts.ts'
 import { blogRoute, homeRoute, href } from '../../routes.ts'
 import { base } from '../../styles/base.ts'
@@ -21,6 +23,21 @@ export const BlogBar = <M>(h: Html.H<M>, right: string) =>
     h.span(right),
   )
 
+// NOTE: the register and its search load in a chunk of their own, the first
+// time /blog is shown, so no other page carries the search. Until then, and
+// if the chunk fails to load, the same register shows every post under a
+// search box that waits.
+const BlogIndex = Component.lazy('BlogIndex', () =>
+  import('../../blog/components/BlogIndex.ts').then(module => module.BlogIndex),
+)
+
+const Waiting = <M>(h: Html.H<M>) =>
+  h.div(
+    SearchBar(h, input => input.attr('disabled', '')),
+    ResultCount(h, Option.none()),
+    AllPosts(h),
+  )
+
 // NOTE: /blog, the index: every post in the drawing register, with a search
 // over them.
 export const BlogPage = <M>(h: Html.H<M>) =>
@@ -31,7 +48,7 @@ export const BlogPage = <M>(h: Html.H<M>) =>
       sx(h.p, sheet.role).children(BLOG.role),
       sx(h.p, styles.intro).children(BLOG.intro),
     ),
-    Section(h, 'sheets').children(BlogIndex(h, { key: 'index' })),
+    Section(h, 'sheets').children(BlogIndex(h, { key: 'index', fallback: () => Waiting(h) })),
   )
 
 const styles = stylex.create({

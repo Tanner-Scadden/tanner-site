@@ -1,7 +1,6 @@
-import { UiSchema } from '@effect/ui'
-import { Html } from '@effect/ui/html'
+import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr, Schema, String as Str } from 'effect'
+import { Array as Arr, Option } from 'effect'
 
 import { sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
@@ -12,15 +11,28 @@ import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { POSTS, isDraft, sheetOf } from '../posts.ts'
+import type { Part, Snippet } from '../search/snippet.ts'
 
 // NOTE: the drawing register: a row per post, with its sheet number, date,
 // title and summary. The blog index lists every post, with a search over
-// them; the home page lists the newest few.
+// them (see BlogIndex.ts); the home page lists the newest few. A search
+// result adds the part of the post that matched, with the matched words in
+// gold.
 
-export const PostList = <M>(h: Html.H<M>, posts: ReadonlyArray<Post>) =>
+export interface Row {
+  readonly post: Post
+  readonly snippet: Option.Option<Snippet>
+}
+
+const Marked = <M>(h: Html.H<M>, parts: ReadonlyArray<Part>) =>
+  Arr.map(parts, part => (part.marked ? sx(h.mark, styles.mark).children(part.text) : part.text))
+
+export const Register = <M>(h: Html.H<M>, rows: ReadonlyArray<Row>) =>
   sx(h.ol, styles.register).children(
-    ...Arr.map(posts, post =>
-      sx(h.li, styles.row).children(
+    ...Arr.map(rows, ({ post, snippet }) => {
+      const summary = Option.filter(snippet, s => s.field === 'summary')
+      const body = Option.filter(snippet, s => s.field === 'body')
+      return sx(h.li, styles.row).children(
         sx(h.a, base.link, styles.entry, stylex.defaultMarker())
           .attr('href', href(postRoute(post.slug)))
           .children(
@@ -28,50 +40,53 @@ export const PostList = <M>(h: Html.H<M>, posts: ReadonlyArray<Post>) =>
             sx(h.span, styles.text).children(
               sx(h.time, styles.date).attr('datetime', post.date).children(formatDate(post.date)),
               sx(h.strong, styles.title).children(post.title, isDraft(post) && sx(h.em, styles.draft).children(' · DRAFT')),
-              sx(h.span, styles.summary).children(post.summary),
+              sx(h.span, styles.summary).children(
+                ...Option.match(summary, { onNone: () => [post.summary], onSome: s => Marked(h, s.parts) }),
+              ),
+              Option.match(body, {
+                onNone: () => null,
+                onSome: s => sx(h.span, styles.snippet).children(...Marked(h, s.parts)),
+              }),
             ),
             sx(h.span, styles.go).attr('aria-hidden', 'true').children('→'),
           ),
-      ),
-    ),
+      )
+    }),
   )
 
-// Does the post's title or summary have every word of the query in it?
-const matches = (query: string) => {
-  const words = Arr.filter(Str.split(Str.toLowerCase(Str.trim(query)), /\s+/), word => word !== '')
-  return (post: Post): boolean => {
-    const text = Str.toLowerCase(`${post.title} ${post.summary}`)
-    return Arr.every(words, word => Str.includes(word)(text))
-  }
-}
+export const PostList = <M>(h: Html.H<M>, posts: ReadonlyArray<Post>) =>
+  Register(
+    h,
+    Arr.map(posts, post => ({ post, snippet: Option.none() })),
+  )
 
-const Message = UiSchema.TaggedEnum({ Searched: { query: Schema.String } })
+// The search box over the register. The blog index passes its live input;
+// the placeholder drawn while the index loads passes a quiet one.
+export const SearchBar = <M>(h: Html.H<M>, input: (field: Html.H<M>['input']) => Html.H<M>['input']) =>
+  sx(h.label, styles.search).children(
+    sx(h.span, styles.searchLabel).children('SEARCH'),
+    input(
+      sx(h.input, base.focus, styles.searchInput).attrs({
+        type: 'search',
+        placeholder: 'Find a post',
+        'aria-label': 'Search posts',
+        autocomplete: 'off',
+      }),
+    ),
+    sx(h.kbd, styles.key).attr('aria-hidden', 'true').children('/'),
+  )
 
-// Every post, with a small search over them.
-export const BlogIndex = Html.component({
-  name: 'BlogIndex',
-  model: Schema.Struct({ query: Schema.String }),
-  message: Message,
-}).make({
-  init: () => ({ query: '' }),
-  update: { Searched: ($, { query }) => $.evolve({ query: () => query }) },
-  view: (h, model) => {
-    const found = Arr.filter(POSTS, matches(model.query))
-    return h.div(
-      sx(h.label, styles.search).children(
-        sx(h.span, styles.searchLabel).children('SEARCH'),
-        sx(h.input, base.focus, styles.searchInput)
-          .attrs({ type: 'search', placeholder: 'Find a post', 'aria-label': 'Search posts', autocomplete: 'off' })
-          .on('input', ({ value }) => Message.Searched({ query: value })),
-      ),
-      POSTS.length === 0
-        ? sx(h.p, sheet.prose).children(BLOG.empty)
-        : found.length === 0
-          ? sx(h.p, styles.none).children(BLOG.noMatch)
-          : PostList(h, found),
-    )
-  },
-})
+// "2 RESULTS", or nothing.
+export const ResultCount = <M>(h: Html.H<M>, count: Option.Option<number>) =>
+  sx(h.p, styles.count)
+    .attrs({ role: 'status', 'aria-live': 'polite' })
+    .children(Option.match(count, { onNone: () => '', onSome: n => `${n} ${n === 1 ? 'RESULT' : 'RESULTS'}` }))
+
+export const NoMatch = <M>(h: Html.H<M>) => sx(h.p, styles.none).children(BLOG.noMatch)
+
+// Every post, newest first, or a note that there's nothing yet.
+export const AllPosts = <M>(h: Html.H<M>) =>
+  POSTS.length === 0 ? sx(h.p, sheet.prose).children(BLOG.empty) : PostList(h, POSTS)
 
 const styles = stylex.create({
   search: {
@@ -85,6 +100,19 @@ const styles = stylex.create({
     borderBottomColor: blueprint.faint,
   },
   searchLabel: { fontSize: 11, letterSpacing: '.18em', color: blueprint.dim },
+  key: {
+    display: { default: null, [media.narrow]: 'none' },
+    fontFamily: fonts.mono,
+    fontSize: 11,
+    lineHeight: 'normal',
+    color: blueprint.dim,
+    borderWidth: 1,
+    borderStyle: 'solid',
+    borderColor: blueprint.faint,
+    paddingBlock: 1,
+    paddingInline: 6,
+  },
+  count: { minHeight: 16, marginTop: -12, marginBottom: 6, fontSize: 10.5, letterSpacing: '.16em', color: blueprint.dim },
   searchInput: {
     flexGrow: 1,
     minWidth: 0,
@@ -152,6 +180,18 @@ const styles = stylex.create({
     color: blueprint.hi,
   },
   summary: { color: blueprint.dim, maxWidth: 620 },
+  snippet: {
+    marginTop: 4,
+    paddingLeft: 10,
+    borderLeftWidth: 1,
+    borderLeftStyle: 'solid',
+    borderLeftColor: blueprint.faint,
+    fontSize: 13,
+    color: blueprint.dim,
+    maxWidth: 620,
+  },
+  // A matched word: gold text, no wash behind it.
+  mark: { color: blueprint.hi, backgroundColor: 'transparent', fontWeight: 700 },
   go: {
     display: { default: null, [media.narrow]: 'none' },
     alignSelf: 'center',
