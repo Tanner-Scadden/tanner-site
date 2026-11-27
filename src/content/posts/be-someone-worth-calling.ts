@@ -25,7 +25,7 @@ export const beSomeoneWorthCalling: Post = {
       'I hadn’t pitched myself to anyone. An old teammate vouched for me in a room I wasn’t in, because of how I’d shown up in Arena of Valor.',
     ),
     h.p(
-      'Almost every big turn in my life has started with a call like that, and I don’t think that’s special to me. You’ll get them too. You can’t ask for them. You can only be someone worth calling.',
+      'Almost every big turn in my life has started with a call like that, and I don’t think that’s special to me. You’ll get them too. You can’t ask for them. Your best bet is to be someone worth calling.',
     ),
 
     h.h2('Choose the team over being right'),
