@@ -73,11 +73,11 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Build with intent.'),
-      ' Build for a better developer experience, a better agent experience, or a real return for the org, and push your knowledge however you can along the way.',
+      ' Build for a better user experience, better DX / Agentic experience, or a real return for the org. Push your knowledge however you can along the way, don\'\t settle for status quo.',
     ),
     h.p(
       h.strong('Be intentional about how you communicate.'),
-      ' The first sentence decides how the rest gets read, so make it count. When you need something from someone, lead with what you need, then give them the context to act on it. ',
+      ' When you need something from someone, lead with what you need, then give them the context to act on it. ',
       h.a.attr('href', 'https://www.smartbrevity.com/').children('Smart Brevity'),
       ' is a whole book on doing this well.',
     ),
