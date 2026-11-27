@@ -109,20 +109,23 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
   { label: 'x', href: 'https://x.com/TannerSDev' },
 ]
 
-// The welcome line up top. Each click drops a few more words, down to a hi.
+// The big line up top. Each click drops a few more words, down to one.
 export const THESES = [
-  "Welcome in. I build engines out of other people's rules.",
-  'Welcome in. Engines from rules.',
-  'Welcome in.',
-  'Hi.',
+  "I build engines out of other people's rules.",
+  'Engines out of rules.',
+  'Rules → engines.',
+  'Solved.',
 ] as const
 
-export const ROLE = 'Engine builder'
+// Under my name, where a job title would usually go.
+export const WELCOME = 'Welcome. Make sure you click around.'
+
+export const SIGN_OFF = 'Thanks for stopping by'
 
 // NOTE: every product I build runs on someone's rulebook, so the site gets
 // one too. Each rule nudges toward an egg without giving it away.
 export const HOUSE_RULES = (eggs: number): ReadonlyArray<string> => [
-  'Click things. Some of them click back.',
+  'Some things click back.',
   'Developers, open your tools. Someone left a note.',
   'Old cheat codes still work here.',
   `There are ${eggs} eggs. Have fun.`,

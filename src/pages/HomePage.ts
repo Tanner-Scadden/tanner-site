@@ -1,7 +1,15 @@
 import type { Html } from '@effect/ui/html'
 import { Array as Arr } from 'effect'
 
-import { ELSEWHERE, HOUSE_RULES, ROLE, OPEN_SOURCE, SITE_REPO_URL, WORK } from '#content/home'
+import {
+  ELSEWHERE,
+  HOUSE_RULES,
+  OPEN_SOURCE,
+  SIGN_OFF,
+  SITE_REPO_URL,
+  WELCOME,
+  WORK,
+} from '#content/home'
 import { EGG_COUNT } from '#domain/Egg'
 
 import { PENS_START } from '../blueprint/webgpu/renderer.ts'
@@ -66,7 +74,7 @@ const Hero = <M>(h: Html.H<M>, thesis: string, clicked: M) =>
     .class('hero')
     .children(
       h.h1('Tanner Scadden'),
-      h.p.class('role').children(ROLE),
+      h.p.class('role').children(WELCOME),
       h.p
         .class('thesis')
         .attrs({ role: 'button', tabindex: '0' })
@@ -187,7 +195,7 @@ const Footer = <M>(h: Html.H<M>, clickedWebGpu: M) =>
   h.footer
     .class('foot')
     .children(
-      h.div(h.small('TANNER SCADDEN'), h.strong(ROLE)),
+      h.div(h.small('TANNER SCADDEN'), h.strong(SIGN_OFF)),
       h.div(
         h.small('ELSEWHERE'),
         ...Arr.flatMap(ELSEWHERE, (link, i) => [

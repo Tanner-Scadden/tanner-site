@@ -96,7 +96,7 @@ it.layer(site(), { buildPerTest: true })('Thesis', it => {
         yield* thesis.call(ThesisEvent.Clicked)
         yield* thesis.call(ThesisEvent.Clicked)
         const simple = yield* thesis.call(ThesisEvent.Clicked)
-        assert.strictEqual(thesisText(simple.newState), 'Hi.')
+        assert.strictEqual(thesisText(simple.newState), 'Solved.')
         yield* eggs.waitFor(state => state.found.includes('thesis'))
         const over = yield* thesis.call(ThesisEvent.Clicked)
         assert.strictEqual(thesisText(over.newState), THESES[0])

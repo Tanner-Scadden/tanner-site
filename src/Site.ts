@@ -2,7 +2,6 @@ import { Command, Component, Head, Router, Subscription, UiSchema } from '@effec
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
 import { Effect, Layer, Schema, Stream, String as Str } from 'effect'
 
-import { ROLE } from '#content/home'
 import { EggId } from '#domain/Egg'
 
 import { Blueprint } from './blueprint/components/Blueprint.ts'
@@ -103,7 +102,7 @@ const REST = { name: 'rest', color: '#07090d' }
 
 const titleOf = (page: PageState): string =>
   PageState.$match(page, {
-    Home: () => `Tanner Scadden · ${ROLE}`,
+    Home: () => 'Tanner Scadden',
     Manor: ({ room }) =>
       room === 'parlour'
         ? 'The Manor · Tanner Scadden'
