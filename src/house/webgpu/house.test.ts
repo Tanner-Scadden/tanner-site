@@ -204,6 +204,18 @@ describe('the pets', () => {
     assert.deepStrictEqual(later.rain.at, home.rain.at)
   })
 
+  it('still has Teddy play-bow in place, without barking, when the pointer comes right up to him', () => {
+    const home = restingPets(plan)
+    const near = { x: home.teddy.at.x + 10, y: home.teddy.at.y }
+    const bowing = run(home, { ms: 500, still: true, pointer: near })
+    assert.isTrue(bowing.teddy.alert)
+    assert.deepStrictEqual(bowing.teddy.at, home.teddy.at)
+    assert.strictEqual(bowing.teddy.facing, 1)
+    assert.strictEqual(bowing.teddy.barkAt, home.teddy.barkAt)
+    const away = run(bowing, { from: 600, ms: 100, still: true, pointer: null })
+    assert.isFalse(away.teddy.alert)
+  })
+
   it('keep their place in the yard when the house resizes', () => {
     const bigger: Plan = planFor({
       house: { x: 40, y: 40, w: 560, h: 380 },

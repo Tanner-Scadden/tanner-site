@@ -52,7 +52,7 @@ it.layer(site(), { buildPerTest: true })('Eggs', it => {
       assert.isFalse(again.transitioned)
       const after = yield* eggs.snapshot
       assert.deepStrictEqual(after.found, ['console'])
-      yield* toastSays('EGG FOUND: DEVTOOLS · 1/7')
+      yield* toastSays('EGG FOUND: DEVTOOLS · 1/8')
     }),
   )
 
@@ -60,20 +60,20 @@ it.layer(site(), { buildPerTest: true })('Eggs', it => {
     Effect.gen(function* () {
       const eggs = yield* Eggs
       yield* eggs.call(EggsEvent.Found({ egg: 'print' }))
-      yield* toastSays('EGG FOUND: PAPER COPY · 1/7')
+      yield* toastSays('EGG FOUND: PAPER COPY · 1/8')
       yield* TestClock.adjust('3 seconds')
       const toasts = yield* Toasts
       const hidden = yield* toasts.waitFor(state => state._tag === 'Hidden')
       // The dock on a hidden page keeps the last text to shrink it away.
       assert.deepStrictEqual(
         hidden,
-        ToastState.Hidden({ last: 'EGG FOUND: PAPER COPY · 1/7' }),
+        ToastState.Hidden({ last: 'EGG FOUND: PAPER COPY · 1/8' }),
       )
     }),
   )
 })
 
-it.layer(site(['manor', 'worlds', 'thesis', 'konami', 'console', 'print']))(
+it.layer(site(['manor', 'worlds', 'thesis', 'konami', 'console', 'print', 'teddy']))(
   'Eggs, one short',
   it => {
     it.effect('the last egg finds them all', () =>

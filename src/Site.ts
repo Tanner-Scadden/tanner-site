@@ -27,6 +27,7 @@ import { Dock, Toast } from './toast/components/Toast.ts'
 const siteInputs = {
   ClickedThesis: {},
   ClickedWebGpu: {},
+  PlayedWithTeddy: {},
   StartedGpu: { supported: Schema.Boolean },
   CountedInfected: { infected: Schema.Finite },
   ClickedZombie: { id: Schema.Finite },
@@ -60,6 +61,7 @@ export class Dispatch extends Command.Service<Dispatch>()('site/Dispatch', {
         SiteInput.match(input, {
           ClickedThesis: () => thesis.send(ThesisEvent.Clicked),
           ClickedWebGpu: () => gpu.send(GpuEvent.Clicked),
+          PlayedWithTeddy: () => eggs.send(EggsEvent.Found({ egg: 'teddy' })),
           StartedGpu: ({ supported }) => gpu.send(GpuEvent.Started({ supported })),
           CountedInfected: ({ infected }) => gpu.send(GpuEvent.Counted({ infected })),
           ClickedZombie: ({ id }) => horde.send(HordeEvent.Munched({ id })),
@@ -119,6 +121,7 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
         thesis: thesisText(model.thesis),
         clickedThesis: SiteMessage.ClickedThesis(),
         clickedWebGpu: SiteMessage.ClickedWebGpu(),
+        playedWithTeddy: SiteMessage.PlayedWithTeddy(),
         still: h.props.reducedMotion,
       })
     case 'Manor':

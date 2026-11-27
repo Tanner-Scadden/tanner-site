@@ -81,7 +81,7 @@ it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
         assert.strictEqual(play.root.model()?.page._tag, 'Home')
         assert.strictEqual(play.root.head().title, 'Tanner Scadden')
         // Landing on the Manor counted its egg.
-        yield* play.expect(Locator.text('EGGS 1/7')).toExist()
+        yield* play.expect(Locator.text('EGGS 1/8')).toExist()
       }).pipe(Effect.scoped),
     )
   },
@@ -105,7 +105,7 @@ it.layer(playLayer('/'), { buildPerTest: true })('Site at /', it => {
     () =>
       Effect.gen(function* () {
         const play = yield* HtmlPlay.make(Site, propsFinding(['manor']))
-        yield* play.expect(Locator.text('QUEST LOG · 1 OF 7 FOUND')).toExist()
+        yield* play.expect(Locator.text('QUEST LOG · 1 OF 8 FOUND')).toExist()
         yield* play.expect(Locator.text(EGG_NAMES.manor)).toExist()
         yield* play.expect(Locator.text(EGG_HINTS.manor)).toBeAbsent()
         yield* play.expect(Locator.text(EGG_HINTS.worlds)).toExist()
