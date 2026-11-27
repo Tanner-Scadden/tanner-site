@@ -3,16 +3,22 @@ import { Array as Arr, Option } from 'effect'
 
 import {
   DRAFT_MS,
+  PRINTS,
+  PRINT_LIFE,
+  REST_FRAME,
+  WALK_FRAMES,
   type Pets,
   type Plan,
   type Point,
   type Rooms,
   draftOf,
   drafted,
+  frameOf,
   initialPets,
   movePets,
   planFor,
   restingPets,
+  printAlpha,
   stepPets,
 } from './house.ts'
 
@@ -120,7 +126,30 @@ describe('the pets', () => {
   it('leave paw prints as they walk, and only a few', () => {
     const later = run(initialPets(plan, 11), { ms: 4000 })
     assert.isAbove(later.teddy.prints.length, 0)
-    assert.isAtMost(later.teddy.prints.length, 8)
+    assert.isAtMost(later.teddy.prints.length, PRINTS)
+  })
+
+  it('let their paw prints fade away', () => {
+    const home = restingPets(plan)
+    const walking: Pets = { ...home, teddy: { ...home.teddy, target: { x: home.teddy.at.x - 40, y: home.teddy.at.y } } }
+    // Walk a moment, then sit long enough for every print to fade.
+    const walked = run(walking, { ms: 600 })
+    assert.isAbove(walked.teddy.prints.length, 0)
+    const [first] = walked.teddy.prints
+    assert.isAbove(printAlpha(first!, first!.t + 10), 0.9)
+    assert.strictEqual(printAlpha(first!, first!.t + PRINT_LIFE), 0)
+    const faded = run(walked, { from: 600, ms: PRINT_LIFE + 100, pointer: walked.teddy.at })
+    assert.strictEqual(faded.teddy.prints.length, 0)
+  })
+
+  it('walk through the walking frames, face where they go, and rest when they stop', () => {
+    const home = restingPets(plan)
+    assert.strictEqual(frameOf(home.teddy), REST_FRAME)
+    const walking: Pets = { ...home, teddy: { ...home.teddy, target: { x: home.teddy.at.x - 40, y: home.teddy.at.y } } }
+    const frames = Arr.makeBy(30, i => frameOf(run(walking, { ms: i * 30 }).teddy))
+    assert.isTrue(Arr.every(Arr.range(0, WALK_FRAMES - 1), f => frames.includes(f)))
+    assert.strictEqual(run(walking, { ms: 300 }).teddy.facing, -1)
+    assert.strictEqual(frameOf(run(walking, { ms: 3000 }).teddy), REST_FRAME)
   })
 
   it('sit still when motion is reduced', () => {
