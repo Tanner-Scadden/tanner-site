@@ -83,7 +83,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Be the first to jump in.'),
-      ' Fix problems as you find them. Answer the question in Slack. If you don’t know how to help, tell them they’re not alone, and that you’re one call or text away.',
+      ' Fix problems as you find them. Answer the question in Slack. Be the person people come to by default. If you’re not sure where to start, mirror the top performers on your team. If there isn’t one, join a team that has one.',
     ),
     h.p(
       h.strong('Give back to open source.'),
