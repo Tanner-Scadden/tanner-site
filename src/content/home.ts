@@ -117,7 +117,7 @@ export const THESES = [
 ] as const
 
 export const BIO =
-  'Hospital staffing, solar permits, tabletop RPGs. I learn the rules a business runs on, model them as code, and build the engine so nobody has to do it by hand again. Usually as one of the first engineers. Mostly TypeScript and Effect. Self-taught.'
+  "It started with solar permits, where every city has its own rules for what goes on a roof. Then four marketplaces that each wanted listings their own way. Then every tabletop RPG's rulebook. Now union rules for hospital staffing. Each time, I learn the rules, model them as code, and build the engine so nobody has to do it by hand again. Self-taught, mostly TypeScript and Effect."
 
 
 export const SITE_REPO_URL = 'https://github.com/Tanner-Scadden/tanner-site'
