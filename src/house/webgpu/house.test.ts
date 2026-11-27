@@ -12,7 +12,9 @@ import {
   type Plan,
   type Point,
   type Rooms,
+  areaOf,
   barkOf,
+  crosses,
   draftOf,
   drafted,
   frameOf,
@@ -214,4 +216,42 @@ describe('the pets', () => {
     assert.isTrue(inside(moved.teddy.at, bigger.yard))
     assert.isTrue(inside(moved.rain.at, bigger.yard))
   })
+
+  // Whether a step from a to b goes through a wall that stands up.
+  const throughWall = (a: Point, b: Point) =>
+    Arr.some(plan.walls, w => w.rise > 0 && crosses({ from: a, to: b }, w))
+
+  // Steps frames like `run`, failing if either pet walks through a wall.
+  const walkThrough = (pets: Pets, ms: number, pointer: Point | null) => {
+    let state = pets
+    for (let now = 0; now <= ms; now += 1000 / 60) {
+      const next = stepPets(state, { now, plan, pointer, still: false })
+      assert.isFalse(throughWall(state.teddy.at, next.teddy.at), `Teddy went through a wall at ${now}ms`)
+      assert.isFalse(throughWall(state.rain.at, next.rain.at), `Rain went through a wall at ${now}ms`)
+      state = next
+    }
+    return state
+  }
+
+  it('come in through the front door, not the walls', () => {
+    for (const seed of Arr.range(1, 24)) walkThrough(initialPets(plan, seed), 12_000, null)
+  })
+
+  it('Teddy goes room to room through the doorways to reach the pointer', () => {
+    // Up in Open Source, two doorways from the yard.
+    const pointer = { x: 260, y: 50 }
+    const later = walkThrough(initialPets(plan, 3), 8000, pointer)
+    assert.strictEqual(areaOf(plan, later.teddy.at), 'oss')
+    assert.isAtMost(distance(later.teddy.at, pointer), 14)
+    // And back to the yard once it's gone.
+    const home = walkThrough(later, 8000, null)
+    assert.strictEqual(areaOf(plan, home.teddy.at), 'outside')
+  })
+
+  it('Teddy waits at the door of D-13, since it stays closed', () => {
+    const later = walkThrough(initialPets(plan, 3), 8000, { x: 262, y: 170 })
+    assert.notStrictEqual(areaOf(plan, later.teddy.at), 'locked')
+    assert.isTrue(later.teddy.alert)
+  })
 })
+

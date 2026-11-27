@@ -11,7 +11,7 @@
 // gets too close. With motion reduced the house is simply up, and the pets
 // sit still.
 
-import { Array as Arr } from 'effect'
+import { Array as Arr, Option } from 'effect'
 import { dual } from 'effect/Function'
 
 export interface Point {
@@ -49,8 +49,29 @@ export interface Wall {
   readonly rise: number
 }
 
+// The rooms a pet can be in, and the porch outside the front door.
+export type Area = 'work' | 'oss' | 'outside' | 'locked' | 'porch'
+
+// A gap in a wall the pets can walk through: a spot just inside each side,
+// so going from one to the other crosses the gap straight on.
+export interface Door {
+  readonly between: readonly [Area, Area]
+  readonly mouths: readonly [Point, Point]
+}
+
+export interface Obstacle {
+  readonly from: Point
+  readonly to: Point
+  readonly around: Point
+}
+
 export interface Plan {
   readonly rooms: Rooms
+  // Every way between the rooms. D-13 has none: it's closed.
+  readonly doors: ReadonlyArray<Door>
+  // Things standing inside a room, like the open front door, and the spot
+  // past the end of each to walk round it by.
+  readonly obstacles: ReadonlyArray<Obstacle>
   // In drafting order.
   readonly walls: ReadonlyArray<Wall>
   // Where the pets come in: just outside the front door.
@@ -161,8 +182,30 @@ export const planFor = (rooms: Rooms): Plan => {
     ),
   ]
 
+  // A spot STEP_IN px each side of a doorway's middle.
+  const across = (x: number, y: number, dx: number, dy: number): readonly [Point, Point] => [
+    pt(x - dx * STEP_IN, y - dy * STEP_IN),
+    pt(x + dx * STEP_IN, y + dy * STEP_IN),
+  ]
+  const doors: ReadonlyArray<Door> = [
+    { between: ['outside', 'porch'], mouths: across((doorLeft + doorRight) / 2, bottom, 0, 1) },
+    { between: ['work', 'outside'], mouths: across(hallLeft + hallWidth / 2, middle, 0, 1) },
+    { between: ['work', 'oss'], mouths: across(split, sideTop + sideWidth / 2, 1, 0) },
+  ]
+
+  // The open front door stands in Outside Work, hinged at the wall.
+  const obstacles: ReadonlyArray<Obstacle> = [
+    {
+      from: pt(doorLeft, bottom),
+      to: pt(doorLeft, bottom - doorWidth),
+      around: pt(doorLeft, bottom - doorWidth - STEP_IN),
+    },
+  ]
+
   return {
     rooms,
+    doors,
+    obstacles,
     walls,
     door: pt((doorLeft + doorRight) / 2, bottom + 14),
     yard: inset(outside, 14),
@@ -171,6 +214,129 @@ export const planFor = (rooms: Rooms): Plan => {
 }
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
+
+// ---------------------------------------------------------------------------
+// Getting around
+// ---------------------------------------------------------------------------
+
+// How far a doorway's mouths sit from its wall, and how far the pets keep
+// off the walls otherwise.
+const STEP_IN = 10
+const WALL_GAP = 7
+const ROOMS = ['work', 'oss', 'outside', 'locked'] as const
+type Room = (typeof ROOMS)[number]
+// The rooms Teddy can get into. D-13 is closed.
+const OPEN: ReadonlyArray<Room> = ['work', 'oss', 'outside']
+
+const within = (p: Point, r: Rect): boolean =>
+  p.x >= r.x - 0.01 && p.x <= r.x + r.w + 0.01 && p.y >= r.y - 0.01 && p.y <= r.y + r.h + 0.01
+
+export const areaOf: {
+  (p: Point): (plan: Plan) => Area
+  (plan: Plan, p: Point): Area
+} = dual(2, (plan: Plan, p: Point): Area =>
+  Option.getOrElse(
+    Arr.findFirst(ROOMS, room => within(p, plan.rooms[room])),
+    (): Area => 'porch',
+  ),
+)
+
+// Where in a room a pet can stand without touching a wall.
+const floorOf = (plan: Plan, room: Room): Rect => inset(plan.rooms[room], WALL_GAP)
+
+const nearest = (p: Point, points: ReadonlyArray<Point>): Point =>
+  Arr.reduce(points, p, (best, q) => (best === p || distance(p, q) < distance(p, best) ? q : best))
+
+// The spot Teddy can reach that's closest to `p`: on the floor of the room
+// it's in, or of the nearest open room when it's in D-13 or off the house.
+export const reachable: {
+  (p: Point): (plan: Plan) => Point
+  (plan: Plan, p: Point): Point
+} = dual(2, (plan: Plan, p: Point): Point => {
+  const area = areaOf(plan, p)
+  return area === 'work' || area === 'oss' || area === 'outside'
+    ? clampTo(p, floorOf(plan, area))
+    : nearest(p, Arr.map(OPEN, room => clampTo(p, floorOf(plan, room))))
+})
+
+// The doors to go through, in order, to get from one area to another, or
+// null when there's no way.
+const route = (plan: Plan, from: Area, to: Area): ReadonlyArray<Door> | null => {
+  let frontier: ReadonlyArray<{ readonly at: Area; readonly doors: ReadonlyArray<Door> }> = [
+    { at: from, doors: [] },
+  ]
+  const seen = new Set<Area>([from])
+  while (frontier.length > 0) {
+    const found = Arr.findFirst(frontier, step => step.at === to)
+    if (Option.isSome(found)) return found.value.doors
+    frontier = Arr.flatMap(frontier, step =>
+      Arr.flatMap(plan.doors, door => {
+        const [a, b] = door.between
+        const next = a === step.at ? b : b === step.at ? a : null
+        if (next === null || seen.has(next)) return []
+        seen.add(next)
+        return [{ at: next, doors: [...step.doors, door] }]
+      }),
+    )
+  }
+  return null
+}
+
+const onSegment = (p: Point, a: Point, b: Point): boolean => {
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const len2 = abx * abx + aby * aby || 1
+  const t = clamp01(((p.x - a.x) * abx + (p.y - a.y) * aby) / len2)
+  return distance(p, pt(a.x + abx * t, a.y + aby * t)) < 1.5
+}
+
+export interface Segment {
+  readonly from: Point
+  readonly to: Point
+}
+
+// Whether walking straight along `path` goes through `wall`.
+export const crosses: {
+  (wall: Segment): (path: Segment) => boolean
+  (path: Segment, wall: Segment): boolean
+} = dual(2, ({ from: a, to: b }: Segment, { from: p, to: q }: Segment): boolean => {
+  const side = (o: Point, u: Point, v: Point) => (u.x - o.x) * (v.y - o.y) - (u.y - o.y) * (v.x - o.x)
+  return side(p, q, a) * side(p, q, b) < 0 && side(a, b, p) * side(a, b, q) < 0
+})
+
+// Heads round anything standing in the way of a straight walk to `stop`.
+const roundObstacles = (plan: Plan, at: Point, stop: Point): Point =>
+  Option.getOrElse(
+    Option.map(
+      Arr.findFirst(plan.obstacles, o => crosses({ from: at, to: stop }, o)),
+      o => o.around,
+    ),
+    () => stop,
+  )
+
+// Where a pet heads next on its way to `target`: straight there within a
+// room, or else to the next doorway, then through it. Every room is a
+// rectangle, so a straight line inside one never meets a wall, only
+// whatever stands in it.
+export interface Trip {
+  readonly at: Point
+  readonly target: Point
+}
+
+export const nextStop: {
+  (trip: Trip): (plan: Plan) => Point
+  (plan: Plan, trip: Trip): Point
+} = dual(2, (plan: Plan, { at, target }: Trip): Point => {
+  const here = areaOf(plan, at)
+  const there = areaOf(plan, target)
+  if (here === there) return roundObstacles(plan, at, target)
+  const doors = route(plan, here, there)
+  const [door] = doors ?? []
+  if (door === undefined) return at
+  const [near, far] = door.between[0] === here ? door.mouths : [door.mouths[1], door.mouths[0]]
+  // Partway through the doorway already: keep going.
+  return onSegment(at, near, far) ? far : roundObstacles(plan, at, near)
+})
 
 // 0 to 1 for each wall: how much of it is drawn, `since` ms after drafting
 // started. One pen works through the walls in order at a steady speed, so a
@@ -343,10 +509,11 @@ const fresh = (prints: ReadonlyArray<Print>, now: number): ReadonlyArray<Print> 
   Arr.filter(prints, p => now - p.t < PRINT_LIFE)
 
 // Moves a pet toward its target, leaving paw prints as it goes.
-const walk = (p: Pet, dt: number, now: number): Pet => {
+const walk = (p: Pet, plan: Plan, dt: number, now: number): Pet => {
   const prints = fresh(p.prints, now)
-  const dx = p.target.x - p.at.x
-  const dy = p.target.y - p.at.y
+  const stop = nextStop(plan, { at: p.at, target: p.target })
+  const dx = stop.x - p.at.x
+  const dy = stop.y - p.at.y
   const d = Math.hypot(dx, dy)
   if (d <= ARRIVED || dt <= 0) return { ...p, moving: false, prints }
   const moved = Math.min(d, p.speed * dt)
@@ -398,11 +565,18 @@ const arrived = (p: Pet): boolean => distance(p.at, p.target) <= ARRIVED
 // after a short sit.
 const teddyPlans = (seed: number, p: Pet, tick: PetTick): readonly [number, Pet] => {
   if (tick.pointer !== null) {
-    const to = clampTo(tick.pointer, tick.plan.inside)
+    const plan = tick.plan
+    const to = reachable(plan, tick.pointer)
     const d = distance(p.at, to)
+    // He sits a little short of it, on its side of any wall.
+    const heel =
+      d <= HEEL
+        ? p.at
+        : reachable(plan, pt(to.x - ((to.x - p.at.x) / d) * HEEL, to.y - ((to.y - p.at.y) / d) * HEEL))
+    const sameRoom = areaOf(plan, p.at) === areaOf(plan, to)
     // Once he's playing, a little pointer wiggle doesn't get him up again.
-    if (d > (p.alert ? HEEL + PLAY_SLACK : HEEL + 1)) {
-      const target = pt(to.x - ((to.x - p.at.x) / d) * HEEL, to.y - ((to.y - p.at.y) / d) * HEEL)
+    if (!sameRoom || distance(p.at, heel) > (p.alert ? PLAY_SLACK : 1)) {
+      const target = sameRoom && d <= HEEL ? p.at : heel
       return [seed, { ...p, target, speed: TEDDY_RUN, restUntil: 0, alert: false }]
     }
     // Caught it: down into a play bow, facing it, barking now and then. The
@@ -467,9 +641,9 @@ export const stepPets: {
   if (tick.still) return { ...pets, last: tick.now }
   const dt = pets.last === null ? 0 : Math.min((tick.now - pets.last) / 1000, LONGEST_STEP_S)
   const [s1, teddyPlan] = teddyPlans(pets.seed, pets.teddy, tick)
-  const teddy = walk(teddyPlan, dt, tick.now)
+  const teddy = walk(teddyPlan, tick.plan, dt, tick.now)
   const [s2, rainPlan] = rainPlans(s1, pets.rain, teddy, tick)
-  const rain = walk(rainPlan, dt, tick.now)
+  const rain = walk(rainPlan, tick.plan, dt, tick.now)
   return { seed: s2, teddy, rain, last: tick.now }
 })
 
@@ -491,7 +665,7 @@ export const restingPets = (plan: Plan): Pets => {
 export const wakePets = (pets: Pets): Pets => ({ ...pets, last: null })
 
 // Rooms can move when the page reflows, so the pets keep their spot within
-// the yard rather than their spot on the canvas.
+// the room they're in rather than their spot on the canvas.
 export interface Replan {
   readonly from: Plan
   readonly to: Plan
@@ -501,13 +675,13 @@ export const movePets: {
   (replan: Replan): (pets: Pets) => Pets
   (pets: Pets, replan: Replan): Pets
 } = dual(2, (pets: Pets, { from, to }: Replan): Pets => {
-  const map = (p: Point): Point =>
-    from.yard.w <= 0 || from.yard.h <= 0
+  const map = (p: Point): Point => {
+    const area = areaOf(from, p)
+    const [a, b] = area === 'porch' ? [from.rooms.house, to.rooms.house] : [from.rooms[area], to.rooms[area]]
+    return a.w <= 0 || a.h <= 0
       ? p
-      : pt(
-          to.yard.x + ((p.x - from.yard.x) / from.yard.w) * to.yard.w,
-          to.yard.y + ((p.y - from.yard.y) / from.yard.h) * to.yard.h,
-        )
+      : pt(b.x + ((p.x - a.x) / a.w) * b.w, b.y + ((p.y - a.y) / a.h) * b.h)
+  }
   const move = (p: Pet): Pet => ({
     ...p,
     at: map(p.at),

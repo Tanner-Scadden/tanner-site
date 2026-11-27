@@ -1,6 +1,7 @@
 // NOTE: Teddy and Rain, drawn as blueprint line art onto one sprite sheet
-// the GPU samples. Teddy is a goldendoodle (a curly gold outline), Rain a
-// Nebelung (long gray fur and a plumed tail). Both face right; the shader
+// the GPU samples. Teddy is a cream goldendoodle with an apricot muzzle,
+// rosy-tan paws and a black nose, Rain a gray Nebelung (long blue-gray fur, a plumed tail and
+// green eyes). Both face right; the shader
 // flips them. Each has four walking frames and a resting pose.
 //
 // Coordinates are in a 64 x 48 cell with the ground at y = 44.
@@ -27,10 +28,21 @@ export const SHEET_LEVELS = 4
 type Ctx = CanvasRenderingContext2D
 type Pt = readonly [number, number]
 
-const GOLD = '#ffd166'
-const INK = '#dcebff'
-// The paper behind the drawing, so walls and grid don't show through.
-const PAPER = 'rgba(15, 59, 120, 0.94)'
+// A pet's coat: its outline and the fur inside it.
+interface Coat {
+  readonly line: string
+  readonly fill: string
+}
+
+// Teddy: cream curls, a warm apricot muzzle, rosy-tan paws, and a black
+// nose and eyes.
+const TEDDY: Coat = { line: '#b9a387', fill: '#f5ecdd' }
+const TEDDY_MUZZLE: Coat = { line: '#a7825d', fill: '#e2c19b' }
+const TEDDY_PAW: Coat = { line: '#a9796a', fill: '#ddb0a0' }
+const TEDDY_EYE = '#1c1512'
+// Rain: blue-gray fur, silver at the tips, and green eyes.
+const RAIN: Coat = { line: '#d2d9e2', fill: '#717b88' }
+const RAIN_EYE = '#b6e07a'
 const LINE = 1.6
 
 // Points round an ellipse, optionally rotated.
@@ -65,10 +77,10 @@ const curly = (ctx: Ctx, pts: ReadonlyArray<Pt>, bump: number) => {
 
 const smooth = (ctx: Ctx, pts: ReadonlyArray<Pt>) => curly(ctx, pts, 0.4)
 
-const ink = (ctx: Ctx, color: string, width = LINE) => {
-  ctx.fillStyle = PAPER
+const ink = (ctx: Ctx, coat: Coat, width = LINE) => {
+  ctx.fillStyle = coat.fill
   ctx.fill()
-  ctx.strokeStyle = color
+  ctx.strokeStyle = coat.line
   ctx.lineWidth = width
   ctx.stroke()
 }
@@ -98,7 +110,7 @@ const tube = (
   c2: Pt,
   to: Pt,
   width: number,
-  color: string,
+  coat: Coat,
 ) => {
   const path = () => {
     ctx.beginPath()
@@ -107,23 +119,25 @@ const tube = (
   }
   ctx.lineCap = 'round'
   path()
-  ctx.strokeStyle = color
+  ctx.strokeStyle = coat.line
   ctx.lineWidth = width + LINE * 2
   ctx.stroke()
   path()
-  ctx.strokeStyle = PAPER
+  ctx.strokeStyle = coat.fill
   ctx.lineWidth = width
   ctx.stroke()
 }
 
-// A leg hanging from `hip`, swung by `angle`, down to the ground.
+// A leg hanging from `hip`, swung by `angle`, down to the ground, with a
+// paw of a different color if it has one.
 const leg = (
   ctx: Ctx,
   hip: Pt,
   angle: number,
   width: number,
-  color: string,
+  coat: Coat,
   fur: number,
+  paw?: Coat,
 ) => {
   const length = 44 - hip[1]
   ctx.save()
@@ -139,7 +153,11 @@ const leg = (
     ctx.beginPath()
     ctx.roundRect(-width / 2, -1, width, length + 1, width / 2)
   }
-  ink(ctx, color)
+  ink(ctx, coat)
+  if (paw !== undefined) {
+    curly(ctx, ellipse(0.6, length - 1.6, width / 2 + 0.7, 2.1, 8), 0.4)
+    ink(ctx, paw, 1)
+  }
   ctx.restore()
 }
 
@@ -153,65 +171,67 @@ const swing = (frame: number, offset: number): number => SWING[(frame + offset) 
 
 const teddyHead = (ctx: Ctx, x: number, y: number) => {
   curly(ctx, ellipse(x, y, 8, 7.5, 12), 1.5)
-  ink(ctx, GOLD)
-  // A fluffy muzzle.
+  ink(ctx, TEDDY)
+  // A fluffy muzzle, a shade warmer than the rest of him.
   curly(ctx, ellipse(x + 6.5, y + 3.2, 4.4, 3.2, 8), 0.9)
-  ink(ctx, GOLD)
-  dot(ctx, x + 10.6, y + 2.2, 1.4, GOLD)
-  dot(ctx, x + 2.4, y - 1.6, 1.1, GOLD)
+  ink(ctx, TEDDY_MUZZLE)
+  dot(ctx, x + 10.6, y + 2.2, 1.4, TEDDY_EYE)
+  dot(ctx, x + 2.4, y - 1.6, 1.1, TEDDY_EYE)
   // The floppy ear.
   curly(ctx, ellipse(x - 3.5, y + 3.5, 3.2, 6.2, 9, 0.15), 1)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
 }
 
 const teddyWalk = (ctx: Ctx, frame: number) => {
   const far = (x: number, o: number) => {
     ctx.globalAlpha = 0.55
-    leg(ctx, [x, 27], swing(frame, o), 5, GOLD, 0.7)
+    leg(ctx, [x, 27], swing(frame, o), 5, TEDDY, 0.7, TEDDY_PAW)
     ctx.globalAlpha = 1
   }
   far(23, 2)
   far(43, 0)
   // The legs hang from under the body, so it covers their tops.
-  leg(ctx, [18, 27], swing(frame, 2), 5, GOLD, 0.7)
-  leg(ctx, [39, 27], swing(frame, 0), 5, GOLD, 0.7)
+  leg(ctx, [18, 27], swing(frame, 2), 5, TEDDY, 0.7, TEDDY_PAW)
+  leg(ctx, [39, 27], swing(frame, 0), 5, TEDDY, 0.7, TEDDY_PAW)
   // The tail, a fluffy plume held up behind.
   curly(ctx, ellipse(13, 15, 3.4, 8, 11, -0.5), 1.2)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
   curly(ctx, ellipse(30, 23, 17, 8.5, 16), 1.6)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
   teddyHead(ctx, 49, 13)
 }
 
 const teddySit = (ctx: Ctx) => {
   // The tail on the floor behind him.
   curly(ctx, ellipse(14, 41, 7, 2.6, 10), 1)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
   ctx.globalAlpha = 0.55
-  leg(ctx, [41, 28], 0.05, 5, GOLD, 0.7)
+  leg(ctx, [41, 28], 0.05, 5, TEDDY, 0.7, TEDDY_PAW)
   ctx.globalAlpha = 1
   curly(ctx, ellipse(30, 30, 11, 9.5, 14, -1.0), 1.6)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
   // The haunch, and the front leg standing in front.
   curly(ctx, ellipse(24, 37, 7.5, 6.5, 11), 1.4)
-  ink(ctx, GOLD)
-  leg(ctx, [37, 28], 0, 5, GOLD, 0.7)
+  ink(ctx, TEDDY)
+  leg(ctx, [37, 28], 0, 5, TEDDY, 0.7, TEDDY_PAW)
   teddyHead(ctx, 42, 12)
 }
 
 // The play bow: elbows down, rear up, tail going.
 const teddyPlay = (ctx: Ctx) => {
   ctx.globalAlpha = 0.55
-  leg(ctx, [22, 26], 0.12, 5, GOLD, 0.7)
+  leg(ctx, [22, 26], 0.12, 5, TEDDY, 0.7, TEDDY_PAW)
   ctx.globalAlpha = 1
-  leg(ctx, [17, 26], -0.06, 5, GOLD, 0.7)
+  leg(ctx, [17, 26], -0.06, 5, TEDDY, 0.7, TEDDY_PAW)
   curly(ctx, ellipse(13.5, 16.5, 3.4, 8, 11, -0.35), 1.2)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
   curly(ctx, ellipse(31, 29, 17, 8, 16, 0.32), 1.6)
-  ink(ctx, GOLD)
-  // Forelegs flat on the floor, reaching forward.
+  ink(ctx, TEDDY)
+  // Forelegs flat on the floor, reaching forward, paws out front.
   curly(ctx, ellipse(48, 41.5, 9.5, 2.6, 10), 0.8)
-  ink(ctx, GOLD)
+  ink(ctx, TEDDY)
+  curly(ctx, ellipse(56, 41.8, 3, 2.1, 8), 0.4)
+  ink(ctx, TEDDY_PAW, 1)
   teddyHead(ctx, 50, 31)
 }
 
@@ -228,78 +248,78 @@ const rainHead = (ctx: Ctx, x: number, y: number, asleep: boolean) => {
     ctx.lineTo(b[0], b[1])
     ctx.closePath()
     ctx.lineJoin = 'round'
-    ink(ctx, INK)
+    ink(ctx, RAIN)
   }
   ear([x - 4.5, y - 2.5], [x - 3, y - 9.5], [x, y - 4.5])
   ear([x, y - 4.5], [x + 3.2, y - 9.8], [x + 4.6, y - 2.6])
   smooth(ctx, ellipse(x, y, 6.2, 5.4, 12))
-  ink(ctx, INK)
+  ink(ctx, RAIN)
   if (asleep) {
     ctx.beginPath()
     ctx.arc(x + 2.6, y - 0.6, 1.5, 0.2, Math.PI - 0.2)
-    ctx.strokeStyle = INK
+    ctx.strokeStyle = RAIN.line
     ctx.lineWidth = 1
     ctx.stroke()
   } else {
-    // An almond eye.
+    // An almond eye, green.
     ctx.beginPath()
     ctx.ellipse(x + 2.8, y - 0.8, 1.6, 0.9, -0.2, 0, Math.PI * 2)
-    ctx.fillStyle = INK
+    ctx.fillStyle = RAIN_EYE
     ctx.fill()
   }
-  dot(ctx, x + 6, y + 1.6, 0.8, INK)
-  line(ctx, [x + 5, y + 2.6], [x + 11, y + 1.6], INK, 0.5)
-  line(ctx, [x + 5, y + 3.4], [x + 11, y + 4.4], INK, 0.5)
+  dot(ctx, x + 6, y + 1.6, 0.8, RAIN.line)
+  line(ctx, [x + 5, y + 2.6], [x + 11, y + 1.6], RAIN.line, 0.5)
+  line(ctx, [x + 5, y + 3.4], [x + 11, y + 4.4], RAIN.line, 0.5)
 }
 
 // Long fur hanging off the belly.
 const fringe = (ctx: Ctx, from: number, to: number, y: number) => {
   for (let x = from; x <= to; x += 2.4) {
-    line(ctx, [x, y - 1], [x - 1.4, y + 3], INK, 1)
+    line(ctx, [x, y - 1], [x - 1.4, y + 3], RAIN.line, 1)
   }
 }
 
 const rainWalk = (ctx: Ctx, frame: number) => {
   const far = (x: number, o: number) => {
     ctx.globalAlpha = 0.55
-    leg(ctx, [x, 30], swing(frame, o), 3.4, INK, 0)
+    leg(ctx, [x, 30], swing(frame, o), 3.4, RAIN, 0)
     ctx.globalAlpha = 1
   }
   far(25, 2)
   far(41, 0)
-  leg(ctx, [21, 30], swing(frame, 2), 3.4, INK, 0)
-  leg(ctx, [37, 30], swing(frame, 0), 3.4, INK, 0)
+  leg(ctx, [21, 30], swing(frame, 2), 3.4, RAIN, 0)
+  leg(ctx, [37, 30], swing(frame, 0), 3.4, RAIN, 0)
   // The plumed tail, up from her back and curling over at the tip.
-  tube(ctx, [17, 25], [8, 22], [4, 12], [10, 6], 5, INK)
+  tube(ctx, [17, 25], [8, 22], [4, 12], [10, 6], 5, RAIN)
   fringe(ctx, 19, 41, 32)
   curly(ctx, ellipse(30, 27, 15.5, 6.6, 18), 0.7)
-  ink(ctx, INK)
+  ink(ctx, RAIN)
   // The ruff round her neck.
   curly(ctx, ellipse(43, 25, 5, 6.4, 10), 1.1)
-  ink(ctx, INK)
+  ink(ctx, RAIN)
   rainHead(ctx, 49, 18, false)
 }
 
 const rainNap = (ctx: Ctx) => {
   // Curled into a loaf, tail wrapped round the front.
   curly(ctx, ellipse(29, 36, 15, 7.5, 18), 0.8)
-  ink(ctx, INK)
+  ink(ctx, RAIN)
   fringe(ctx, 18, 38, 40.5)
   rainHead(ctx, 44, 29, true)
-  tube(ctx, [15, 39], [10, 46], [28, 46], [42, 43], 3.6, INK)
+  tube(ctx, [15, 39], [10, 46], [28, 46], [42, 43], 3.6, RAIN)
 }
 
 // Sitting up, tail round her feet, watching.
 const rainWatch = (ctx: Ctx) => {
-  tube(ctx, [22, 42], [18, 46], [34, 46], [44, 43.5], 3.6, INK)
+  tube(ctx, [22, 42], [18, 46], [34, 46], [44, 43.5], 3.6, RAIN)
   curly(ctx, ellipse(27, 38, 8.5, 6, 12), 0.7)
-  ink(ctx, INK)
+  ink(ctx, RAIN)
   smooth(ctx, ellipse(32, 31, 7.5, 10, 14, 0.25))
-  ink(ctx, INK)
-  leg(ctx, [36.5, 30], 0, 3.4, INK, 0)
+  ink(ctx, RAIN)
+  leg(ctx, [36.5, 30], 0, 3.4, RAIN, 0)
   fringe(ctx, 26, 32, 40)
   curly(ctx, ellipse(35, 23, 5.4, 5, 10), 1.1)
-  ink(ctx, INK)
+  ink(ctx, RAIN)
   rainHead(ctx, 37, 15, false)
 }
 
