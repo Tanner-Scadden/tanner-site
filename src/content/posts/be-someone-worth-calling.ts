@@ -106,7 +106,7 @@ export const beSomeoneWorthCalling: Post = {
 
     h.h2('The calls keep coming'),
     h.p(
-      'I still get calls. People I’ve worked with, and people I’ve worked for, asking if I’m open to something new, or if I’d want to found a company with them. The network grows with the career, and I never set out to build it. Yours will grow the same way.',
+      'I still get calls. People I’ve worked with asking if I’m open to something new, or if I’d want to found a company with them. The network grows with the career, it happens naturally. Yours will grow the same way.',
     ),
     h.p(
       'In ',
