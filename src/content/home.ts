@@ -110,14 +110,14 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
 ]
 
 export const THESES = [
-  'I build the hard part underneath the product.',
-  'The hard part, underneath.',
-  'Underneath.',
+  "I turn the rules in people's heads into engines that run themselves.",
+  'Rules in heads → engines.',
+  'Rules → engines.',
   'Solved.',
 ] as const
 
 export const BIO =
-  "Scheduling engines, game rules engines, marketplace sync. I'm usually an early engineer at a startup, and I build the part everything else depends on, then keep it running. Mostly TypeScript and Effect. Self-taught."
+  'Hospital staffing, solar permits, tabletop RPGs. I learn the rules a business runs on, model them as code, and build the engine so nobody has to do it by hand again. Usually as one of the first engineers. Mostly TypeScript and Effect. Self-taught.'
 
 
 export const SITE_REPO_URL = 'https://github.com/Tanner-Scadden/tanner-site'
