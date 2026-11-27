@@ -6,7 +6,8 @@ import { type Post, sortPosts } from '#domain/Post'
 
 export const SITE = 'https://tannerscadden.com'
 const NAME = 'Tanner Scadden'
-const IMAGE = `${SITE}/og.png`
+// The site's card, for pages that don't have their own.
+const IMAGE = { url: `${SITE}/og.png`, alt: 'Tanner Scadden: I like to build things.' }
 const AUTHOR = { '@type': 'Person', name: NAME, url: `${SITE}/` } as const
 
 export interface Page {
@@ -18,10 +19,13 @@ export interface Page {
   readonly description: string
   // The day a post went up, YYYY-MM-DD. None for the blog itself.
   readonly published?: string
+  readonly image: { readonly url: string; readonly alt: string }
   readonly jsonLd: object
 }
 
 const postUrl = (post: Post): string => `${SITE}/blog/${post.slug}`
+const imageOf = (post: Post) =>
+  post.image === undefined ? IMAGE : { url: `${SITE}${post.image.path}`, alt: post.image.alt }
 
 const postJsonLd = (post: Post) => ({
   '@type': 'BlogPosting',
@@ -30,7 +34,7 @@ const postJsonLd = (post: Post) => ({
   datePublished: post.date,
   url: postUrl(post),
   mainEntityOfPage: postUrl(post),
-  image: IMAGE,
+  image: imageOf(post).url,
   author: AUTHOR,
 })
 
@@ -44,6 +48,7 @@ export const pagesOf = (published: ReadonlyArray<Post>): ReadonlyArray<Page> => 
       url: `${SITE}/blog`,
       title: `${BLOG.title} · ${NAME}`,
       description: BLOG.intro,
+      image: IMAGE,
       jsonLd: {
         '@context': 'https://schema.org',
         '@type': 'Blog',
@@ -60,6 +65,7 @@ export const pagesOf = (published: ReadonlyArray<Post>): ReadonlyArray<Page> => 
       title: `${post.title} · ${NAME}`,
       description: post.summary,
       published: post.date,
+      image: imageOf(post),
       jsonLd: { '@context': 'https://schema.org', ...postJsonLd(post) },
     })),
   ]
@@ -112,6 +118,10 @@ export const withHead: {
     tag('meta', 'property="og:description"', 'content', page.description),
     tag('meta', 'name="twitter:title"', 'content', page.title),
     tag('meta', 'name="twitter:description"', 'content', page.description),
+    tag('meta', 'property="og:image"', 'content', page.image.url),
+    tag('meta', 'property="og:image:alt"', 'content', page.image.alt),
+    tag('meta', 'name="twitter:image"', 'content', page.image.url),
+    tag('meta', 'name="twitter:image:alt"', 'content', page.image.alt),
     { find: OG_LOCALE, put: `${locale}${article}` },
     { find: /<script type="application\/ld\+json">[\s\S]*?<\/script>/, put: jsonLdScript(page.jsonLd) },
   ]

@@ -50,14 +50,32 @@ describe('withHead', () => {
     assert.include(page, `<link rel="canonical" href="${SITE}/blog/${real.slug}" />`)
   })
 
-  it('shares it as an article, and keeps the site image and its alt text', () => {
+  it('shares it as an article', () => {
     const real = PUBLISHED[0]!
     assert.deepStrictEqual(metaOf(page, 'property="og:type"'), ['article'])
     assert.deepStrictEqual(metaOf(page, 'property="og:description"'), [real.summary])
     assert.deepStrictEqual(metaOf(page, 'name="twitter:description"'), [real.summary])
     assert.deepStrictEqual(metaOf(page, 'property="article:published_time"'), [real.date])
-    assert.deepStrictEqual(metaOf(page, 'property="og:image"'), metaOf(INDEX, 'property="og:image"'))
-    assert.deepStrictEqual(metaOf(page, 'property="og:image:alt"'), metaOf(INDEX, 'property="og:image:alt"'))
+  })
+
+  it('shares a post with its own card and alt text, where it has one', () => {
+    const real = PUBLISHED[0]!
+    assert.isDefined(real.image)
+    const url = `${SITE}${real.image!.path}`
+    assert.deepStrictEqual(metaOf(page, 'property="og:image"'), [url])
+    assert.deepStrictEqual(metaOf(page, 'name="twitter:image"'), [url])
+    assert.deepStrictEqual(metaOf(page, 'property="og:image:alt"'), [real.image!.alt])
+    assert.deepStrictEqual(metaOf(page, 'name="twitter:image:alt"'), [real.image!.alt])
+    assert.strictEqual(jsonLdOf(page)['image'], url)
+  })
+
+  it('keeps the site card and its alt text for a post without one, and for /blog', () => {
+    const [, plain] = pagesOf([post('plain', '2026-01-01')])
+    for (const html of [withHead(INDEX, plain!), withHead(INDEX, blog!)]) {
+      for (const key of ['property="og:image"', 'property="og:image:alt"', 'name="twitter:image"', 'name="twitter:image:alt"']) {
+        assert.deepStrictEqual(metaOf(html, key), metaOf(INDEX, key), key)
+      }
+    }
   })
 
   it('describes it as a BlogPosting', () => {

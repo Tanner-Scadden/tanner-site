@@ -34,6 +34,15 @@ describe('posts', () => {
     assert.strictEqual(sourcePath({ ...post('moved', '2026-01-01'), source: 'src/x.ts' }), 'src/x.ts')
   })
 
+  it('every share card is a PNG in public/og, described for anyone who can’t see it', () => {
+    const cards = Arr.map(Rec.keys(import.meta.glob('/public/og/*.png', { query: '?url' })), Str.slice('/public'.length))
+    for (const post of ALL_POSTS) {
+      if (post.image === undefined) continue
+      assert.include(cards, post.image.path, `card of ${post.slug}`)
+      assert.isNotEmpty(post.image.alt, `alt of ${post.slug}`)
+    }
+  })
+
   it('no two posts share a slug', () => {
     const slugs = Arr.map(ALL_POSTS, post => post.slug)
     assert.strictEqual(Arr.dedupe(slugs).length, slugs.length)

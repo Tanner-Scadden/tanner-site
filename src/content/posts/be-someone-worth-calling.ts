@@ -10,6 +10,10 @@ export const beSomeoneWorthCalling: Post = {
   date: '2026-11-27',
   summary:
     'The best opportunities in life will come from people vouching for you in rooms you’re not in.',
+  image: {
+    path: '/og/be-someone-worth-calling.png',
+    alt: 'Be Someone Worth Calling: a network of people around you, with one branch torn away after a bad interaction.',
+  },
   body: h => [
     h.p('My call to join Sentinels came after I’d thought I was done playing.'),
     h.p(
