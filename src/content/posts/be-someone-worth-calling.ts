@@ -67,14 +67,13 @@ export const beSomeoneWorthCalling: Post = {
     NetworkFigure(h, { key: 'network' }),
 
     h.h2('How to be someone worth calling'),
-    h.p('None of those calls came from a strategy. They came from habits, and you can build every one of them.'),
     h.p(
       h.strong('Understand the problems.'),
-      ' Step back and look at the bigger picture, then step back and do it again. Don’t stop at the  in front of you. Ask what it’s really for and what else it touches. Talk to customers, watch session replays, and dig through your OpenTelemetry data for problems users never reported. The more of the picture you can see, the bigger the problems you can take on. Bring the team solutions, not problems.',
+      ' Talk to customers, watch session replays, and dig through data. The more of the picture you can see, the better the solutions you\'\ll come up with.',
     ),
     h.p(
       h.strong('Build with intent.'),
-      ' Don’t build just for fun. Build for a better developer experience, a better agent experience, or a real return for the org, and push your knowledge however you can along the way.',
+      ' Build for a better developer experience, a better agent experience, or a real return for the org, and push your knowledge however you can along the way.',
     ),
     h.p(
       h.strong('Be intentional about how you communicate.'),
