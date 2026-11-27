@@ -61,6 +61,12 @@ const styles = stylex.create({
     outlineOffset: { default: null, ':focus-visible': 4 },
   },
   welcome: { marginTop: 18, maxWidth: 520, color: blueprint.dim },
+  // On a phone the links take a row of their own under the name, so the
+  // eggs stay in the top right.
+  topNav: {
+    order: { default: null, [media.phone]: 1 },
+    flexBasis: { default: null, [media.phone]: '100%' },
+  },
   allPosts: { display: 'inline-block', marginTop: 18, fontSize: 12, letterSpacing: '.14em' },
 
   // Open source, and the rest.
@@ -178,7 +184,7 @@ const pressed = <M>(message: M) => ({ key }: { readonly key: string }) =>
 const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   sx(h.div, sheet.bar).children(
     h.span('TANNER SCADDEN'),
-    sx(h.nav, sheet.nav).children(
+    sx(h.nav, sheet.nav, styles.topNav).children(
       BLOG_OPEN && sx(h.a, base.link, sheet.navLink).attr('href', '#blog').children('BLOG'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#work').children('WORK'),
       sx(h.a, base.link, sheet.navLink).attr('href', '#oss').children('OPEN SOURCE'),
