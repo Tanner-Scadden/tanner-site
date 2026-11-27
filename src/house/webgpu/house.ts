@@ -202,12 +202,25 @@ export interface Pet {
   readonly restUntil: number
   // Rain only: running from Teddy.
   readonly fleeing: boolean
-  // The way it last moved, for the tail and the paw prints.
+  // The way it last moved, for the paw prints.
   readonly heading: Point
+  // 1 facing right, -1 facing left.
+  readonly facing: number
+  // Whether it moved this frame, and how far it has walked in all, which
+  // picks the walking frame.
+  readonly moving: boolean
+  readonly gait: number
   // Distance walked since the last paw print.
   readonly stride: number
-  // The latest paw prints, newest last.
-  readonly prints: ReadonlyArray<Point>
+  // Paw prints that haven't faded yet, oldest first.
+  readonly prints: ReadonlyArray<Print>
+}
+
+// A paw print: where it is, which way the paw pointed, and when it was left.
+export interface Print {
+  readonly at: Point
+  readonly heading: Point
+  readonly t: number
 }
 
 export interface Pets {
@@ -226,9 +239,14 @@ export interface PetTick {
   readonly still: boolean
 }
 
-export const PRINTS = 8
-const PRINT_EVERY = 7
-const PRINT_SIDE = 2
+// Paw prints fade out over PRINT_LIFE ms, and there are never more than
+// PRINTS per pet.
+export const PRINT_LIFE = 3200
+export const PRINTS = 40
+const PRINT_EVERY = 9
+const PRINT_SIDE = 2.6
+// Px walked per walking frame.
+const FRAME_EVERY = 5
 const TEDDY_WALK = 45
 const TEDDY_RUN = 95
 const RAIN_WALK = 22
@@ -269,6 +287,9 @@ const pet = (name: PetName, at: Point, target: Point, speed: number): Pet => ({
   restUntil: 0,
   fleeing: false,
   heading: pt(0, -1),
+  facing: 1,
+  moving: false,
+  gait: 0,
   stride: 0,
   prints: [],
 })
@@ -288,28 +309,48 @@ export const initialPets: {
   }
 })
 
+// Prints older than PRINT_LIFE are gone.
+const fresh = (prints: ReadonlyArray<Print>, now: number): ReadonlyArray<Print> =>
+  Arr.filter(prints, p => now - p.t < PRINT_LIFE)
+
 // Moves a pet toward its target, leaving paw prints as it goes.
-const walk = (p: Pet, dt: number): Pet => {
+const walk = (p: Pet, dt: number, now: number): Pet => {
+  const prints = fresh(p.prints, now)
   const dx = p.target.x - p.at.x
   const dy = p.target.y - p.at.y
   const d = Math.hypot(dx, dy)
-  if (d <= ARRIVED) return p
+  if (d <= ARRIVED || dt <= 0) return { ...p, moving: false, prints }
   const moved = Math.min(d, p.speed * dt)
   const heading = pt(dx / d, dy / d)
   const at = pt(p.at.x + heading.x * moved, p.at.y + heading.y * moved)
+  // Turning around only for a clear sideways step, so walking up or down
+  // doesn't flicker.
+  const facing = Math.abs(heading.x) > 0.2 ? Math.sign(heading.x) : p.facing
   const stride = p.stride + moved
-  if (stride < PRINT_EVERY) return { ...p, at, heading, stride }
+  const walked = { ...p, at, heading, facing, moving: true, gait: p.gait + moved }
+  if (stride < PRINT_EVERY) return { ...walked, stride, prints }
   // Prints alternate left and right of the path.
-  const side = p.prints.length % 2 === 0 ? PRINT_SIDE : -PRINT_SIDE
-  const print = pt(at.x - heading.y * side, at.y + heading.x * side)
-  return {
-    ...p,
-    at,
+  const side = p.gait % (PRINT_EVERY * 2) < PRINT_EVERY ? PRINT_SIDE : -PRINT_SIDE
+  const print: Print = {
+    at: pt(at.x - heading.y * side, at.y + heading.x * side),
     heading,
-    stride: stride - PRINT_EVERY,
-    prints: Arr.takeRight([...p.prints, print], PRINTS),
+    t: now,
   }
+  return { ...walked, stride: stride - PRINT_EVERY, prints: Arr.takeRight([...prints, print], PRINTS) }
 }
+
+// Which sprite frame a pet shows: a walking frame while it moves, or its
+// resting pose (Teddy sits, Rain curls up).
+export const WALK_FRAMES = 4
+export const REST_FRAME = WALK_FRAMES
+export const frameOf = (p: Pet): number =>
+  p.moving ? Math.floor(p.gait / FRAME_EVERY) % WALK_FRAMES : REST_FRAME
+
+// 1 for a fresh print, down to 0 as it fades.
+export const printAlpha: {
+  (now: number): (print: Print) => number
+  (print: Print, now: number): number
+} = dual(2, (print: Print, now: number): number => clamp01(1 - (now - print.t) / PRINT_LIFE))
 
 const arrived = (p: Pet): boolean => distance(p.at, p.target) <= ARRIVED
 
@@ -321,7 +362,9 @@ const teddyPlans = (seed: number, p: Pet, tick: PetTick): readonly [number, Pet]
     const d = distance(p.at, to)
     // Close enough: sit and look at it.
     const target = d <= HEEL ? p.at : pt(to.x - ((to.x - p.at.x) / d) * HEEL, to.y - ((to.y - p.at.y) / d) * HEEL)
-    return [seed, { ...p, target, speed: TEDDY_RUN, restUntil: 0 }]
+    // Sitting, he turns to look at it.
+    const facing = d <= HEEL && Math.abs(to.x - p.at.x) > 1 ? Math.sign(to.x - p.at.x) : p.facing
+    return [seed, { ...p, target, facing, speed: TEDDY_RUN, restUntil: 0 }]
   }
   if (!arrived(p)) return [seed, p.speed === TEDDY_WALK ? p : { ...p, speed: TEDDY_WALK }]
   if (p.restUntil === 0) {
@@ -364,9 +407,9 @@ export const stepPets: {
   if (tick.still) return { ...pets, last: tick.now }
   const dt = pets.last === null ? 0 : Math.min((tick.now - pets.last) / 1000, LONGEST_STEP_S)
   const [s1, teddyPlan] = teddyPlans(pets.seed, pets.teddy, tick)
-  const teddy = walk(teddyPlan, dt)
+  const teddy = walk(teddyPlan, dt, tick.now)
   const [s2, rainPlan] = rainPlans(s1, pets.rain, teddy, tick)
-  const rain = walk(rainPlan, dt)
+  const rain = walk(rainPlan, dt, tick.now)
   return { seed: s2, teddy, rain, last: tick.now }
 })
 
@@ -379,7 +422,7 @@ export const restingPets = (plan: Plan): Pets => {
   return {
     seed: 1,
     teddy: { ...pet('teddy', teddyAt, teddyAt, TEDDY_WALK), heading: pt(1, 0) },
-    rain: { ...pet('rain', rainAt, rainAt, RAIN_WALK), heading: pt(-1, 0) },
+    rain: { ...pet('rain', rainAt, rainAt, RAIN_WALK), heading: pt(-1, 0), facing: -1 },
     last: null,
   }
 }
@@ -409,7 +452,7 @@ export const movePets: {
     ...p,
     at: map(p.at),
     target: map(p.target),
-    prints: Arr.map(p.prints, map),
+    prints: Arr.map(p.prints, print => ({ ...print, at: map(print.at) })),
   })
   return { ...pets, teddy: move(pets.teddy), rain: move(pets.rain) }
 })
