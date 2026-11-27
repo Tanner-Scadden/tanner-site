@@ -115,9 +115,6 @@ const styles = stylex.create({
     paddingInline: 4,
     color: blueprint.line,
     textDecoration: 'none',
-    backgroundColor: { default: null, ':hover': blueprint.wash, ':focus-visible': blueprint.wash },
-    transitionProperty: 'background-color',
-    transitionDuration: '.15s',
   },
   no: {
     fontSize: 11,
