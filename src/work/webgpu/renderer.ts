@@ -130,7 +130,7 @@ const measure = (
   const origin = canvas.getBoundingClientRect()
   return jobs.map(job =>
     rowOf(
-      Array.from(job.querySelectorAll('.step'), el => {
+      Array.from(job.querySelectorAll('[data-step]'), el => {
         const r = el.getBoundingClientRect()
         return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
       }).slice(0, STEPS),
@@ -356,11 +356,11 @@ const hoveredAt = (
   target: EventTarget | null,
 ): Hovered | null => {
   if (!(target instanceof Element)) return null
-  const jobEl = target.closest<HTMLElement>('.job')
+  const jobEl = target.closest<HTMLElement>('[data-job]')
   const job = jobEl === null ? -1 : jobs.indexOf(jobEl)
   if (job < 0) return null
-  const stepEl = target.closest('.step')
-  const steps = Array.from(jobs[job]!.querySelectorAll('.step'))
+  const stepEl = target.closest('[data-step]')
+  const steps = Array.from(jobs[job]!.querySelectorAll('[data-step]'))
   const index = stepEl === null ? -1 : steps.indexOf(stepEl)
   return { job, step: index < 0 ? null : index }
 }
@@ -420,7 +420,7 @@ export const runWorkDrawing = (
   Effect.gen(function* () {
     const container = canvas.parentElement
     if (container === null) return
-    const jobs = Array.from(container.querySelectorAll<HTMLElement>('.job'))
+    const jobs = Array.from(container.querySelectorAll<HTMLElement>('[data-job]'))
     const gpu = yield* makeGpu(canvas, jobs.length)
 
     const settings = yield* Ref.make(initial)
@@ -463,7 +463,7 @@ export const runWorkDrawing = (
         seenJobs(jobs),
         pointed(container, jobs),
         taps(container, jobs),
-        resized([container, ...container.querySelectorAll('.step')]),
+        resized([container, ...container.querySelectorAll('[data-step]')]),
         Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Moved())),
         // Web fonts landing can reflow every box.
         Stream.fromEffect(

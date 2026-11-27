@@ -3,8 +3,9 @@ import type { HighlighterCore, ThemedToken } from 'shiki/core'
 
 // NOTE: syntax highlighting for code blocks, with Shiki. It loads the first
 // time a post shows code, so the rest of the site never downloads it. The
-// colours are CSS variables (--code-token-*), set in styles.css, so the
-// theme lives with the rest of the blueprint.
+// colours are CSS variables (--code-token-*), set by the Code block in
+// Prose.ts from the syntax tokens, so the theme lives with the rest of the
+// blueprint.
 
 export const CodeLang = Schema.Literals(['ts', 'tsx', 'js', 'json', 'bash', 'css', 'html'])
 export type CodeLang = typeof CodeLang.Type

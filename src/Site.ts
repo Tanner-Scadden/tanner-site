@@ -20,9 +20,12 @@ import { ManorPage } from './pages/manor/ManorPage.ts'
 import { NotFoundPage } from './pages/NotFoundPage.ts'
 import { RestPage } from './pages/rest/RestPage.ts'
 import { SiteRoute } from './routes.ts'
+import { documentStyles } from './site/document.ts'
 import { SiteSnapshot, initialSnapshot, siteActors, siteSnapshots } from './site/actors.ts'
 import { Keys, KeysEvent } from './site/machines/Keys.ts'
 import { Page, PageEvent, PageState } from './site/machines/Page.ts'
+import { classOf } from './styles/sx.ts'
+import { paper } from './styles/tokens.stylex.ts'
 import { Thesis, ThesisEvent, thesisText } from './thesis/machines/Thesis.ts'
 import { Dock, Toast } from './toast/components/Toast.ts'
 
@@ -93,7 +96,12 @@ const SiteDef = Html.component({
   message: SiteMessage,
 })
 
-const roomColorOf = (page: PageState): { readonly name: string; readonly color: string } =>
+interface RoomColor {
+  readonly name: 'blueprint' | 'manor' | 'rest'
+  readonly color: string
+}
+
+const roomColorOf = (page: PageState): RoomColor =>
   PageState.$match(page, {
     Home: () => BLUEPRINT,
     Manor: () => MANOR,
@@ -103,9 +111,14 @@ const roomColorOf = (page: PageState): { readonly name: string; readonly color: 
     NotFound: () => BLUEPRINT,
   })
 
-const BLUEPRINT = { name: 'blueprint', color: '#0f3b78' }
-const MANOR = { name: 'manor', color: '#141022' }
-const REST = { name: 'rest', color: '#07090d' }
+const BLUEPRINT: RoomColor = { name: 'blueprint', color: paper.blueprint }
+const MANOR: RoomColor = { name: 'manor', color: paper.manor }
+const REST: RoomColor = { name: 'rest', color: paper.rest }
+
+// NOTE: the body carries the blueprint paper, which the document shows
+// through. The hidden pages paint over it, on <html> too.
+const roomStyle = (room: RoomColor) =>
+  room === MANOR ? documentStyles.manor : room === REST ? documentStyles.rest : null
 
 const titleOf = (page: PageState): string =>
   PageState.$match(page, {
@@ -185,16 +198,20 @@ export const SiteNoDeps = SiteDef.make({
       HtmlHead.lang('en'),
       // NOTE: the room's color goes on the document itself, so overscroll,
       // the space under short pages and the mobile toolbar all match it.
-      HtmlHead.htmlData('data-room', room.name),
+      HtmlHead.htmlClass(classOf(roomStyle(room))),
+      HtmlHead.bodyClass(classOf(documentStyles.body, roomStyle(room))),
       HtmlHead.meta({ name: 'theme-color', content: room.color }),
     ]
   },
   // NOTE: the blueprint canvas, the horde and the toast sit outside the
   // page, so they carry across pages and the GPU never restarts.
-  view: (h, model) =>
-    h.div(
+  view: (h, model) => {
+    const room = roomColorOf(model.page)
+    return h.div(
       Blueprint(h, {
         gpu: model.gpu,
+        // The hidden pages have their own colors, so the blueprint steps out.
+        hidden: room !== BLUEPRINT,
         still: h.props.reducedMotion,
         started: supported => SiteMessage.StartedGpu({ supported }),
         infected: count => SiteMessage.CountedInfected({ infected: count }),
@@ -202,12 +219,13 @@ export const SiteNoDeps = SiteDef.make({
       page(h, model),
       Zombies(h, zombiesOf(model.horde), id => SiteMessage.ClickedZombie({ id })),
       // The counter only shows on pages that show the pens.
-      roomColorOf(model.page) === BLUEPRINT && Outbreak(h, model.gpu),
+      room === BLUEPRINT && Outbreak(h, model.gpu),
       // The hidden pages dock the toast as the way home; the blog keeps it.
-      roomColorOf(model.page) === BLUEPRINT && model.page._tag !== 'NotFound'
+      room === BLUEPRINT && model.page._tag !== 'NotFound'
         ? Toast(h, model.toast)
-        : Dock(h, model.toast),
-    ),
+        : Dock(h, model.toast, room.name),
+    )
+  },
 })
 
 // NOTE: the actors start when the Site mounts, seeded from its props, and

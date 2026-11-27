@@ -13,7 +13,7 @@ export const HouseDrawing = Mount.makeStream(
   (canvas: HTMLCanvasElement, args, changes) =>
     Stream.callback<void>(queue =>
       runHouseDrawing(canvas, args, changes, Effect.asVoid(Queue.offer(queue, undefined))).pipe(
-        // The plan waits hidden while the GPU starts (see styles.css), so
+        // The plan waits hidden while the GPU starts (see House.ts), so
         // without one it's handed back to CSS.
         Effect.catchTag('GpuUnavailable', error =>
           Effect.andThen(

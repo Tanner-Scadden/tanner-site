@@ -7,7 +7,7 @@ import { readFoundEggs } from './eggs/storage.ts'
 import { Viewport } from './horde/services/Viewport.ts'
 import { SiteRoute } from './routes.ts'
 import { Site } from './Site.ts'
-import './styles.css'
+import './styles/reset.css'
 
 // NOTE: the devtools egg starts as plain console output on purpose: styled
 // text in the console, where Effect's logger would add its own prefix.
@@ -23,15 +23,7 @@ const greetDevtools = Effect.sync(() => {
   )
 })
 
-// NOTE: marks the root before the first paint when the browser has WebGPU,
-// so the GPU drawings can keep their CSS stand-ins out of sight while the
-// GPU starts, instead of showing them and then taking them away.
-const markWebGpu = Effect.sync(() => {
-  if ('gpu' in navigator) document.documentElement.dataset['webgpu'] = ''
-})
-
 const main = Effect.gen(function* () {
-  yield* markWebGpu
   yield* greetDevtools
   const found = yield* readFoundEggs
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches

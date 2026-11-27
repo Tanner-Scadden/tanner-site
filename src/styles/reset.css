@@ -1,0 +1,15 @@
+/* NOTE: plain CSS is only for elements no component styles: this reset,
+   and a blog post's body (blog/prose.css). Everything else is StyleX. Both
+   sit in layers, so any StyleX rule wins over them whatever order the
+   sheets load in. The document's colors come from <body>'s StyleX class,
+   through --link. */
+/* Whichever sheet loads first sets the layer order, so both say it. */
+@layer reset, prose;
+
+@layer reset {
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  html { scroll-behavior: smooth }
+  a { color: var(--link) }
+  :focus-visible { outline: 2px solid var(--link); outline-offset: 2px }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto } }
+}
