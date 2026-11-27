@@ -180,7 +180,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                     ),
                   ),
             ),
-          sx(h.figcaption, styles.caption).children(shown.caption),
+          shown.caption !== '' && sx(h.figcaption, styles.caption).children(shown.caption),
         )
     },
   })

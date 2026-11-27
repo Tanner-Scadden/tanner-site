@@ -21,7 +21,8 @@ export const forestScene: Scene = {
     {
       id: 'grove',
       label: 'ONE SEED',
-      caption: 'One seed, then a forest. For "The Lorax" by Dr. Seuss, which ends with one last seed handed on.',
+      // The quote above it says what it's for.
+      caption: '',
       tone: 'hi',
     },
   ],

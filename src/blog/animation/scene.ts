@@ -34,7 +34,7 @@ export interface Shapes {
 }
 
 // One version of the scene a reader can switch to, and what the caption
-// says while it's showing.
+// says while it's showing. An empty caption leaves the figure without one.
 export interface Variant {
   readonly id: string
   readonly label: string
