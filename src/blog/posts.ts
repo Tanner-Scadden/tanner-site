@@ -6,6 +6,12 @@ import { type Post, sheetNo, sortPosts } from '#domain/Post'
 // NOTE: the posts this build shows, newest first. DRAFTS is empty in a build.
 export const POSTS: ReadonlyArray<Post> = sortPosts([...PUBLISHED, ...DRAFTS])
 
+// NOTE: the blog only exists once there's something on it. Until a post is
+// in PUBLISHED, a build answers /blog and every post with Sheet not found
+// and the home page has no link to it. Under `bun run dev` drafts count, so
+// you can write and preview there.
+export const BLOG_OPEN: boolean = POSTS.length > 0
+
 export const isDraft = (post: Post): boolean =>
   Arr.some(DRAFTS, draft => draft.slug === post.slug)
 

@@ -19,7 +19,7 @@ import { PENS_START } from '../blueprint/webgpu/renderer.ts'
 import { EggCounter } from '../eggs/components/QuestLog.ts'
 import { HouseDrawing } from '../house/mounts/HouseDrawing.ts'
 import type { EggsState } from '../eggs/machines/Eggs.ts'
-import { POSTS } from '../blog/posts.ts'
+import { BLOG_OPEN } from '../blog/posts.ts'
 import { SiteRoute, blogRoute, href, restRoute } from '../routes.ts'
 import { WorkDrawing } from '../work/mounts/WorkDrawing.ts'
 
@@ -61,8 +61,7 @@ const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
         h.a.attr('href', '#work').children('WORK'),
         h.a.attr('href', '#oss').children('OPEN SOURCE'),
         h.a.attr('href', '#outside').children(PERSONAL_LIFE),
-        // The blog shows up once there's something on it.
-        POSTS.length > 0 && h.a.attr('href', href(blogRoute)).children('BLOG'),
+        BLOG_OPEN && h.a.attr('href', href(blogRoute)).children('BLOG'),
       ),
       EggCounter(h, eggs),
     )

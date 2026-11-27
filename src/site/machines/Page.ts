@@ -4,7 +4,7 @@ import { Event, Machine, State } from 'effect-machine'
 
 import { RoomId } from '#domain/Room'
 
-import { findPost } from '../../blog/posts.ts'
+import { BLOG_OPEN, findPost } from '../../blog/posts.ts'
 import { findEgg } from '../../eggs/machines/Eggs.ts'
 import { type Actor, started } from '../../lib/actor.ts'
 import { SiteRoute, blogRoute, homeRoute, restRoute } from '../../routes.ts'
@@ -36,7 +36,7 @@ export const pageOf = (route: SiteRoute): PageState =>
     Manor: () => PageState.Manor({ room: 'parlour' }),
     ManorRoom: ({ params }) => PageState.Manor({ room: params.room }),
     Rest: () => PageState.Rest,
-    Blog: () => PageState.Blog,
+    Blog: () => (BLOG_OPEN ? PageState.Blog : PageState.NotFound),
     // A slug with no post (or a draft, in a build) is a sheet not in the set.
     BlogPost: ({ params }) =>
       Option.isSome(findPost(params.slug))
