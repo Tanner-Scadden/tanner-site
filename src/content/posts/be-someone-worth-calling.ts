@@ -92,6 +92,10 @@ export const beSomeoneWorthCalling: Post = {
       ' PR.',
     ),
     h.p(
+      h.strong('See the cup half full.'),
+      ' Things will break, deals will fall through, and you’ll lose games you should have won. Look for what you can still do, not who to blame. People want to work with someone who makes the hard days lighter.',
+    ),
+    h.p(
       h.strong('Believe in yourself.'),
       ' Except for physics, every ceiling is one you put there yourself. When you’re stuck, borrow George Mack’s evil twin from ',
       h.a.attr('href', 'https://www.highagency.com/').children('High Agency'),
