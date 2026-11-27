@@ -6,6 +6,7 @@ import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 import { readFoundEggs } from './eggs/storage.ts'
 import { Viewport } from './horde/services/Viewport.ts'
 import { SiteRoute } from './routes.ts'
+import { restoreScrollOnReload, saveScrollOnHide } from './site/reloadScroll.ts'
 import { Site } from './Site.ts'
 import './styles.css'
 
@@ -34,11 +35,15 @@ const main = Effect.gen(function* () {
     reducedMotion,
     route,
   }))
-  return yield* Layer.launch(
+  yield* saveScrollOnHide
+  yield* Layer.build(
     BrowserHost.mount(Site, props, document.getElementById('app')!).pipe(
       Layer.provide([BrowserRouter.layer({ routes: SiteRoute }), Viewport.browser]),
     ),
   )
-})
+  // NOTE: after the mount, so the page is tall enough to scroll back into.
+  yield* restoreScrollOnReload
+  return yield* Effect.never
+}).pipe(Effect.scoped)
 
 Effect.runFork(main)
