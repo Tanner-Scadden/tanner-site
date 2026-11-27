@@ -1,8 +1,30 @@
 import * as stylex from '@stylexjs/stylex'
 
-// NOTE: StyleX has no `all: unset`, so a button that draws itself starts
-// from this: no browser chrome, and the type of the words around it.
+import { blueprint } from './tokens.stylex.ts'
+
+// NOTE: what every interactive element starts from, so each one gets its
+// look from its own classes and nothing styles it from a distance. Put a
+// base style first: the element's own styles come after and win where they
+// set the same property.
 export const base = stylex.create({
+  // A link: gold, with the focus ring.
+  link: {
+    color: blueprint.hi,
+    outlineWidth: { default: null, ':focus-visible': 2 },
+    outlineStyle: { default: null, ':focus-visible': 'solid' },
+    outlineColor: { default: null, ':focus-visible': blueprint.hi },
+    outlineOffset: { default: null, ':focus-visible': 2 },
+  },
+  // Anything else you can tab to: the focus ring alone.
+  focus: {
+    outlineWidth: { default: null, ':focus-visible': 2 },
+    outlineStyle: { default: null, ':focus-visible': 'solid' },
+    outlineColor: { default: null, ':focus-visible': blueprint.hi },
+    outlineOffset: { default: null, ':focus-visible': 2 },
+  },
+  // StyleX has no `all: unset`, so a button that draws itself starts from
+  // this: no browser chrome, the type of the words around it, and the focus
+  // ring.
   button: {
     appearance: 'none',
     borderStyle: 'none',
@@ -16,5 +38,9 @@ export const base = stylex.create({
     lineHeight: 'inherit',
     letterSpacing: 'inherit',
     textAlign: 'inherit',
+    outlineWidth: { default: null, ':focus-visible': 2 },
+    outlineStyle: { default: null, ':focus-visible': 'solid' },
+    outlineColor: { default: null, ':focus-visible': blueprint.hi },
+    outlineOffset: { default: null, ':focus-visible': 2 },
   },
 })

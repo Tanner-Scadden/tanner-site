@@ -42,6 +42,7 @@ export const fonts = stylex.defineConsts({
 // Archivo's widths: the display type is set wide.
 export const widths = stylex.defineConsts({
   normal: '100%',
+  hint: '104%',
   slight: '108%',
   semi: '112%',
   wide: '115%',

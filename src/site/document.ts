@@ -8,7 +8,6 @@ import { blueprint, fonts, media, paper } from '../styles/tokens.stylex.ts'
 // the head, since no component draws them.
 export const documentStyles = stylex.create({
   body: {
-    '--link': blueprint.hi,
     backgroundColor: blueprint.paper,
     color: blueprint.line,
     fontFamily: fonts.mono,

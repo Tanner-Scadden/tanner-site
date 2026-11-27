@@ -8,6 +8,7 @@ import { formatDate } from '#domain/Post'
 
 import { POSTS, isDraft, sheetOf } from '../../blog/posts.ts'
 import { blogRoute, homeRoute, href, postRoute } from '../../routes.ts'
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 
@@ -15,8 +16,8 @@ import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 export const BlogBar = <M>(h: Html.H<M>, right: string) =>
   sx(h.div, sheet.bar).children(
     sx(h.nav, sheet.nav).children(
-      sx(h.a, sheet.navLink).attr('href', href(homeRoute)).children('TANNER SCADDEN'),
-      sx(h.a, sheet.navLink).attr('href', href(blogRoute)).children('BLOG'),
+      sx(h.a, base.link, sheet.navLink).attr('href', href(homeRoute)).children('TANNER SCADDEN'),
+      sx(h.a, base.link, sheet.navLink).attr('href', href(blogRoute)).children('BLOG'),
     ),
     h.span(right),
   )
@@ -38,7 +39,7 @@ export const BlogPage = <M>(h: Html.H<M>) =>
         : sx(h.ol, styles.register).children(
             ...Arr.map(POSTS, post =>
               sx(h.li, styles.row).children(
-                sx(h.a, styles.entry, stylex.defaultMarker())
+                sx(h.a, base.link, styles.entry, stylex.defaultMarker())
                   .attr('href', href(postRoute(post.slug)))
                   .children(
                     sx(h.span, styles.no).children(sheetOf(post)),

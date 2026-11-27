@@ -5,6 +5,7 @@ import { Array as Arr } from 'effect'
 import { EGG_HINTS, EGG_NAMES } from '#content/eggs'
 import { EGG_COUNT, EggId } from '#domain/Egg'
 
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, media } from '../../styles/tokens.stylex.ts'
 import type { EggsState } from '../machines/Eggs.ts'
@@ -93,7 +94,7 @@ const styles = stylex.create({
 // NOTE: the EGGS counter in the top bar. Hovering or focusing it opens the
 // quest log: found eggs by name, hidden ones as a hint.
 export const EggCounter = <M>(h: Html.H<M>, eggs: EggsState) =>
-  sx(h.span, styles.counter, eggs.found.length > 0 && styles.got, stylex.defaultMarker())
+  sx(h.span, base.focus, styles.counter, eggs.found.length > 0 && styles.got, stylex.defaultMarker())
     .attrs({ tabindex: '0', 'aria-describedby': 'quest-log' })
     .children(`EGGS ${eggs.found.length}/${EGG_COUNT}`, QuestLog(h, eggs))
 

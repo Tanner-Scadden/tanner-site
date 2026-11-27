@@ -4,6 +4,7 @@ import { Array as Arr } from 'effect'
 
 import { WORK } from '#content/home'
 
+import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { WorkDrawing } from '../mounts/WorkDrawing.ts'
@@ -26,7 +27,7 @@ export const Work = <M>(h: Html.H<M>, still: boolean) =>
           h.div(
             sx(h.small, styles.note).children(job.when),
             sx(h.strong, styles.name).children(
-              sx(h.a, styles.link)
+              sx(h.a, base.link, styles.link)
                 .attrs({ href: job.href, target: '_blank', rel: 'noopener noreferrer' })
                 .children(job.name),
             ),

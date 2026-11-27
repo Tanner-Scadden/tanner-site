@@ -3,6 +3,7 @@ import type { Html } from '@effect/ui/html'
 import { sheet } from '#components/Sheet'
 
 import { homeRoute, href } from '../routes.ts'
+import { base } from '../styles/base.ts'
 import { sx } from '../styles/sx.ts'
 
 // Any path no route claims.
@@ -13,7 +14,7 @@ export const NotFoundPage = <M>(h: Html.H<M>) =>
       sx(h.p, sheet.role).children('404'),
       h.p(
         "This drawing isn't in the set. ",
-        h.a.attr('href', href(homeRoute)).children('Back to the front page'),
+        sx(h.a, base.link).attr('href', href(homeRoute)).children('Back to the front page'),
         '.',
       ),
     ),
