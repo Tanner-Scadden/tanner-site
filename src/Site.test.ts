@@ -79,7 +79,7 @@ it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
         yield* TestGlobalEvents.fire('document', 'keydown', { key: 'Escape' })
         yield* TestHost.settle
         assert.strictEqual(play.root.model()?.page._tag, 'Home')
-        assert.strictEqual(play.root.head().title, 'Tanner Scadden · Product engineer')
+        assert.strictEqual(play.root.head().title, 'Tanner Scadden · Engine builder')
         // Landing on the Manor counted its egg.
         yield* play.expect(Locator.text('EGGS 1/7')).toExist()
       }).pipe(Effect.scoped),

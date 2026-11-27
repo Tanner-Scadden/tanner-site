@@ -116,6 +116,8 @@ export const THESES = [
   'Solved.',
 ] as const
 
+export const ROLE = 'Engine builder'
+
 export const BIO =
   "It started with solar permits, where every city has its own rules for what goes on a roof. Then four marketplaces that each wanted listings their own way. Then every tabletop RPG's rulebook. Now union rules for hospital staffing. Each time, I learn the rules, model them as code, and build the engine so nobody has to do it by hand again. Self-taught, mostly TypeScript and Effect."
 
