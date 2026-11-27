@@ -2,8 +2,10 @@
 // out, so the walls, the drafting and the pets are testable without a GPU.
 // The renderer only draws what these return.
 //
-// The plan is drafted once: pens trace every wall one after another, then
-// the front door swings in. Then the house rises into 3D (see ./view), and
+// The plan is drafted once: first the whole blueprint is sketched at once,
+// every wall a faint fine line, then the rooms fill in one after another and
+// the walls fill out to their full weight. Then the house rises into 3D (see
+// ./view), and
 // once it's up, Teddy and Rain move in through the front door. Teddy wanders
 // the Personal Life room, chases the pointer whenever it's on the house, and
 // play-bows and barks once he catches it. Rain ignores it and does her own
@@ -82,7 +84,10 @@ export interface Plan {
   readonly inside: Rect
 }
 
-export const DRAFT_MS = 2400
+// Sketching the lines, then filling in the rooms and walls.
+export const SKETCH_MS = 900
+export const FILL_MS = 1500
+export const DRAFT_MS = SKETCH_MS + FILL_MS
 const OUTER = 2.4
 const INNER = 1.6
 const THIN = 0.8
@@ -223,8 +228,9 @@ const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
 // off the walls otherwise.
 const STEP_IN = 10
 const WALL_GAP = 7
-const ROOMS = ['work', 'oss', 'outside', 'locked'] as const
-type Room = (typeof ROOMS)[number]
+// Also the order the rooms fill in.
+export const ROOMS = ['work', 'oss', 'outside', 'locked'] as const
+export type Room = (typeof ROOMS)[number]
 // The rooms Teddy can get into. D-13 is closed.
 const OPEN: ReadonlyArray<Room> = ['work', 'oss', 'outside']
 
@@ -338,31 +344,39 @@ export const nextStop: {
   return onSegment(at, near, far) ? far : roundObstacles(plan, at, near)
 })
 
-// 0 to 1 for each wall: how much of it is drawn, `since` ms after drafting
-// started. One pen works through the walls in order at a steady speed, so a
-// long wall takes longer than a short one.
+// How far the drafting has got, `since` ms after it started.
 export interface Drafting {
   // Ms since drafting started.
   readonly since: number
   readonly still: boolean
 }
 
-export const draftOf: {
-  (at: Drafting): (walls: ReadonlyArray<Wall>) => ReadonlyArray<number>
-  (walls: ReadonlyArray<Wall>, at: Drafting): ReadonlyArray<number>
-} = dual(2, (walls: ReadonlyArray<Wall>, { since, still }: Drafting): ReadonlyArray<number> => {
-  if (still || since >= DRAFT_MS) return Arr.map(walls, () => 1)
-  if (since <= 0) return Arr.map(walls, () => 0)
-  const lengths = Arr.map(walls, w => distance(w.from, w.to))
-  const total = Arr.reduce(lengths, 0, (sum, l) => sum + l)
-  const head = clamp01(since / DRAFT_MS) * total
-  // Where each wall starts along the pen's path.
-  const starts = Arr.scan(lengths, 0, (sum, l) => sum + l)
-  return Arr.map(lengths, (length, i) => {
-    const start = starts[i] ?? 0
-    return length <= 0 ? (head >= start ? 1 : 0) : clamp01((head - start) / length)
-  })
-})
+export interface Draft {
+  // 0 to 1: how much of every line is sketched. They all draw at once.
+  readonly sketch: number
+  // 0 to 1: how far the walls have filled out to their full weight.
+  readonly fill: number
+  // 0 to 1 for each room, in ROOMS order: how much of its floor is filled.
+  readonly rooms: ReadonlyArray<number>
+}
+
+// Each room starts filling this far, as a share of its own fill time, after
+// the one before.
+const ROOM_STAGGER = 0.35
+
+const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
+
+export const draftOf = ({ since, still }: Drafting): Draft => {
+  if (still || since >= DRAFT_MS) return { sketch: 1, fill: 1, rooms: Arr.map(ROOMS, () => 1) }
+  const sketch = easeInOut(clamp01(since / SKETCH_MS))
+  const filling = clamp01((since - SKETCH_MS) / FILL_MS)
+  const span = 1 + (ROOMS.length - 1) * ROOM_STAGGER
+  return {
+    sketch,
+    fill: easeInOut(filling),
+    rooms: Arr.map(ROOMS, (_, i) => easeInOut(clamp01(filling * span - i * ROOM_STAGGER))),
+  }
+}
 
 export const drafted = ({ since, still }: Drafting): boolean => still || since >= DRAFT_MS
 
