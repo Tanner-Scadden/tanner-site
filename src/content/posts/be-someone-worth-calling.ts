@@ -70,7 +70,7 @@ export const beSomeoneWorthCalling: Post = {
     h.p('None of those calls came from a strategy. They came from habits, and you can build every one of them.'),
     h.p(
       h.strong('Understand the problems.'),
-      ' Step back and look at the bigger picture, then step back and do it again. Don’t stop at the ticket in front of you. Ask what it’s really for and what else it touches. Talk to customers, watch session replays, and dig through your OpenTelemetry data for problems users never reported. The more of the picture you can see, the bigger the problems you can take on. Bring the team solutions, not problems.',
+      ' Step back and look at the bigger picture, then step back and do it again. Don’t stop at the  in front of you. Ask what it’s really for and what else it touches. Talk to customers, watch session replays, and dig through your OpenTelemetry data for problems users never reported. The more of the picture you can see, the bigger the problems you can take on. Bring the team solutions, not problems.',
     ),
     h.p(
       h.strong('Build with intent.'),
