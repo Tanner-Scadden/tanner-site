@@ -105,9 +105,9 @@ export const beSomeoneWorthCalling: Post = {
       ', nobody is self-made.',
     ),
 
-    h.h2('The calls keep coming'),
+    h.h2('Opportunities will keep coming'),
     h.p(
-      'I still get calls. People I’ve worked with asking if I’m open to something new, or if I’d want to found a company with them. The network grows with the career. It happens naturally.',
+      'People I’ve worked with still ask if I’m open to something new, or if I’d want to found a company with them. The network grows with the career. It happens naturally.',
     ),
     h.p(
       'In ',
