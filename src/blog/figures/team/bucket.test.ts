@@ -48,31 +48,35 @@ describe('team bucket', () => {
   it('stays inside its bounds and its buffer sizes', () => {
     for (const seed of SEEDS) {
       const timeline = withKicks(buildTimeline(seed), [3, 4.2, 6, 10.5, 12, 13])
+      // Checked by hand and gathered, since asserting every point is slow.
+      const misses: Array<string> = []
+      const unit = (c: number) => c >= 0 && c <= 1
       for (const t of moments(0, timeline.end + 1)) {
         const frame = frameAt(timeline, t)
         for (const [x, y] of pointsOf(frame)) {
-          assert.isAtMost(Math.abs(x), BOUNDS.x, `seed ${seed} at ${t}`)
-          assert.isAtMost(Math.abs(y), BOUNDS.y, `seed ${seed} at ${t}`)
+          if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) misses.push(`point ${x},${y} at ${t}`)
         }
         for (const [w, h] of [
           [800, 450],
           [314, 177],
         ] as const) {
           const shapes = shapesOf(frame, w, h, Option.some([w / 2, h * 0.15]))
-          assert.isAtMost(shapes.lines.length, MAX_LINES, `seed ${seed} at ${t}`)
-          assert.isAtMost(shapes.dots.length, MAX_DOTS, `seed ${seed} at ${t}`)
+          if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
+          if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
           for (const dot of shapes.dots) {
-            assert.isTrue(dot.x >= 0 && dot.x <= w && dot.y >= 0 && dot.y <= h, `seed ${seed} at ${t}`)
-            for (const c of dot.color) assert.isTrue(c >= 0 && c <= 1, `seed ${seed} at ${t}`)
+            const on = dot.x >= 0 && dot.x <= w && dot.y >= 0 && dot.y <= h
+            if (!on || !dot.color.every(unit)) misses.push(`dot at ${t}`)
           }
           for (const line of shapes.lines) {
-            for (const c of line.color) assert.isTrue(c >= 0 && c <= 1, `seed ${seed} at ${t}`)
-            for (const v of [...line.from, ...line.to]) assert.isTrue(Number.isFinite(v), `seed ${seed} at ${t}`)
+            if (!line.color.every(unit) || ![...line.from, ...line.to].every(Number.isFinite)) {
+              misses.push(`line at ${t}`)
+            }
           }
         }
       }
+      assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
     }
-  }, 60_000)
+  })
 
   it('only rises before the kick, a drop at a time', () => {
     for (const seed of SEEDS) {

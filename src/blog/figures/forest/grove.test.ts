@@ -98,26 +98,29 @@ describe('grove timeline', () => {
   it('only ever grows', () => {
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
+      const misses: Array<string> = []
       let before = frameAt(timeline, 0)
       for (const t of momentsOf(timeline.end).slice(1)) {
         const now = frameAt(timeline, t)
-        assert.isAtLeast(now.ground, before.ground)
-        assert.isAtLeast(now.trees.length, before.trees.length, `seed ${seed} at ${t}`)
+        if (now.ground < before.ground) misses.push(`ground at ${t}`)
+        if (now.trees.length < before.trees.length) misses.push(`trees at ${t}`)
         for (const tree of before.trees) {
           const after = Arr.findFirst(now.trees, other => other.id === tree.id)
-          assert.isTrue(Option.isSome(after), `seed ${seed} at ${t}`)
-          assert.isAtLeast(Option.getOrThrow(after).grown, tree.grown)
-          assert.isAtLeast(branchLength(now, tree.id) + 1e-9, branchLength(before, tree.id), `seed ${seed} at ${t}`)
+          if (Option.isNone(after) || after.value.grown < tree.grown) misses.push(`tree ${tree.id} at ${t}`)
+          if (branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id)) {
+            misses.push(`branches ${tree.id} at ${t}`)
+          }
           const leavesOf = (frame: typeof now) =>
             Arr.reduce(
               Arr.filter(frame.leaves, leaf => leaf.tree === tree.id),
               0,
               (sum, leaf) => sum + leaf.size,
             )
-          assert.isAtLeast(leavesOf(now) + 1e-9, leavesOf(before), `seed ${seed} at ${t}`)
+          if (leavesOf(now) + 1e-9 < leavesOf(before)) misses.push(`leaves ${tree.id} at ${t}`)
         }
         before = now
       }
+      assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
     }
   })
 

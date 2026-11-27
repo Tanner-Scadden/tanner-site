@@ -32,17 +32,19 @@ describe('network timeline', () => {
       const timeline = buildTimeline(seed)
       assert.isAtMost(timeline.nodes.length, MAX_NODES)
       assert.isAtMost(timeline.edges.length, MAX_EDGES)
-      for (const key of timeline.layout) {
+      // Checked by hand and gathered, since asserting every point is slow.
+      const misses: Array<string> = []
+      for (const [k, key] of timeline.layout.entries()) {
         for (let i = 0; i < key.length; i += 2) {
-          assert.isAtMost(Math.abs(key[i]!), BOUNDS.x)
-          assert.isAtMost(Math.abs(key[i + 1]!), BOUNDS.y)
+          if (Math.abs(key[i]!) > BOUNDS.x || Math.abs(key[i + 1]!) > BOUNDS.y) misses.push(`key ${k}, ${i / 2}`)
         }
       }
       for (let t = 0; t <= timeline.end + 4; t += 0.1) {
         const shapes = shapesOf(frameAt(timeline, t), 800, 450, Option.some([400, 225]))
-        assert.isAtMost(shapes.lines.length, MAX_LINES, `seed ${seed} at ${t}`)
-        assert.isAtMost(shapes.dots.length, MAX_DOTS, `seed ${seed} at ${t}`)
+        if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
+        if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
       }
+      assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
     }
   })
 
@@ -110,14 +112,16 @@ describe('network timeline', () => {
     // canvas as the network grows around them.
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
+      const misses: Array<string> = []
       for (let t = 0; t < timeline.end; t += 0.05) {
         for (const [i, node] of timeline.nodes.entries()) {
           if (node.born > t) continue
           const [ax, ay] = positionAt(timeline, i, t)
           const [bx, by] = positionAt(timeline, i, t + 0.05)
-          assert.isAtMost(Math.hypot(bx - ax, by - ay) / 0.05, 0.2, `seed ${seed}, person ${i} at ${t}`)
+          if (Math.hypot(bx - ax, by - ay) / 0.05 > 0.2) misses.push(`person ${i} at ${t}`)
         }
       }
+      assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
     }
   })
 
