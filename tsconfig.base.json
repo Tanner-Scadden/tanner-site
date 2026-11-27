@@ -189,7 +189,8 @@
               "src/components/*.ts",
               "src/*/components/*.ts",
               "src/blog/animation/*.ts",
-              "src/network/*.ts"
+              "src/network/*.ts",
+              "src/team/*.ts"
             ],
             "options": {
               "diagnosticSeverity": {

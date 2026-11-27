@@ -1,6 +1,7 @@
 import type { Post } from '#domain/Post'
 
 import { NetworkFigure } from '../../network/scene.ts'
+import { TeamFigure } from '../../team/scene.ts'
 
 export const beSomeoneWorthCalling: Post = {
   slug: 'be-someone-worth-calling',
@@ -42,6 +43,7 @@ export const beSomeoneWorthCalling: Post = {
     h.p(
       'I’ve broken that harmony myself. After a heated game, or in the middle of an incident, it’s easy to let your frustration slip and take it out on others. It might feel righteous in that moment, but people remember it long after. Trust is built in drops and lost in buckets.',
     ),
+    TeamFigure(h, { key: 'team' }),
     h.p(
       'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them, and the whole team gets slower and less fun. Don’t be that person, and don’t hire them.',
     ),
