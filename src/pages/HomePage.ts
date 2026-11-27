@@ -148,8 +148,8 @@ const Work = <M>(h: Html.H<M>, still: boolean) =>
     .children(
       Label(h, 1, 'SELECTED WORK'),
       h.div.class('work').children(
-        // NOTE: WebGPU drafts the boxes and runs a spark along the arrows.
-        // Without it this canvas stays empty and the CSS borders show.
+        // NOTE: WebGPU draws the boxes and runs a wave round them and along
+        // the arrows. Without it this canvas stays empty and the CSS borders show.
         h.canvas
           .class('work-gpu')
           .attr('aria-hidden', 'true')

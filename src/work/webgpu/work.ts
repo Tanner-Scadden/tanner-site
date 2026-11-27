@@ -1,27 +1,28 @@
 // NOTE: the timing rules for the Selected Work drawing, as plain data in and
-// plain data out, so when each box draws, sparks and rests is testable
-// without a GPU. The renderer only draws what these return.
+// plain data out, so when a wave leaves, where it is and when it rests is
+// testable without a GPU. The renderer only draws what these return.
 //
-// A job draws once, the first time it scrolls into view: its three boxes
-// are drafted one after another, then a spark runs along the arrows from
-// PROBLEM to RESULT. Pointing at or tapping a job later sends the spark
-// again. With motion reduced the boxes are simply there, and nothing
-// travels.
+// The boxes are simply there. The first time a job scrolls into view, a
+// wave runs through it: in at PROBLEM, splitting round its border, out
+// through the arrow, round APPROACH, through the next arrow and round
+// RESULT, where it closes and the box glows. Pointing at or tapping a job
+// later sends the wave again. With motion reduced nothing travels.
 
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
 
 export const STEPS = 3
-export const STAGGER_MS = 240
-export const DRAW_MS = 760
-// The spark leaves as the last box closes, and takes one arrow at a time.
-const SPARK_LEAD_MS = 200
-export const GAP_MS = 420
-export const TRAVEL_MS = 360
-// After the spark lands its trail fades, and the box it hit glows a moment.
-export const TRAIL_TAIL = 0.4
-export const PING_MS = 520
-const SPARK_MS = (STEPS - 2) * GAP_MS + TRAVEL_MS + PING_MS
+// A beat after the job lands on screen, so the eye gets there first.
+export const WAVE_DELAY_MS = 220
+// How long the wave's front takes from PROBLEM to the far side of RESULT.
+// It runs at one speed the whole way, so how far it gets is a fraction of
+// the job's path.
+export const WAVE_MS = 1500
+// The front stops at the end, and the rest of the wave runs out behind it
+// for this much more of the path.
+export const WAVE_TAIL = 0.15
+export const PING_MS = 600
+const WAVE_END_MS = WAVE_MS * (1 + WAVE_TAIL)
 const HOVER_PER_S = 12
 const LONGEST_STEP_S = 0.05
 const SNAP = 0.002
@@ -29,8 +30,8 @@ const SNAP = 0.002
 export interface JobState {
   // When the job first came into view, or null while it hasn't.
   readonly seenAt: number | null
-  // When the latest spark left, or null before the first.
-  readonly sparkAt: number | null
+  // When the latest wave left, or null before the first.
+  readonly waveAt: number | null
   // 0 to 1 per box: how much the pointer's over it.
   readonly hover: ReadonlyArray<number>
 }
@@ -59,9 +60,8 @@ export interface JobEvent {
   readonly now: number
 }
 
-// One box of one job at one moment.
-export interface BoxAt {
-  readonly box: number
+// One job at one moment.
+export interface At {
   readonly now: number
   readonly still: boolean
 }
@@ -69,7 +69,7 @@ export interface BoxAt {
 export const initialWork = (jobs: number): WorkState => ({
   jobs: Arr.makeBy(jobs, () => ({
     seenAt: null,
-    sparkAt: null,
+    waveAt: null,
     hover: Arr.makeBy(STEPS, () => 0),
   })),
   last: null,
@@ -90,13 +90,11 @@ const updateJob = (
     : { ...state, jobs: Arr.map(state.jobs, (old, i) => (i === index ? next : old)) }
 }
 
-const drawnAt = (seenAt: number): number =>
-  seenAt + (STEPS - 1) * STAGGER_MS + DRAW_MS
+// The wave is on its way, or the RESULT box is still glowing from it.
+const busy = (job: JobState, now: number): boolean =>
+  job.waveAt !== null && now < job.waveAt + Math.max(WAVE_END_MS, WAVE_MS + PING_MS)
 
-const sparking = (job: JobState, now: number): boolean =>
-  job.sparkAt !== null && now < job.sparkAt + SPARK_MS
-
-// A job came into view: it starts drawing, and sparks once it's drawn.
+// A job came into view: a wave leaves once, a beat later.
 export const seen: {
   (event: JobEvent): (state: WorkState) => WorkState
   (state: WorkState, event: JobEvent): WorkState
@@ -104,22 +102,18 @@ export const seen: {
   updateJob(state, job, current =>
     current.seenAt !== null
       ? current
-      : { ...current, seenAt: now, sparkAt: drawnAt(now) - SPARK_LEAD_MS },
+      : { ...current, seenAt: now, waveAt: now + WAVE_DELAY_MS },
   ),
 )
 
-// The pointer came onto a job, or a finger tapped it: a drawn job sparks
-// again, unless one's already on its way.
+// The pointer came onto a job, or a finger tapped it: a seen job sends
+// another wave, unless one's already going through.
 export const replayed: {
   (event: JobEvent): (state: WorkState) => WorkState
   (state: WorkState, event: JobEvent): WorkState
 } = dual(2, (state: WorkState, { job, now }: JobEvent): WorkState =>
   updateJob(state, job, current =>
-    current.seenAt === null ||
-    now < drawnAt(current.seenAt) ||
-    sparking(current, now)
-      ? current
-      : { ...current, sparkAt: now },
+    current.seenAt === null || busy(current, now) ? current : { ...current, waveAt: now },
   ),
 )
 
@@ -149,37 +143,25 @@ export const step: {
   }
 })
 
-const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
-
-// 0 to 1: how much of a box's outline is drawn.
-export const revealOf: {
-  (at: BoxAt): (job: JobState) => number
-  (job: JobState, at: BoxAt): number
-} = dual(2, (job: JobState, { box, now, still }: BoxAt): number => {
-  if (job.seenAt === null) return 0
-  if (still) return 1
-  return clamp01((now - job.seenAt - box * STAGGER_MS) / DRAW_MS)
+// How far the wave's front is along the job's whole path: 0 to 1 while it
+// travels, up to 1 + WAVE_TAIL while the rest of it runs out, or null when
+// there's no wave.
+export const waveOf: {
+  (at: At): (job: JobState) => number | null
+  (job: JobState, at: At): number | null
+} = dual(2, (job: JobState, { now, still }: At): number | null => {
+  if (still || job.waveAt === null) return null
+  const t = (now - job.waveAt) / WAVE_MS
+  return t >= 0 && t <= 1 + WAVE_TAIL ? t : null
 })
 
-// How far the spark is along the arrow into `box` (1 or 2): 0 to 1 while
-// it travels, a little past 1 while its trail fades, or null when it's not
-// on that arrow.
-export const sparkOf: {
-  (at: BoxAt): (job: JobState) => number | null
-  (job: JobState, at: BoxAt): number | null
-} = dual(2, (job: JobState, { box, now, still }: BoxAt): number | null => {
-  if (still || job.sparkAt === null) return null
-  const t = (now - job.sparkAt - (box - 1) * GAP_MS) / TRAVEL_MS
-  return t >= 0 && t <= 1 + TRAIL_TAIL ? t : null
-})
-
-// 0 to 1: the glow on a box the spark just reached.
+// 0 to 1: the glow on RESULT once the wave closes round it.
 export const pingOf: {
-  (at: BoxAt): (job: JobState) => number
-  (job: JobState, at: BoxAt): number
-} = dual(2, (job: JobState, { box, now, still }: BoxAt): number => {
-  if (still || job.sparkAt === null || box === 0) return 0
-  const since = now - (job.sparkAt + (box - 1) * GAP_MS + TRAVEL_MS)
+  (at: At): (job: JobState) => number
+  (job: JobState, at: At): number
+} = dual(2, (job: JobState, { now, still }: At): number => {
+  if (still || job.waveAt === null) return 0
+  const since = now - (job.waveAt + WAVE_MS)
   return since < 0 || since > PING_MS ? 0 : 1 - since / PING_MS
 })
 
@@ -192,9 +174,7 @@ export const settled: {
     state.jobs,
     (job, j) =>
       Arr.every(job.hover, (h, b) => h === hoverTarget(hovered, j, b)) &&
-      (still ||
-        job.seenAt === null ||
-        (now >= drawnAt(job.seenAt) && !sparking(job, now))),
+      (still || !busy(job, now)),
   ),
 )
 

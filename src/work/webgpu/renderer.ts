@@ -1,6 +1,7 @@
 // NOTE: the Selected Work drawing, as one scoped Effect like the blueprint.
 // The canvas sits behind the job list and owns the PROBLEM, APPROACH and
-// RESULT outlines while it runs (the CSS borders step aside). The page's
+// RESULT outlines while it runs (the CSS borders step aside) and sends a
+// wave through them. The page's
 // layout is read from the DOM, the timing rules live in ./work, and the loop
 // sleeps whenever nothing is drawing, so a resting list costs nothing.
 
@@ -21,14 +22,14 @@ import {
   replayed,
   initialWork,
   pingOf,
-  revealOf,
   seen,
   settled,
-  sparkOf,
   step,
   wake,
+  waveOf,
+  WAVE_TAIL,
 } from './work.ts'
-import { BOXES, BOX_FLOATS, SPARKS, SPARK_FLOATS } from './shaders.ts'
+import { BOXES, BOX_FLOATS, GAPS as GAP_SHADER, GAP_FLOATS } from './shaders.ts'
 
 export interface WorkSettings {
   readonly still: boolean
@@ -37,6 +38,8 @@ export interface WorkSettings {
 const VIEW_FLOATS = 4
 const MAX_PIXEL_RATIO = 2
 const GAPS = STEPS - 1
+// The wave's length along the path, in px, at most.
+const WAVE_PX = 120
 
 interface Rect {
   readonly x: number
@@ -50,11 +53,21 @@ interface Segment {
   readonly to: readonly [number, number]
 }
 
-// Where every box and arrow sits, in CSS px from the canvas's corner.
-interface Layout {
-  readonly boxes: ReadonlyArray<ReadonlyArray<Rect>>
-  readonly gaps: ReadonlyArray<ReadonlyArray<Segment>>
+// One job's boxes and arrows, and where the wave's path reaches each: it
+// enters a box at one side, goes both ways round to the far side, crosses
+// the arrow, and so on.
+interface Row {
+  readonly boxes: ReadonlyArray<Rect>
+  readonly gaps: ReadonlyArray<Segment>
+  // Whether the boxes stack, so the wave enters each at its top.
+  readonly stacked: boolean
+  readonly boxStarts: ReadonlyArray<number>
+  readonly gapStarts: ReadonlyArray<number>
+  readonly length: number
 }
+
+// Where every box and arrow sits, in CSS px from the canvas's corner.
+type Layout = ReadonlyArray<Row>
 
 // The arrow between two boxes runs across the gap between them: sideways
 // when they sit in a row, downward when the list stacks on a phone.
@@ -69,21 +82,36 @@ const gapBetween = (a: Rect, b: Rect): Segment =>
         to: [b.x + b.w / 2, b.y],
       }
 
+const rowOf = (boxes: ReadonlyArray<Rect>): Row => {
+  const gaps = boxes.slice(1).map((box, i) => gapBetween(boxes[i]!, box))
+  const stacked = boxes.length > 1 && boxes[1]!.x < boxes[0]!.x + boxes[0]!.w - 1
+  const boxStarts: Array<number> = []
+  const gapStarts: Array<number> = []
+  let at = 0
+  boxes.forEach((box, i) => {
+    boxStarts.push(at)
+    at += box.w + box.h
+    const gap = gaps[i]
+    if (gap === undefined) return
+    gapStarts.push(at)
+    at += Math.hypot(gap.to[0] - gap.from[0], gap.to[1] - gap.from[1])
+  })
+  return { boxes, gaps, stacked, boxStarts, gapStarts, length: at }
+}
+
 const measure = (
   canvas: HTMLCanvasElement,
   jobs: ReadonlyArray<HTMLElement>,
 ): Layout => {
   const origin = canvas.getBoundingClientRect()
-  const boxes = jobs.map(job =>
-    Array.from(job.querySelectorAll('.step'), el => {
-      const r = el.getBoundingClientRect()
-      return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
-    }).slice(0, STEPS),
+  return jobs.map(job =>
+    rowOf(
+      Array.from(job.querySelectorAll('.step'), el => {
+        const r = el.getBoundingClientRect()
+        return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
+      }).slice(0, STEPS),
+    ),
   )
-  const gaps = boxes.map(row =>
-    row.slice(1).map((box, i) => gapBetween(row[i]!, box)),
-  )
-  return { boxes, gaps }
 }
 
 const BLEND: GPUBlendState = {
@@ -98,7 +126,7 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
     const { context, format } = yield* acquireContext(canvas, device, 'premultiplied')
 
     const boxCount = jobs * STEPS
-    const sparkCount = jobs * GAPS
+    const gapCount = jobs * GAPS
     const viewBuffer = yield* acquireBuffer(device, {
       size: VIEW_FLOATS * 4,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -107,8 +135,8 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
       size: Math.max(1, boxCount) * BOX_FLOATS * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     })
-    const sparkBuffer = yield* acquireBuffer(device, {
-      size: Math.max(1, sparkCount) * SPARK_FLOATS * 4,
+    const gapBuffer = yield* acquireBuffer(device, {
+      size: Math.max(1, gapCount) * GAP_FLOATS * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     })
 
@@ -127,7 +155,7 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
         entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })),
       })
     const boxes = pipeline(BOXES)
-    const sparks = pipeline(SPARKS)
+    const gaps = pipeline(GAP_SHADER)
 
     return {
       device,
@@ -137,11 +165,11 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
       boxBuffer,
       boxData: new Float32Array(Math.max(1, boxCount) * BOX_FLOATS),
       boxCount,
-      sparkBuffer,
-      sparkData: new Float32Array(Math.max(1, sparkCount) * SPARK_FLOATS),
-      sparkCount,
+      gapBuffer,
+      gapData: new Float32Array(Math.max(1, gapCount) * GAP_FLOATS),
+      gapCount,
       boxes: { pipeline: boxes, group: bind(boxes, [viewBuffer, boxBuffer]) },
-      sparks: { pipeline: sparks, group: bind(sparks, [viewBuffer, sparkBuffer]) },
+      gaps: { pipeline: gaps, group: bind(gaps, [viewBuffer, gapBuffer]) },
     }
   })
 
@@ -179,11 +207,17 @@ const render = (
     gpu.device.queue.writeBuffer(gpu.viewBuffer, 0, gpu.viewData)
 
     gpu.boxData.fill(0)
-    gpu.sparkData.fill(0)
+    gpu.gapData.fill(0)
     state.jobs.forEach((job, j) => {
-      for (let b = 0; b < STEPS; b++) {
-        const rect = layout.boxes[j]?.[b]
-        if (rect === undefined) continue
+      const row = layout[j]
+      if (row === undefined) return
+      const t = waveOf(job, { now, still })
+      const front = (t ?? 0) * row.length
+      // Short enough to run out within the tail, so it's gone at the end.
+      const length = Math.min(WAVE_PX, row.length * WAVE_TAIL)
+      const on = t === null ? 0 : 1
+      const ping = pingOf(job, { now, still })
+      row.boxes.forEach((rect, b) => {
         // NOTE: the order matches `struct Box` in the shader.
         gpu.boxData.set(
           [
@@ -191,27 +225,27 @@ const render = (
             rect.y,
             rect.w,
             rect.h,
-            revealOf(job, { box: b, now, still }),
             job.hover[b] ?? 0,
             b === STEPS - 1 ? 1 : 0,
-            pingOf(job, { box: b, now, still }),
+            b === STEPS - 1 ? ping : 0,
+            row.stacked ? 1 : 0,
+            row.boxStarts[b] ?? 0,
+            front,
+            length,
+            on,
           ],
           (j * STEPS + b) * BOX_FLOATS,
         )
-      }
-      for (let g = 0; g < GAPS; g++) {
-        const gap = layout.gaps[j]?.[g]
-        const t = sparkOf(job, { box: g + 1, now, still })
-        gpu.sparkData.set(
-          gap === undefined
-            ? [0, 0, 0, 0, -1, 0, 0, 0]
-            : [...gap.from, ...gap.to, t ?? -1, 0, 0, 0],
-          (j * GAPS + g) * SPARK_FLOATS,
+      })
+      row.gaps.forEach((gap, g) => {
+        gpu.gapData.set(
+          [...gap.from, ...gap.to, row.gapStarts[g] ?? 0, front, length, on],
+          (j * GAPS + g) * GAP_FLOATS,
         )
-      }
+      })
     })
     gpu.device.queue.writeBuffer(gpu.boxBuffer, 0, gpu.boxData)
-    gpu.device.queue.writeBuffer(gpu.sparkBuffer, 0, gpu.sparkData)
+    gpu.device.queue.writeBuffer(gpu.gapBuffer, 0, gpu.gapData)
 
     const encoder = gpu.device.createCommandEncoder()
     const pass = encoder.beginRenderPass({
@@ -229,10 +263,10 @@ const render = (
       pass.setBindGroup(0, gpu.boxes.group)
       pass.draw(6, gpu.boxCount)
     }
-    if (gpu.sparkCount > 0) {
-      pass.setPipeline(gpu.sparks.pipeline)
-      pass.setBindGroup(0, gpu.sparks.group)
-      pass.draw(6, gpu.sparkCount)
+    if (gpu.gapCount > 0) {
+      pass.setPipeline(gpu.gaps.pipeline)
+      pass.setBindGroup(0, gpu.gaps.group)
+      pass.draw(6, gpu.gapCount)
     }
     pass.end()
     gpu.device.queue.submit([encoder.finish()])
@@ -268,7 +302,7 @@ const seenJobs = (jobs: ReadonlyArray<HTMLElement>): Stream.Stream<Input> =>
               Queue.offerUnsafe(queue, Input.Seen({ job }))
             }
           },
-          // A job draws once a good part of it is on screen.
+          // A job's wave leaves once a good part of it is on screen.
           { rootMargin: '0px 0px -12% 0px', threshold: 0.2 },
         )
         for (const job of jobs) observer.observe(job)
@@ -318,7 +352,7 @@ const pointed = (
     ),
   )
 
-// A tap or click on a job plays its spark again.
+// A tap or click on a job sends its wave again.
 const taps = (
   container: HTMLElement,
   jobs: ReadonlyArray<HTMLElement>,
@@ -334,9 +368,9 @@ const taps = (
 // The drawing
 // ---------------------------------------------------------------------------
 
-// Marks the list while the GPU draws it, so the CSS borders step aside and
-// the text waits for its box. Closing the scope hands both back to CSS.
-const markList = (container: HTMLElement, jobs: ReadonlyArray<HTMLElement>) =>
+// Marks the list while the GPU draws it, so the CSS borders step aside.
+// Closing the scope hands them back.
+const markList = (container: HTMLElement) =>
   Effect.acquireRelease(
     Effect.sync(() => {
       container.dataset['gpu'] = 'on'
@@ -344,7 +378,6 @@ const markList = (container: HTMLElement, jobs: ReadonlyArray<HTMLElement>) =>
     () =>
       Effect.sync(() => {
         delete container.dataset['gpu']
-        for (const job of jobs) delete job.dataset['drawn']
       }),
   )
 
@@ -385,13 +418,7 @@ export const runWorkDrawing = (
     })
 
     const handle = Input.$match({
-      Seen: ({ job }) =>
-        Effect.andThen(
-          Effect.sync(() => {
-            jobs[job]!.dataset['drawn'] = ''
-          }),
-          Ref.update(state, s => seen(s, { job, now: performance.now() })),
-        ),
+      Seen: ({ job }) => Ref.update(state, s => seen(s, { job, now: performance.now() })),
       Pointed: ({ hovered: next }) =>
         Effect.gen(function* () {
           const before = yield* Ref.getAndSet(hovered, next)
@@ -437,6 +464,6 @@ export const runWorkDrawing = (
       ),
     )
 
-    yield* markList(container, jobs)
+    yield* markList(container)
     yield* poke
   })
