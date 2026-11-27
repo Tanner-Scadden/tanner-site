@@ -3,12 +3,13 @@
 // The renderer only draws what these return.
 //
 // The plan is drafted once: pens trace every wall one after another, then
-// the front door swings in. Once it's drawn, Teddy and Rain move in through
-// the front door. Teddy wanders the Outside Work room, chases the pointer
-// whenever it's on the house, and play-bows and barks once he catches it.
-// Rain ignores it and does her own thing: mostly naps, sometimes sits up to
-// watch it, and bolts when Teddy gets too close. With motion reduced the plan is simply there, and the
-// pets sit still.
+// the front door swings in. Then the house rises into 3D (see ./view), and
+// once it's up, Teddy and Rain move in through the front door. Teddy wanders
+// the Outside Work room, chases the pointer whenever it's on the house, and
+// play-bows and barks once he catches it. Rain ignores it and does her own
+// thing: mostly naps, sometimes sits up to watch it, and bolts when Teddy
+// gets too close. With motion reduced the house is simply up, and the pets
+// sit still.
 
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
@@ -43,9 +44,13 @@ export interface Wall {
   // Dash length in px, or 0 for a solid line.
   readonly dash: number
   readonly alpha: number
+  // How much of the full wall height it stands, once the house rises. 0
+  // keeps it a mark on the floor.
+  readonly rise: number
 }
 
 export interface Plan {
+  readonly rooms: Rooms
   // In drafting order.
   readonly walls: ReadonlyArray<Wall>
   // Where the pets come in: just outside the front door.
@@ -68,8 +73,13 @@ const wall = (
   from: Point,
   to: Point,
   width: number,
-  { gold = 0, dash = 0, alpha = 0.9 }: { gold?: number; dash?: number; alpha?: number } = {},
-): Wall => ({ from, to, width, gold, dash, alpha })
+  {
+    gold = 0,
+    dash = 0,
+    alpha = 0.9,
+    rise = 1,
+  }: { gold?: number; dash?: number; alpha?: number; rise?: number } = {},
+): Wall => ({ from, to, width, gold, dash, alpha, rise })
 
 const distance = (a: Point, b: Point): number => Math.hypot(b.x - a.x, b.y - a.y)
 
@@ -82,7 +92,7 @@ const swing = (hinge: Point, radius: number, from: number, to: number): Readonly
       pt(hinge.x + radius * Math.cos(a), hinge.y + radius * Math.sin(a)),
       pt(hinge.x + radius * Math.cos(b), hinge.y + radius * Math.sin(b)),
       THIN,
-      { dash: 3, alpha: 0.7 },
+      { dash: 3, alpha: 0.7, rise: 0 },
     )
   })
 
@@ -96,7 +106,8 @@ const inset = (r: Rect, by: number): Rect => ({
 // Every wall of the house, in the order the pens draft them: the outside
 // walls clockwise from the front door, the inside walls, the doors, and the
 // locked room's cross last.
-export const planFor = ({ house, work, outside, locked }: Rooms): Plan => {
+export const planFor = (rooms: Rooms): Plan => {
+  const { house, work, outside, locked } = rooms
   const left = house.x
   const top = house.y
   const right = house.x + house.w
@@ -129,8 +140,9 @@ export const planFor = ({ house, work, outside, locked }: Rooms): Plan => {
     wall(pt(split, sideTop + sideWidth), pt(split, middle), INNER),
     // The locked room.
     wall(pt(lockX, middle), pt(lockX, bottom), INNER),
-    // The front door, open, and its swing.
-    wall(pt(doorLeft, bottom), pt(doorLeft, bottom - doorWidth), THIN, { alpha: 0.8 }),
+    // The front door, open, and its swing. The door stands a little shorter
+    // than the walls.
+    wall(pt(doorLeft, bottom), pt(doorLeft, bottom - doorWidth), THIN, { alpha: 0.8, rise: 0.82 }),
     ...swing(pt(doorLeft, bottom), doorWidth, -Math.PI / 2, 0),
     // The doorway's swing into Outside Work.
     ...swing(pt(hallLeft, middle), hallWidth, 0, Math.PI / 2),
@@ -139,17 +151,18 @@ export const planFor = ({ house, work, outside, locked }: Rooms): Plan => {
       pt(locked.x + 8, locked.y + 8),
       pt(locked.x + locked.w - 8, locked.y + locked.h - 8),
       THIN,
-      { gold: 1, dash: 4, alpha: 0.6 },
+      { gold: 1, dash: 4, alpha: 0.6, rise: 0 },
     ),
     wall(
       pt(locked.x + locked.w - 8, locked.y + 8),
       pt(locked.x + 8, locked.y + locked.h - 8),
       THIN,
-      { gold: 1, dash: 4, alpha: 0.6 },
+      { gold: 1, dash: 4, alpha: 0.6, rise: 0 },
     ),
   ]
 
   return {
+    rooms,
     walls,
     door: pt((doorLeft + doorRight) / 2, bottom + 14),
     yard: inset(outside, 14),
