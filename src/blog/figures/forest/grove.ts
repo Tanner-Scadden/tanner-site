@@ -45,10 +45,10 @@ const FIRST_FLIGHT = 2.2
 const REST = 0.3
 // How long the first tree takes to grow.
 const FIRST_GROW = 3.5
-// The first tree's seeds: the first release, the gap between them, and
-// how long they're in the air.
-const FIRST_RELEASE = 6.5
-const RELEASE_GAP = 0.25
+// When the first tree lets each of its seeds go. One at a time at first,
+// then closer together, so the grove multiplies instead of landing at once.
+const GROVE_RELEASES = [6.5, 7.7, 8.7, 9.5, 10.2, 10.8, 11.3, 11.7] as const
+// How long they're in the air.
 const FLIGHT = { min: 1.6, spread: 0.4 } as const
 const GROVE_GROW = { min: 2.8, spread: 0.4 } as const
 // The grove's own seeds, filling the gaps it leaves.
@@ -398,7 +398,7 @@ export const buildTimeline = (seed: number): Timeline => {
   // Beat 3: the first tree lets its seeds go, alternating sides so the
   // grove spreads both ways. Beat 4: each grows where it lands.
   for (let k = 0; k < GROVE; k++) {
-    const release = FIRST_RELEASE + k * RELEASE_GAP
+    const release = GROVE_RELEASES[k]!
     const duration = FLIGHT.min + next() * FLIGHT.spread
     const spot = GROVE_SPOTS[k]! + jitter(0.05)
     const near = Math.abs(spot) < 0.7

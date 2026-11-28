@@ -9,7 +9,7 @@ export const beSomeoneWorthCalling: Post = {
   slug: 'be-someone-worth-calling',
   title: 'Be Someone Worth Calling',
   date: '2026-11-27',
-  summary: 'The best opportunities come from people who vouch for you. Be someone they’d call.',
+  summary: 'The best opportunities come from people who vouch for you.',
   image: {
     path: '/og/be-someone-worth-calling.png',
     alt: 'Be Someone Worth Calling: an old telephone switchboard with gold cords running up to its jacks and their lamps lit.',
@@ -18,9 +18,9 @@ export const beSomeoneWorthCalling: Post = {
   body: h => [
     h.p('The call to join Sentinels came after I thought I was done playing.'),
     h.p(
-      'A few years earlier, I got really into Arena of Valor. I played constantly, and the people I played with became friends. When we lost, I looked at what I could have done better. When we won, I tried to give my teammates the credit.',
+      'A few years earlier, I got really into Arena of Valor. I played more than I’d like to admit, and the people I played with became friends.',
     ),
-    h.p('We got signed and made it to worlds twice. After the 2nd tournament, I went to be a software engineer full time, thinking I was done.'),
+    h.p('We got signed and made it to worlds twice. After the second tournament, I went to be a software engineer full time, thinking I was done.'),
     h.p(
       'About two years later, a teammate from those days reached out. Sentinels was putting together a Wild Rift team and they needed another player.',
     ),
@@ -28,10 +28,10 @@ export const beSomeoneWorthCalling: Post = {
       'I didn’t have to pitch myself. That same teammate vouched for me, and the rest of the team already knew how I’d shown up in Arena of Valor.',
     ),
     h.p(
-      'Almost every big turn in my life has started with a call like that. Your best bet is to keep showing up, and your network will grow from there.',
+      'Almost every big turn in my life has started with a call like that. The best bet is to keep showing up, and your network will grow from there.',
     ),
 
-    h.h2('How to be someone worth calling'),
+    h.h2('Becoming someone worth calling'),
     h.p(
       h.strong('Know the problem.'),
       ' Talk to customers, watch session replays, and dig through data. The more of the picture you see, the better the solutions you’ll come up with.',
@@ -74,9 +74,8 @@ export const beSomeoneWorthCalling: Post = {
     NetworkFigure(h, { key: 'network' }),
 
     h.h2('Win together over being right'),
-    h.p('Being worth calling is also about what the team is like with you on it.'),
     h.p(
-      'I’ve broken team harmony myself. After a heated game, or in the middle of an incident, it’s easy to take your frustration out on the people around you. It might feel righteous in the moment, but they’ll remember it long after.',
+      'I’ve made the mistake of breaking team harmony more times than I can count. After a heated game, or in the middle of an incident, it’s easy to take your frustration out on the people around you. It might feel righteous in the moment, but they’ll remember it long after.',
     ),
     h.p(
       'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them. Everyone slows down. Don’t be that person.',
@@ -84,26 +83,30 @@ export const beSomeoneWorthCalling: Post = {
     h.p('People forget who was right. They remember how you made them feel.'),
     TeamFigure(h, { key: 'team' }),
 
-    h.h2('Betting on your network'),
+    h.h2('It takes time'),
     h.p(
-      'In 2021 I took a leap of faith and started my own thing with no clients lined up. I didn’t have a plan. I was betting that the people who knew my work would remember me.',
+      'My first real job was in customer success at a solar company. My accounts went from sale to install faster than anyone else’s. I wasn’t a developer yet, and I didn’t think any of it would matter later.',
     ),
     h.p(
-      'It paid off that same week. An engineer I’d worked with, and hadn’t really talked to in almost a year, heard I was going out on my own and gave me a call. That call became my first contract, Webaholics.',
+      'Years later, after a dev bootcamp, I posted that I was looking for work. One of that company’s founders had started something new, remembered my work, and reached out. That became my first engineering job, Solo.',
     ),
     h.p(
-      'More calls followed. Some people wanted to build something together, and others introduced me to someone who did. For a few years, all my work came from people who’d worked with me before. Some of those calls even led to founding a company.',
+      'A few years in, I took a leap of faith and started my own thing with no clients lined up. I was betting that the people I’d worked with would remember how I showed up.',
     ),
-    h.p('I didn’t build any of that on my own. Other people did the vouching.'),
+    h.p(
+      'It paid off that same week. An engineer from Solo, who’d left a year before me, heard I was going out on my own and gave me a call. That call became my first contract, Webaholics.',
+    ),
+    h.p(
+      'More calls followed. Some people wanted to build something together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
+    ),
+    h.p('Other people did the vouching. They got me into rooms I’d never have reached alone.'),
+    h.p(
+      'Sunil Pai describes the same thing in ',
+      h.a.attr('href', 'https://sunilpai.dev/posts/collecting-favours').children('collecting favours'),
+      '. He writes about a fundraiser that brought in $56,000 in two weeks, and says the money really took fifteen years to raise.',
+    ),
     h.p(
       'If you’ve been useful to people, you have a safety net you can’t see. Sometimes you have to jump to find out it’s there.',
-    ),
-
-    h.h2('Years to earn, one call to arrive'),
-    h.p(
-      'In ',
-      h.a.attr('href', 'https://sunilpai.dev/posts/collecting-favours').children('collecting favours'),
-      ', Sunil Pai writes about a fundraiser that brought in $56,000 in two weeks, and says the money really took fifteen years to raise.',
     ),
     h.p(
       'Arnold’s book is named after what his dad used to tell him: “Be useful, Arnold.” Give your best even when nobody’s keeping score. That’s what people remember when they’re deciding who to call.',
