@@ -1,11 +1,10 @@
-// @vitest-environment happy-dom
 import { Router } from '@effect/ui'
 import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 import { HtmlLocator, HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
 import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
-import { vi } from 'vitest'
-import { Effect, Layer, String as Str } from 'effect'
+import { Effect, Layer, Queue, Schedule, String as Str } from 'effect'
+import { TestClock } from 'effect/testing'
 
 import { BLOG } from '#content/blog'
 import { EGG_HINTS, EGG_NAMES } from '#content/eggs'
@@ -23,37 +22,26 @@ const propsFinding = (found: ReadonlyArray<EggId>) =>
     reducedMotion: true,
     route,
   }))
-const siteProps = Effect.map(Router.currentRoute(SiteRoute), route => ({
-  found: [] as ReadonlyArray<EggId>,
-  reducedMotion: true,
-  route,
-}))
+const siteProps = propsFinding([])
 
 const drainWhileUnmounting = Layer.effectDiscard(
   Effect.gen(function* () {
     const host = yield* TestHost.TestHost
-    yield* Effect.acquireRelease(
-      // The test runs on TestClock, so an Effect schedule would never fire.
-      // @effect-diagnostics-next-line globalTimersInEffect:off
-      Effect.sync(() => setInterval(() => host.drain(host.budget), 1)),
-      id => Effect.sync(() => clearInterval(id)),
+    yield* Effect.forkScoped(
+      TestClock.withLive(
+        Effect.repeat(
+          Effect.sync(() => host.drain(host.budget)),
+          Schedule.spaced('1 millis'),
+        ),
+      ),
     )
   }),
 )
 
-// The blog search loads its in-page engine with `import()` (see
-// SearchPosts.ts), and `settle` gives a Promise only a few macrotasks to come
-// back, which Vite's module runner can take longer than. So a step that
-// waits on a search tries again, a macrotask apart, for a while.
-const macrotask = Effect.callback<void>(resume => {
-  // The test runs on TestClock, so an Effect sleep would never wake.
-  // @effect-diagnostics-next-line globalTimersInEffect:off
-  const id = setTimeout(() => resume(Effect.void), 5)
-  return Effect.sync(() => clearTimeout(id))
-})
-
-const eventually = <A, E, R>(step: Effect.Effect<A, E, R>, tries = 100): Effect.Effect<A, E, R> =>
-  tries <= 1 ? step : Effect.catchCause(step, () => Effect.andThen(macrotask, eventually(step, tries - 1)))
+const eventually = <A, E, R>(step: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+  TestClock.withLive(
+    Effect.retry(Effect.sandbox(step), { schedule: Schedule.spaced('5 millis'), times: 99 }),
+  ).pipe(Effect.catch(Effect.failCause))
 
 const playLayer = (url: string) =>
   Layer.mergeAll(
@@ -84,7 +72,6 @@ it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
         const play = yield* HtmlPlay.make(Site, siteProps)
         yield* play.expect(Locator.text('YOU FOUND THE MANOR')).toExist()
         yield* play.expect(Locator.text(RATTLES_SAYS.trophy)).toExist()
-        // A hidden page docks the toast as the way back home.
         yield* play.expect(Locator.text('← BACK')).toExist()
         assert.strictEqual(
           play.root.head().title,
@@ -95,7 +82,6 @@ it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
         yield* TestHost.settle
         assert.strictEqual(play.root.model()?.page._tag, 'Home')
         assert.strictEqual(play.root.head().title, 'Tanner Scadden')
-        // Landing on the Manor counted its egg.
         yield* play.expect(Locator.text('EGGS 1/8')).toExist()
       }).pipe(Effect.scoped),
     )
@@ -173,7 +159,6 @@ it.layer(playLayer('/blog'), { buildPerTest: true })('Site at /blog', it => {
       yield* play.expect(Locator.text(firstPost.title)).toExist()
       yield* play.type(HtmlLocator.label('Search posts'), 'zzzz nothing')
       yield* eventually(play.expect(Locator.text(BLOG.noMatch)).toExist())
-      // Punctuation alone isn't a search: every post shows.
       yield* play.type(HtmlLocator.label('Search posts'), '!?')
       yield* play.expect(Locator.text(firstPost.title)).toExist()
     }).pipe(Effect.scoped),
@@ -192,39 +177,63 @@ it.layer(playLayer('/blog/no-such-post'), { buildPerTest: true })(
   },
 )
 
-// The browser Router scrolls to the top once the root has the new route, so
-// this mounts on the real host and Router rather than the test ones. The new
-// page has to be in by then: scrolling the old one leaves a phone at the
-// bottom of the new page.
+const recordingScrolls = (onScroll: () => void): Window =>
+  new Proxy(window, {
+    get: (target, key) => {
+      if (key === 'scrollTo') {
+        return (x: number, y: number) => {
+          onScroll()
+          target.scrollTo(x, y)
+        }
+      }
+      // oxlint-disable-next-line effect/noReflectGet -- BrowserRouter takes a whole Window, so this stand-in forwards every other member of the real one by key
+      const member: unknown = Reflect.get(target, key, target)
+      return member
+    },
+  })
+
+const typeRest = Effect.sync(() => {
+  for (const key of ['r', 'e', 's', 't']) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key }))
+  }
+})
+
+const restIsOpen = Effect.sync(() => location.pathname).pipe(
+  Effect.filterOrFail(
+    path => path === '/rest',
+    path => `still at ${path}`,
+  ),
+)
+
+const typeRestUntilItOpens = typeRest.pipe(
+  Effect.andThen(restIsOpen),
+  Effect.retry({ schedule: Schedule.spaced('20 millis'), times: 150 }),
+)
+
 describe('Site in the browser', () => {
   it.live('a new page starts at the top', () =>
     Effect.gen(function* () {
-      history.replaceState(null, '', '/')
+      history.replaceState(history.state, '', '/')
       const container = document.body.appendChild(document.createElement('div'))
+      const onRestWhenScrolled = yield* Queue.unbounded<boolean>()
+      const routerWindow = recordingScrolls(() =>
+        Queue.offerUnsafe(onRestWhenScrolled, Str.includes('GG, BACK TO WORK')(container.textContent)),
+      )
       yield* Layer.build(
         BrowserHost.mount(Site, siteProps, container).pipe(
-          Layer.provide([BrowserRouter.layer({ routes: SiteRoute }), Viewport.test(1000)]),
+          Layer.provide([
+            BrowserRouter.layer({ routes: SiteRoute, window: routerWindow }),
+            Viewport.test(1000),
+          ]),
         ),
       )
-      yield* Effect.sleep('50 millis')
       window.scrollTo(0, 800)
       assert.strictEqual(window.scrollY, 800)
 
-      const onRestWhenScrolled: Array<boolean> = []
-      const scrollTo = vi.spyOn(window, 'scrollTo')
-      scrollTo.mockImplementation(() => {
-        onRestWhenScrolled.push(Str.includes('GG, BACK TO WORK')(container.textContent))
-        scrollTo.mockRestore()
-        window.scrollTo(0, 0)
-      })
-      yield* Effect.addFinalizer(() => Effect.sync(() => scrollTo.mockRestore()))
-
-      for (const key of ['r', 'e', 's', 't']) {
-        document.dispatchEvent(new KeyboardEvent('keydown', { key }))
-      }
-      yield* Effect.sleep('50 millis')
+      yield* typeRestUntilItOpens
+      const firstScroll = yield* Queue.take(onRestWhenScrolled)
+      assert.isTrue(firstScroll)
       assert.strictEqual(location.pathname, '/rest')
-      assert.deepStrictEqual(onRestWhenScrolled, [true])
       assert.strictEqual(window.scrollY, 0)
     }).pipe(Effect.scoped),
   )

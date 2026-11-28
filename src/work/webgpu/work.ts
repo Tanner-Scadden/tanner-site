@@ -1,18 +1,12 @@
-import { Array as Arr } from 'effect'
+import { Array as Arr, Boolean as Bool, Option } from 'effect'
 import { dual } from 'effect/Function'
 
-import { stepBetween } from '../../gpu/loop.ts'
+import { stepSince } from '../../gpu/loop.ts'
 import { approach } from '../../gpu/math.ts'
 
 export const STEPS = 3
-// A beat after the job lands on screen, so the eye gets there first.
 export const WAVE_DELAY_MS = 220
-// How long the wave's front takes from PROBLEM to the far side of RESULT.
-// It runs at one speed the whole way, so how far it gets is a fraction of
-// the job's path.
 export const WAVE_MS = 1500
-// The front stops at the end, and the rest of the wave runs out behind it
-// for this much more of the path.
 export const WAVE_TAIL = 0.15
 export const PING_MS = 600
 const WAVE_END_MS = WAVE_MS * (1 + WAVE_TAIL)
@@ -20,39 +14,32 @@ const HOVER_PER_S = 12
 const SNAP = 0.002
 
 export interface JobState {
-  // When the job first came into view, or null while it hasn't.
-  readonly seenAt: number | null
-  // When the latest wave left, or null before the first.
-  readonly waveAt: number | null
-  // 0 to 1 per box: how much the pointer's over it.
+  readonly seenAt: Option.Option<number>
+  readonly waveAt: Option.Option<number>
   readonly hover: ReadonlyArray<number>
 }
 
 export interface WorkState {
   readonly jobs: ReadonlyArray<JobState>
-  // The previous frame's time, or null at the start of a burst.
-  readonly last: number | null
+  readonly last: Option.Option<number>
 }
 
-// The box under a mouse, if any. `step` is null between boxes.
 export interface Hovered {
   readonly job: number
-  readonly step: number | null
+  readonly step: Option.Option<number>
 }
 
 export interface Tick {
   readonly now: number
-  readonly hovered: Hovered | null
+  readonly hovered: Option.Option<Hovered>
   readonly still: boolean
 }
 
-// Something that happened to one job at one moment.
 export interface JobEvent {
   readonly job: number
   readonly now: number
 }
 
-// One job at one moment.
 export interface At {
   readonly now: number
   readonly still: boolean
@@ -60,98 +47,96 @@ export interface At {
 
 export const initialWork = (jobs: number): WorkState => ({
   jobs: Arr.makeBy(jobs, () => ({
-    seenAt: null,
-    waveAt: null,
+    seenAt: Option.none(),
+    waveAt: Option.none(),
     hover: Arr.makeBy(STEPS, () => 0),
   })),
-  last: null,
+  last: Option.none(),
 })
 
-// An update that changes nothing keeps the same state, so callers can tell
-// nothing happened.
 const updateJob = (
   state: WorkState,
   index: number,
   f: (job: JobState) => JobState,
 ): WorkState => {
-  const job = state.jobs[index]
-  if (job === undefined) return state
-  const next = f(job)
-  return next === job
-    ? state
-    : { ...state, jobs: Arr.map(state.jobs, (old, i) => (i === index ? next : old)) }
+  const job = Arr.get(state.jobs, index)
+  if (Option.isNone(job)) return state
+  const next = f(job.value)
+  if (next === job.value) return state
+  return {
+    ...state,
+    jobs: Arr.map(state.jobs, (old, i) => Bool.match(i === index, { onTrue: () => next, onFalse: () => old })),
+  }
 }
 
-// The wave is on its way, or the RESULT box is still glowing from it.
 const busy = (job: JobState, now: number): boolean =>
-  job.waveAt !== null && now < job.waveAt + Math.max(WAVE_END_MS, WAVE_MS + PING_MS)
+  Option.exists(job.waveAt, waveAt => now < waveAt + Math.max(WAVE_END_MS, WAVE_MS + PING_MS))
 
-// A job came into view: a wave leaves once, a beat later.
 export const seen: {
   (event: JobEvent): (state: WorkState) => WorkState
   (state: WorkState, event: JobEvent): WorkState
 } = dual(2, (state: WorkState, { job, now }: JobEvent): WorkState =>
-  updateJob(state, job, current =>
-    current.seenAt !== null
-      ? current
-      : { ...current, seenAt: now, waveAt: now + WAVE_DELAY_MS },
-  ),
+  updateJob(state, job, current => {
+    if (Option.isSome(current.seenAt)) return current
+    return { ...current, seenAt: Option.some(now), waveAt: Option.some(now + WAVE_DELAY_MS) }
+  }),
 )
 
-// The pointer came onto a job, or a finger tapped it: a seen job sends
-// another wave, unless one's already going through.
 export const replayed: {
   (event: JobEvent): (state: WorkState) => WorkState
   (state: WorkState, event: JobEvent): WorkState
 } = dual(2, (state: WorkState, { job, now }: JobEvent): WorkState =>
-  updateJob(state, job, current =>
-    current.seenAt === null || busy(current, now) ? current : { ...current, waveAt: now },
-  ),
+  updateJob(state, job, current => {
+    if (Option.isNone(current.seenAt) || busy(current, now)) return current
+    return { ...current, waveAt: Option.some(now) }
+  }),
 )
 
-const hoverTarget = (hovered: Hovered | null, job: number, box: number): number =>
-  hovered !== null && hovered.job === job && hovered.step === box ? 1 : 0
+const hoverTarget = (hovered: Option.Option<Hovered>, job: number, box: number): number => {
+  const over = Option.exists(hovered, at => at.job === job && Option.contains(at.step, box))
+  if (over) return 1
+  return 0
+}
 
 export const step: {
   (tick: Tick): (state: WorkState) => WorkState
   (state: WorkState, tick: Tick): WorkState
 } = dual(2, (state: WorkState, { now, hovered, still }: Tick): WorkState => {
-  const dt = stepBetween({ before: state.last, now })
+  const dt = stepSince({ before: state.last, now })
   return {
-    last: now,
+    last: Option.some(now),
     jobs: Arr.map(state.jobs, (job, j) => ({
       ...job,
       hover: Arr.map(job.hover, (h, b) => {
         const to = hoverTarget(hovered, j, b)
-        return still ? to : approach({ from: h, to, dt, rate: HOVER_PER_S, snap: SNAP })
+        if (still) return to
+        return approach({ from: h, to, dt, rate: HOVER_PER_S, snap: SNAP })
       }),
     })),
   }
 })
 
-// How far the wave's front is along the job's whole path: 0 to 1 while it
-// travels, up to 1 + WAVE_TAIL while the rest of it runs out, or null when
-// there's no wave.
 export const waveOf: {
-  (at: At): (job: JobState) => number | null
-  (job: JobState, at: At): number | null
-} = dual(2, (job: JobState, { now, still }: At): number | null => {
-  if (still || job.waveAt === null) return null
-  const t = (now - job.waveAt) / WAVE_MS
-  return t >= 0 && t <= 1 + WAVE_TAIL ? t : null
+  (at: At): (job: JobState) => Option.Option<number>
+  (job: JobState, at: At): Option.Option<number>
+} = dual(2, (job: JobState, { now, still }: At): Option.Option<number> => {
+  if (still) return Option.none()
+  return Option.filter(
+    Option.map(job.waveAt, waveAt => (now - waveAt) / WAVE_MS),
+    t => t >= 0 && t <= 1 + WAVE_TAIL,
+  )
 })
 
-// 0 to 1: the glow on RESULT once the wave closes round it.
 export const pingOf: {
   (at: At): (job: JobState) => number
   (job: JobState, at: At): number
 } = dual(2, (job: JobState, { now, still }: At): number => {
-  if (still || job.waveAt === null) return 0
-  const since = now - (job.waveAt + WAVE_MS)
-  return since < 0 || since > PING_MS ? 0 : 1 - since / PING_MS
+  if (still || Option.isNone(job.waveAt)) return 0
+  const since = now - (job.waveAt.value + WAVE_MS)
+  if (since < 0 || since > PING_MS) return 0
+  return 1 - since / PING_MS
 })
 
-// True once nothing would change on the next frame, so the loop can sleep.
 export const settled: {
   (tick: Tick): (state: WorkState) => boolean
   (state: WorkState, tick: Tick): boolean
@@ -164,5 +149,4 @@ export const settled: {
   ),
 )
 
-// A burst of frames starts fresh, so its first dt is 0, not the rest time.
-export const wake = (state: WorkState): WorkState => ({ ...state, last: null })
+export const wake = (state: WorkState): WorkState => ({ ...state, last: Option.none() })

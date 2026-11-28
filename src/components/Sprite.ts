@@ -1,24 +1,24 @@
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr } from 'effect'
+import { Array as Arr, HashMap, MutableHashMap, Option } from 'effect'
 
 import { sx } from '../styles/sx.ts'
 
-const PALETTE: Record<string, string> = {
-  k: '#1c1426',
-  w: '#f3e6c8',
-  g: '#7ce36b',
-  p: '#8a5bd6',
-  r: '#e0475a',
-  y: '#f3c14b',
-  o: '#c98a2b',
-  b: '#5b8bd6',
-  s: '#e8b48a',
-  h: '#5a3a2a',
-  z: '#8fb86a',
-  Z: '#5f8a45',
-  n: '#2a3a6a',
-}
+const PALETTE = HashMap.make(
+  ['k', '#1c1426'],
+  ['w', '#f3e6c8'],
+  ['g', '#7ce36b'],
+  ['p', '#8a5bd6'],
+  ['r', '#e0475a'],
+  ['y', '#f3c14b'],
+  ['o', '#c98a2b'],
+  ['b', '#5b8bd6'],
+  ['s', '#e8b48a'],
+  ['h', '#5a3a2a'],
+  ['z', '#8fb86a'],
+  ['Z', '#5f8a45'],
+  ['n', '#2a3a6a'],
+)
 
 const MAPS = {
   rattles: [
@@ -107,25 +107,29 @@ interface SpriteSpec {
 const shadowFor = ({ name, pixel }: SpriteSpec): string =>
   Arr.join(
     Arr.flatMap(MAPS[name], (row, y) =>
-      Arr.flatMap(Arr.fromIterable(row), (cell, x) => {
-        const color = PALETTE[cell]
-        return color === undefined
-          ? []
-          : [`${x * pixel}px ${y * pixel}px 0 0 ${color}`]
-      }),
+      Arr.flatMap(Arr.fromIterable(row), (cell, x) =>
+        Option.match(HashMap.get(PALETTE, cell), {
+          onNone: () => [],
+          onSome: color => [`${x * pixel}px ${y * pixel}px 0 0 ${color}`],
+        }),
+      ),
     ),
     ',',
   )
 
-const cache = new Map<string, string>()
+const cache = MutableHashMap.empty<string, string>()
+
+const cachedShadow = (key: string, spec: SpriteSpec): string => {
+  const shadow = shadowFor(spec)
+  MutableHashMap.set(cache, key, shadow)
+  return shadow
+}
 
 const spriteShadow = (spec: SpriteSpec): string => {
   const key = `${spec.name}:${spec.pixel}`
-  const hit = cache.get(key)
-  if (hit !== undefined) return hit
-  const shadow = shadowFor(spec)
-  cache.set(key, shadow)
-  return shadow
+  return Option.getOrElse(MutableHashMap.get(cache, key), () =>
+    cachedShadow(key, spec),
+  )
 }
 
 const styles = stylex.create({
@@ -138,7 +142,6 @@ const styles = stylex.create({
     width: `${SPRITE_SIZE * pixel}px`,
     height: `${SPRITE_SIZE * pixel}px`,
   }),
-  // One pixel box; its box-shadow paints the rest.
   px: (pixel: number, shadow: string) => ({
     position: 'absolute',
     left: 0,
@@ -149,23 +152,21 @@ const styles = stylex.create({
   }),
 })
 
-// What a layout may set on a sprite: where it sits, and how it shrinks on
-// small screens. Its size and its pixels are the sprite's own.
-type Placement = stylex.StyleXStyles<{
-  readonly transform?: string | number | null
-  readonly transformOrigin?: string | number | null
-  readonly marginBlock?: string | number | null
-  readonly marginRight?: string | number | null
-  readonly marginBottom?: string | number | null
-}>
+type Placement = Readonly<
+  Partial<
+    Record<
+      'transform' | 'transformOrigin' | 'marginBlock' | 'marginRight' | 'marginBottom',
+      stylex.StyleXClassNameFor<string, unknown>
+    >
+  >
+>
 
-// A sprite `pixel` CSS pixels per sprite pixel, hidden from screen readers.
 export const Sprite = <M>(
   h: Html.H<M>,
   name: SpriteName,
   pixel: number,
   style?: Placement,
 ) =>
-  sx(h.span, styles.sprite(pixel), style)
+  sx(h.span, styles.sprite(pixel), Option.toArray(Option.fromNullishOr(style)))
     .attr('aria-hidden', 'true')
     .children(sx(h.span, styles.px(pixel, spriteShadow({ name, pixel }))))

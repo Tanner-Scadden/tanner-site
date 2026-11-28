@@ -1,12 +1,3 @@
-// Renders a share card, 2400 by 1260, on the blueprint: a post's title and
-// summary beside one of its figures at a chosen moment, or the site's own
-// card beside the house. Run against the dev server, so the drawing is the
-// real one, by the real painter:
-//
-//   bun run dev --port 5199
-//   bun run card post <slug> [--figure 1] [--seek 1] [--interact 0] [--aim x,y] [--wait 2600] [--art-scale 1]
-//   bun run card home [--wait 4000]
-//   bun run card --help
 import { BunRuntime, BunServices } from '@effect/platform-bun'
 import { Array as Arr, Console, Effect, FileSystem, Option, Schema, String as Str, pipe } from 'effect'
 import { Argument, Command, Flag } from 'effect/cli'
@@ -14,7 +5,6 @@ import { type Browser, type Locator, type Page, chromium } from 'playwright-core
 
 import { THESES } from '../../../src/content/home.ts'
 
-// Chrome, or the dev server, didn't do what the card needed.
 class BrowserError extends Schema.TaggedError<BrowserError>()('BrowserError', { cause: Schema.Unknown }) {}
 class NotDrawn extends Schema.TaggedError<NotDrawn>()('NotDrawn', { what: Schema.String }) {}
 
@@ -27,8 +17,6 @@ const browser = Effect.acquireRelease(
 
 const pause = (page: Page, ms: number) => use(() => page.waitForTimeout(ms))
 
-// What's drawn in `canvas`, and anything laid over it, on a clear
-// background: no page paper, no other canvas, no controls.
 const shootClear = (page: Page, canvas: Locator, what: string) =>
   Effect.gen(function* () {
     yield* use(() =>
@@ -43,8 +31,11 @@ const shootClear = (page: Page, canvas: Locator, what: string) =>
       }),
     )
     yield* pause(page, 150)
-    const box = yield* use(() => canvas.boundingBox())
-    if (box === null) return yield* new NotDrawn({ what })
+    const found = yield* use(() => canvas.boundingBox())
+    const box = yield* Option.match(Option.fromNullishOr(found), {
+      onNone: () => Effect.fail(new NotDrawn({ what })),
+      onSome: Effect.succeed,
+    })
     const png = yield* use(() => page.screenshot({ clip: box, omitBackground: true }))
     return { png, width: box.width, height: box.height }
   })
@@ -56,11 +47,13 @@ interface Card {
   readonly art: Option.Option<{ readonly src: string; readonly width: number; readonly height: number }>
 }
 
-// The art's full size on the card, in CSS px.
 const ART = { width: 720, height: 405 } as const
 
 const escape = (text: string) =>
   pipe(text, Str.replaceAll('&', '&amp;'), Str.replaceAll('<', '&lt;'), Str.replaceAll('>', '&gt;'))
+
+const textWidth = (card: Card): number =>
+  Option.match(card.art, { onNone: () => 1000, onSome: () => 560 })
 
 const cardHtml = (card: Card) => `<!doctype html>
 <html><head><meta charset="utf-8">
@@ -74,7 +67,7 @@ const cardHtml = (card: Card) => `<!doctype html>
   .frame{position:absolute;inset:32px;border:2px solid rgba(220,235,255,.75)}
   .frame::after{content:'';position:absolute;inset:5px;border:1px solid rgba(220,235,255,.4)}
   .art{position:absolute;right:46px;top:56px}
-  .text{position:absolute;left:78px;top:78px;bottom:78px;width:${Option.isSome(card.art) ? 560 : 1000}px;display:flex;flex-direction:column}
+  .text{position:absolute;left:78px;top:78px;bottom:78px;width:${textWidth(card)}px;display:flex;flex-direction:column}
   .kicker{font-family:'Space Mono',monospace;font-weight:700;font-size:20px;letter-spacing:.18em;color:#ffd166}
   h1{margin:22px 0 0;font-weight:900;font-stretch:125%;font-size:70px;line-height:.95;letter-spacing:.01em;text-transform:uppercase;color:#cfe0f6;text-shadow:0 2px 24px #0f3b78,0 0 40px #0f3b78}
   .dek{margin-top:auto;max-width:600px;display:flex;gap:16px;font-family:'Space Mono',monospace;font-size:22px;line-height:1.4;color:rgba(220,235,255,.9)}
@@ -84,7 +77,6 @@ const cardHtml = (card: Card) => `<!doctype html>
 <body><div class="card">
   ${Option.match(card.art, {
     onNone: () => '',
-    // Smaller art stays at the right and centres on where full-size art sits.
     onSome: ({ src, width, height }) =>
       `<img class="art" src="${src}" style="width:${width}px;height:${height}px;top:${56 + (ART.height - height) / 2}px">`,
   })}
@@ -99,8 +91,6 @@ const cardHtml = (card: Card) => `<!doctype html>
 
 const dataUrl = (png: Buffer) => `data:image/png;base64,${png.toString('base64')}`
 
-// Opens a page on the dev server, makes the card's contents from it, lays
-// the card out, and writes it as a PNG to `out`.
 const render = (url: string, out: string, contents: (page: Page) => Effect.Effect<Card, BrowserError | NotDrawn>) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -108,8 +98,6 @@ const render = (url: string, out: string, contents: (page: Page) => Effect.Effec
       const page = yield* use(() => b.newPage({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 2 }))
       yield* use(() => page.goto(url, { waitUntil: 'networkidle' }))
       const card = yield* contents(page)
-      // Laid out at 1200 by 630 and shot at 2x, so the small type stays sharp
-      // when a phone shows the card wider than 1200 device pixels.
       const sheet = yield* use(() => b.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 2 }))
       yield* use(() => sheet.setContent(cardHtml(card), { waitUntil: 'networkidle' }))
       yield* use(() => sheet.evaluate(() => document.fonts.ready))
@@ -152,13 +140,11 @@ const post = Command.make(
     url,
     out,
   },
-  Effect.fn(function* (args) {
+  Effect.fn('card.post')(function* (args) {
     yield* render(`${args.url}/blog/${args.slug}`, Option.getOrElse(args.out, () => `public/og/${args.slug}.png`), page =>
       Effect.gen(function* () {
         const title = yield* use(() => page.locator('article > header h1').innerText())
         const summary = yield* use(() => page.locator('article > header p').first().innerText())
-        // The post's figures in page order, named by what INTERACT does, so
-        // it's easy to tell which number is which.
         const figures = yield* use(() =>
           page.$$eval('figure:has(canvas)', all =>
             all.map((f, i) => `${i + 1}: ${f.querySelector('[aria-label^="Interact"]')?.getAttribute('aria-label') ?? 'figure'}`),
@@ -170,7 +156,6 @@ const post = Command.make(
         const figure = page.locator('figure:has(canvas)').nth(args.figure - 1)
         yield* use(() => figure.scrollIntoViewIfNeeded())
         yield* pause(page, 800)
-        // A hero has no slider: it plays once, so --wait lets it finish.
         const slider = figure.locator('input[type="range"]')
         if ((yield* use(() => slider.count())) > 0) {
           yield* use(() =>
@@ -188,7 +173,7 @@ const post = Command.make(
           onNone: () => use(() => figure.locator('button[aria-label^="Interact"]').click()),
           onSome: aim => {
             const [x, y] = Arr.map(Str.split(aim, ','), Number)
-            return use(() => canvas.click({ position: { x: (box?.width ?? 0) * x!, y: (box?.height ?? 0) * y! } }))
+            return use(() => canvas.click({ position: { x: (box?.width ?? 0) * x, y: (box?.height ?? 0) * y } }))
           },
         })
         for (let k = 0; k < args.interact; k++) yield* press
@@ -221,12 +206,11 @@ const home = Command.make(
     url,
     out,
   },
-  Effect.fn(function* (args) {
+  Effect.fn('card.home')(function* (args) {
     yield* render(`${args.url}/`, Option.getOrElse(args.out, () => 'public/og/home.png'), page =>
       Effect.gen(function* () {
         yield* pause(page, args.wait)
         const shot = yield* shootClear(page, page.locator('figure[data-gpu] canvas'), 'the house')
-        // As big as fits beside the title, keeping its shape.
         const scale = Math.min(640 / shot.width, 500 / shot.height)
         return {
           kicker: 'SOFTWARE ENGINEER',

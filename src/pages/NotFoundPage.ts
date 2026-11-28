@@ -6,7 +6,6 @@ import { homeRoute, href } from '../routes.ts'
 import { base } from '../styles/base.ts'
 import { sx } from '../styles/sx.ts'
 
-// Any path no route claims.
 export const NotFoundPage = <M>(h: Html.H<M>) =>
   sx(h.main, sheet.sheet).children(
     sx(h.header, sheet.hero, sheet.last).children(

@@ -2,6 +2,7 @@ import {
   Data,
   Duration,
   Effect,
+  Option,
   Random,
   Ref,
   type Scope,
@@ -18,7 +19,7 @@ import {
   requestAdapter,
   unavailable,
 } from '../../gpu/device.ts'
-import { nextFrame, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
+import { frameTime, nextFrame, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
 import { resizes } from '../../gpu/observe.ts'
 import { bound, renderPipeline, whole } from '../../gpu/pipeline.ts'
 import {
@@ -49,26 +50,23 @@ import {
 } from './shaders.ts'
 
 const FRAME_FLOATS = 16
-// How fast a pen draws, in CSS px per second.
 const PEN_SPEED = { min: 15, max: 125 }
 const PENS_BYTES = PARTICLE_COUNT * PARTICLE_FLOATS * 4
-// How often the page counts the zombies, for the INFECTED counter.
 const COUNT_EVERY = Duration.millis(250)
 
-// The pens start somewhere on a large field, so they never need reseeding
-// when the window grows.
 const FIELD = extentFor(Math.max(screen.width, screen.height, 2400))
 
 export const PENS_START = 'data-pens-start'
 
-// Where patient zero starts: on the grid line nearest the WebGPU toggle, in
-// the page coordinates the pens use, which wrap every extent (see the
-// shaders). The middle of the screen if the toggle isn't there.
 const startingPoint = (canvas: HTMLCanvasElement) =>
   Effect.sync((): Point => {
-    const box = document.querySelector(`[${PENS_START}]`)?.getBoundingClientRect()
-    const x = box === undefined ? canvas.clientWidth / 2 : box.left + box.width / 2
-    const y = box === undefined ? canvas.clientHeight / 2 : box.top + box.height / 2
+    const { x, y } = Option.match(Option.fromNullishOr(document.querySelector(`[${PENS_START}]`)), {
+      onNone: () => ({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }),
+      onSome: start => {
+        const box = start.getBoundingClientRect()
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+      },
+    })
     const wrap = (value: number, extent: number) => value - extent * Math.floor(value / extent)
     const line = Math.round((y + window.scrollY - 0.5) / MINOR) * MINOR + 0.5
     return {
@@ -77,8 +75,16 @@ const startingPoint = (canvas: HTMLCanvasElement) =>
     }
   })
 
-// Every pen starts yellow on a random grid line, heading along it at its own
-// speed, except patient zero: the zombie that starts the outbreak at `zero`.
+const coinSign = Effect.map(Random.next, roll => {
+  if (roll < 0.5) return -1
+  return 1
+})
+
+const penAt = (alongX: boolean, along: number, line: number, velocity: number): ReadonlyArray<number> => {
+  if (alongX) return [along, line, velocity, 0]
+  return [line, along, 0, velocity]
+}
+
 const seedPens = (zero: Point) =>
   Effect.gen(function* () {
     const data = new Float32Array(PARTICLE_COUNT * PARTICLE_FLOATS)
@@ -86,15 +92,12 @@ const seedPens = (zero: Point) =>
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const alongX = (yield* Random.next) < 0.5
       const speed = yield* Random.nextBetween(PEN_SPEED.min, PEN_SPEED.max)
-      const velocity = ((yield* Random.next) < 0.5 ? -1 : 1) * speed
+      const velocity = (yield* coinSign) * speed
       const along = yield* Random.nextBetween(0, FIELD)
       const line = (yield* Random.nextIntBetween(0, lines - 1)) * MINOR + 0.5
-      const [x, y, vx, vy] = alongX
-        ? [along, line, velocity, 0]
-        : [line, along, 0, velocity]
-      data.set([x, y, vx, vy, 0, 0, HEALTHY, 0], i * PARTICLE_FLOATS)
+      data.set([...penAt(alongX, along, line, velocity), 0, 0, HEALTHY, 0], i * PARTICLE_FLOATS)
     }
-    const heading = (yield* Random.next) < 0.5 ? -1 : 1
+    const heading = yield* coinSign
     data.set(
       [zero.x, zero.y, heading * PATIENT_ZERO_SPEED, 0, 0, 0, FOREVER, 0],
       PATIENT_ZERO * PARTICLE_FLOATS,
@@ -102,7 +105,6 @@ const seedPens = (zero: Point) =>
     return data
   })
 
-// A fresh outbreak: new pens, and patient zero by the toggle.
 const startOutbreak = (gpu: Gpu, canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
     const zero = yield* startingPoint(canvas)
@@ -110,7 +112,6 @@ const startOutbreak = (gpu: Gpu, canvas: HTMLCanvasElement) =>
     gpu.device.queue.writeBuffer(gpu.particleBuffer, 0, pens)
   })
 
-// Every pen yellow again, patient zero too, so the pens fade out clean.
 const cureEveryone = (gpu: Gpu) =>
   Effect.sync(() => {
     const healthy = new Float32Array([HEALTHY, 0])
@@ -119,7 +120,6 @@ const cureEveryone = (gpu: Gpu) =>
     }
   })
 
-// Everything a frame needs, built once per canvas.
 const makeGpu = (canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
     const adapter = yield* requestAdapter
@@ -134,13 +134,10 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       size: PENS_BYTES,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     })
-    // A copy of the pens the page can read, to count the zombies.
     const readback = yield* acquireBuffer(device, {
       size: PENS_BYTES,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     })
-    // The grid paints every pixel, so it skips blending, which
-    // `renderPipeline` always turns on.
     const backgroundModule = device.createShaderModule({ code: BACKGROUND })
     const background = device.createRenderPipeline({
       layout: 'auto',
@@ -164,8 +161,6 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       readback,
       frameData: new Float32Array(FRAME_FLOATS),
       background: bound({ device, pipeline: background, resources: [whole(frameBuffer)] }),
-      // Moving first, then biting, as two dispatches: the second sees
-      // every pen where the first left it.
       infect: bound({ device, pipeline: compute('infect'), resources: pens }),
       simulate: bound({ device, pipeline: compute('step'), resources: pens }),
       pens: bound({
@@ -178,9 +173,6 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
 
 type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
 
-// How many pens are zombies right now. Copies the pens off the GPU and reads
-// each one's `zombie` (see `struct Pen`). Fails quietly if the copy can't be
-// read, such as when the device is lost.
 const countInfected = (gpu: Gpu) =>
   Effect.gen(function* () {
     const encoder = gpu.device.createCommandEncoder()
@@ -199,9 +191,6 @@ const countInfected = (gpu: Gpu) =>
     return infected
   })
 
-// ---------------------------------------------------------------------------
-// Drawing a frame
-// ---------------------------------------------------------------------------
 
 const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number) =>
   Effect.sync(() => {
@@ -260,30 +249,27 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
     gpu.device.queue.submit([encoder.finish()])
   })
 
-// ---------------------------------------------------------------------------
-// Input
-// ---------------------------------------------------------------------------
 
 type Input = Data.TaggedEnum<{
-  // A mouse moved over the page. Touch never bends the grid.
   Moved: { readonly pointer: Pointer }
   Left: {}
-  // The page scrolled or resized, or the canvas came back into view, so the
-  // grid needs one more frame.
   Changed: {}
 }>
 const Input = Data.taggedEnum<Input>()
 
+const inQuiet = (event: Event): boolean =>
+  event.target instanceof Element &&
+  Option.isSome(Option.fromNullishOr(event.target.closest('[data-blueprint-quiet]')))
+
+const movedTo = (event: PointerEvent): Input => {
+  if (inQuiet(event)) return Input.Left()
+  return Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } })
+}
+
 const sources = (canvas: HTMLCanvasElement): ReadonlyArray<Stream.Stream<Input>> => [
   Stream.fromEventListener<PointerEvent>(window, 'pointermove', { passive: true }).pipe(
     Stream.filter(event => event.pointerType === 'mouse'),
-    // Over a block that's interactive in its own right, like a blog
-    // animation, the sheet keeps still, as if the cursor had left.
-    Stream.map(event =>
-      event.target instanceof Element && event.target.closest('[data-blueprint-quiet]') !== null
-        ? Input.Left()
-        : Input.Moved({ pointer: { x: event.clientX, y: event.clientY, inside: true } }),
-    ),
+    Stream.map(movedTo),
   ),
   Stream.fromEventListener(document.documentElement, 'pointerleave').pipe(
     Stream.as(Input.Left()),
@@ -305,14 +291,7 @@ const pointerAfter = (pointer: Pointer) =>
     Changed: () => pointer,
   })
 
-// ---------------------------------------------------------------------------
-// The blueprint
-// ---------------------------------------------------------------------------
 
-// Starts the blueprint on `canvas` and returns once it's drawing. It follows
-// `changes` and the page's input for as long as `Scope` stays open, and
-// fails with GpuUnavailable when this browser can't run it. While the pens
-// run, it tells `infected` how many are zombies.
 export const runBlueprint = (
   canvas: HTMLCanvasElement,
   initial: Settings,
@@ -326,11 +305,9 @@ export const runBlueprint = (
     const settings = yield* Ref.make(initial)
     const pointer = yield* Ref.make(NO_POINTER)
     const state = yield* Ref.make(initialFrame(initial))
-    const started = performance.now()
-    // The last count told, so the page only hears when it changes.
+    const started = yield* frameTime
     const told = yield* Ref.make(FIRST_INFECTED)
 
-    // Draws frames until the page settles, then returns.
     const animate = Effect.gen(function* () {
       yield* Ref.update(state, wake)
       while (true) {
@@ -356,8 +333,6 @@ export const runBlueprint = (
       handle: input => Ref.update(pointer, at => pointerAfter(at)(input)),
     })
 
-    // Turning the pens on starts a new outbreak by the toggle; turning them
-    // off cures everyone, so they fade out yellow.
     yield* wakeOn({
       stream: changes,
       wake: poke,
@@ -373,7 +348,6 @@ export const runBlueprint = (
         }),
     })
 
-    // Counts the zombies a few times a second while the pens run.
     yield* Effect.forkScoped(
       Effect.forever(
         Effect.gen(function* () {
@@ -387,7 +361,6 @@ export const runBlueprint = (
       ),
     )
 
-    // A lost device leaves the CSS grid showing, so the page still looks right.
     yield* markDrawing({ element: canvas, device: gpu.device })
     yield* poke
   })

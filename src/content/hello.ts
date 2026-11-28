@@ -20,5 +20,4 @@ export const HELLO_NOTE: ReadonlyArray<string> = [
   'things. Say hi anytime:',
 ]
 
-// The value `tanner.hello()` returns, shown last in the console.
 export const HELLO = 'gg, thanks for stopping by'

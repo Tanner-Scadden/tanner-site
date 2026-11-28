@@ -46,7 +46,6 @@ export const SHOTS: ReadonlyArray<Shot> = [
     title: 'WILD RIFT ICONS · SENTINELS',
     photo: 'worlds/wild-rift-icons-sentinels.jpg',
   },
-  // Still looking for photos of these:
   { size: 'mid', when: 'NOV 2018', title: 'VALOR SERIES S2 · CHAMPIONS AGAIN' },
   { size: 'mid', when: 'NOV 2018 · HO CHI MINH CITY', title: 'AIC 2018' },
 ]

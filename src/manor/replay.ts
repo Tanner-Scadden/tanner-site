@@ -1,6 +1,5 @@
-import { Array as Arr, String as Str } from 'effect'
+import { Array as Arr, MutableHashMap, Option, String as Str } from 'effect'
 
-// The parlour is 320x180 game pixels, cut into 20px tiles.
 export const ROOM_W = 320
 export const ROOM_H = 180
 export const COLS = 16
@@ -33,7 +32,6 @@ export interface Splat {
   readonly y: number
 }
 
-// One shot fired this turn, from a survivor's tile toward a zombie's tile.
 export interface Shot {
   readonly by: number
   readonly x0: number
@@ -47,8 +45,6 @@ export interface Frame {
   readonly wave: number
   readonly survivors: ReadonlyArray<Survivor>
   readonly zombies: ReadonlyArray<Zombie>
-  // Shots fired, zombies hit and zombies downed on this turn, for the
-  // tracers, the flash and the fall.
   readonly shots: ReadonlyArray<Shot>
   readonly hits: ReadonlyArray<number>
   readonly splats: ReadonlyArray<Splat>
@@ -57,14 +53,13 @@ export interface Frame {
 
 export interface Run {
   readonly seed: number
-  readonly frames: ReadonlyArray<Frame>
+  readonly frames: Arr.NonEmptyReadonlyArray<Frame>
   readonly held: boolean
   readonly hash: string
 }
 
 const HP: Record<ZombieKind, number> = { walker: 1, lid: 2, brute: 4 }
 
-// Where the parlour's doors are, in tiles.
 export const DOORS = [
   { x: 10, y: 0 },
   { x: 4, y: 8 },
@@ -72,7 +67,6 @@ export const DOORS = [
   { x: 15, y: 4 },
 ] as const
 
-// Each wave: the turn it starts, and who comes through the doors.
 const WAVE_PLAN: ReadonlyArray<{ readonly turn: number; readonly kinds: ReadonlyArray<ZombieKind> }> = [
   { turn: 1, kinds: ['walker', 'walker', 'walker'] },
   { turn: 12, kinds: ['walker', 'walker', 'lid', 'walker'] },
@@ -83,7 +77,6 @@ const WAVE_PLAN: ReadonlyArray<{ readonly turn: number; readonly kinds: Readonly
 const RANGE = 3
 const AIM = 0.22
 
-// mulberry32: small, fast, and the same in every browser.
 const rng = (seed: number) => {
   let a = seed >>> 0
   return (): number => {
@@ -104,10 +97,10 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
 
 const dist = (a: Spot, b: Spot) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))
 
-const nearest = <A extends Spot>(from: Spot, targets: ReadonlyArray<A>): A | undefined => {
-  let best: A | undefined
+const nearest = <A extends Spot>(from: Spot, targets: ReadonlyArray<A>): Option.Option<A> => {
+  let best: Option.Option<A> = Option.none()
   for (const t of targets) {
-    if (best === undefined || dist(from, t) < dist(from, best)) best = t
+    if (Option.isNone(best) || dist(from, t) < dist(from, best.value)) best = Option.some(t)
   }
   return best
 }
@@ -115,24 +108,32 @@ const nearest = <A extends Spot>(from: Spot, targets: ReadonlyArray<A>): A | und
 const stepToward = <A extends Spot>(from: A, to: Spot, roll: number): A => {
   const dx = Math.sign(to.x - from.x)
   const dy = Math.sign(to.y - from.y)
-  return dx !== 0 && (dy === 0 || roll < 0.5)
-    ? { ...from, x: from.x + dx }
-    : { ...from, y: from.y + dy }
+  if (dx !== 0 && (dy === 0 || roll < 0.5)) return { ...from, x: from.x + dx }
+  return { ...from, y: from.y + dy }
 }
 
-// Survivors back off toward the middle of the rug, never into a wall.
+const coinFlip = (roll: number, heads: number, tails: number): number => {
+  if (roll < 0.5) return heads
+  return tails
+}
+
+const directionOr = (direction: number, fallback: number): number => {
+  if (direction !== 0) return direction
+  return fallback
+}
+
 const stepAway = (from: Survivor, threat: Spot, roll: number): Survivor => {
-  const dx = Math.sign(from.x - threat.x) || (roll < 0.5 ? 1 : -1)
-  const dy = Math.sign(from.y - threat.y) || (roll < 0.5 ? -1 : 1)
-  return roll < 0.5
-    ? { ...from, x: clamp(from.x + dx, 4, COLS - 5) }
-    : { ...from, y: clamp(from.y + dy, 2, ROWS - 3) }
+  const dx = directionOr(Math.sign(from.x - threat.x), coinFlip(roll, 1, -1))
+  const dy = directionOr(Math.sign(from.y - threat.y), coinFlip(roll, -1, 1))
+  if (roll < 0.5) return { ...from, x: clamp(from.x + dx, 4, COLS - 5) }
+  return { ...from, y: clamp(from.y + dy, 2, ROWS - 3) }
 }
 
-const moves = (kind: ZombieKind, turn: number, roll: number): boolean =>
-  kind === 'walker' ? roll < 0.7 : turn % 2 === 0
+const moves = (kind: ZombieKind, turn: number, roll: number): boolean => {
+  if (kind === 'walker') return roll < 0.7
+  return turn % 2 === 0
+}
 
-// FNV-1a over every position in every frame.
 const hashOf = (frames: ReadonlyArray<Frame>): string => {
   let h = 0x811c9dc5
   const mix = (n: number) => {
@@ -140,7 +141,7 @@ const hashOf = (frames: ReadonlyArray<Frame>): string => {
   }
   for (const frame of frames) {
     for (const s of frame.survivors) {
-      mix(s.id); mix(s.x); mix(s.y); mix(s.up ? 1 : 0)
+      mix(s.id); mix(s.x); mix(s.y); mix(Number(s.up))
     }
     mix(-1)
     for (const z of frame.zombies) {
@@ -163,7 +164,7 @@ const simulate = (seed: number): Run => {
   let zombies: ReadonlyArray<Zombie> = []
   let downed = 0
   let wave = 0
-  const frames: Array<Frame> = [
+  const frames: Arr.NonEmptyArray<Frame> = [
     { wave, survivors, zombies, shots: [], hits: [], splats: [], downed },
   ]
 
@@ -172,23 +173,26 @@ const simulate = (seed: number): Run => {
     const hits: Array<number> = []
     const splats: Array<Splat> = []
 
-    const plan = WAVE_PLAN[wave]
-    if (plan !== undefined && plan.turn === turn) {
+    const plan = Option.filter(Arr.get(WAVE_PLAN, wave), arriving => arriving.turn === turn)
+    if (Option.isSome(plan)) {
       wave++
       zombies = [
         ...zombies,
-        ...Arr.map(plan.kinds, kind => {
-          const door = DOORS[Math.floor(next() * DOORS.length)] ?? DOORS[0]
+        ...Arr.map(plan.value.kinds, kind => {
+          const door = Option.getOrElse(
+            Arr.get(DOORS, Math.floor(next() * DOORS.length)),
+            () => DOORS[0],
+          )
           return { id: zombieId++, kind, x: door.x, y: door.y, hp: HP[kind] }
         }),
       ]
     }
 
-    // Survivors shoot the nearest zombie in range, or back off if it's close.
     for (const s of survivors) {
       if (!s.up) continue
-      const target = nearest(s, zombies)
-      if (target === undefined || dist(s, target) > RANGE) continue
+      const inRange = Option.filter(nearest(s, zombies), z => dist(s, z) <= RANGE)
+      if (Option.isNone(inRange)) continue
+      const target = inRange.value
       const hit = next() < AIM
       shots.push({ by: s.id, x0: s.x, y0: s.y, x1: target.x, y1: target.y, hit })
       if (hit) {
@@ -204,27 +208,22 @@ const simulate = (seed: number): Run => {
     }
     survivors = Arr.map(survivors, s => {
       if (!s.up) return s
-      const threat = nearest(s, zombies)
-      return threat !== undefined && dist(s, threat) <= 2 && next() < 0.5
-        ? stepAway(s, threat, next())
-        : s
+      const threat = Option.filter(nearest(s, zombies), z => dist(s, z) <= 2)
+      if (Option.isNone(threat) || next() >= 0.5) return s
+      return stepAway(s, threat.value, next())
     })
 
-    // Zombies go for the nearest survivor still standing.
     const standing = Arr.filter(survivors, s => s.up)
     zombies = Arr.map(zombies, z => {
       const target = nearest(z, standing)
-      return target !== undefined && moves(z.kind, turn, next())
-        ? stepToward(z, target, next())
-        : z
+      if (Option.isNone(target) || !moves(z.kind, turn, next())) return z
+      return stepToward(z, target.value, next())
     })
 
-    // Try not to get eaten.
-    survivors = Arr.map(survivors, s =>
-      s.up && Arr.some(zombies, z => z.x === s.x && z.y === s.y)
-        ? { ...s, up: false }
-        : s,
-    )
+    survivors = Arr.map(survivors, s => {
+      if (s.up && Arr.some(zombies, z => z.x === s.x && z.y === s.y)) return { ...s, up: false }
+      return s
+    })
 
     frames.push({ wave, survivors, zombies, shots, hits, splats, downed })
   }
@@ -233,15 +232,16 @@ const simulate = (seed: number): Run => {
   return { seed, frames, held, hash: hashOf(frames) }
 }
 
-const cache = new Map<number, Run>()
+const cache = MutableHashMap.empty<number, Run>()
 
-export const runOf = (seed: number): Run => {
-  const hit = cache.get(seed)
-  if (hit !== undefined) return hit
+const simulated = (seed: number): Run => {
   const run = simulate(seed)
-  cache.set(seed, run)
+  MutableHashMap.set(cache, seed, run)
   return run
 }
+
+export const runOf = (seed: number): Run =>
+  Option.getOrElse(MutableHashMap.get(cache, seed), () => simulated(seed))
 
 export const nextSeed = (seed: number): number =>
   ((Math.imul(seed + 1, 2654435761) >>> 0) % 90000) + 10000

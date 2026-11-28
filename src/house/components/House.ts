@@ -1,6 +1,7 @@
 import { Mount } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
+import { Boolean as Bool } from 'effect'
 
 import { HOUSE } from '#content/home'
 
@@ -16,7 +17,7 @@ const WEBGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
 
 export const House = <M>(h: Html.H<M>, still: boolean, played: M, blogOpen: boolean) =>
   sx(h.figure, styles.house, houseMarker)
-    .attrs(WEBGPU ? { 'data-gpu': 'starting' } : {})
+    .attrs(Bool.match(WEBGPU, { onTrue: () => ({ 'data-gpu': 'starting' }), onFalse: () => ({}) }))
     .children(
     sx(h.canvas, styles.canvas)
       .attr('aria-hidden', 'true')
@@ -27,11 +28,13 @@ export const House = <M>(h: Html.H<M>, still: boolean, played: M, blogOpen: bool
     sx(h.nav, styles.plan)
       .attrs({ 'aria-label': 'Floor plan of this page', 'data-plan': '' })
       .children(
-        blogOpen
-          ? Room(h, 'library', '#blog')
-          : sx(h.div, styles.room, rooms.library)
+        Bool.match(blogOpen, {
+          onTrue: () => Room(h, 'library', '#blog'),
+          onFalse: () =>
+            sx(h.div, styles.room, rooms.library)
               .attrs({ 'data-room': 'library', 'aria-hidden': 'true' })
               .children(sx(h.b, styles.name, styles.pencilled).children(HOUSE.rooms.library.name)),
+        }),
         Room(h, 'work', '#work'),
         Room(h, 'oss', '#oss'),
         Room(h, 'outside', '#personal-life'),
@@ -50,13 +53,11 @@ const Room = <M>(h: Html.H<M>, name: RoomName, target: string) =>
     .children(sx(h.b, styles.name, styles.pencilled).children(HOUSE.rooms[name].name))
 
 const styles = stylex.create({
-  // The canvas bleeds past the figure, so the risen walls and the pets on
-  // the back rooms have room to stand.
   house: {
     position: 'relative',
     isolation: 'isolate',
     margin: 0,
-    display: { default: null, [media.print]: 'none' },
+    display: { [media.print]: 'none' },
   },
   canvas: {
     position: 'absolute',
@@ -70,8 +71,6 @@ const styles = stylex.create({
       [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: 'block',
     },
   },
-  // The labels wait for the pens to draw the walls, then fade in. They only
-  // fade in, never out.
   pencilled: {
     opacity: {
       default: 1,
@@ -95,12 +94,8 @@ const styles = stylex.create({
     color: blueprint.dim,
     marginBottom: 8,
   },
-  // While WebGPU draws, the CSS walls step aside, and the renderer tips the
-  // plan into 3D with its walls, from its own corner.
   plan: {
     display: 'grid',
-    // The library, Work and Open Source across the back; Personal Life and
-    // D-13 at the front.
     gridTemplateColumns: '85fr 105fr 35fr 75fr',
     gridTemplateRows: '1.3fr 1fr',
     aspectRatio: '28 / 19',
@@ -113,14 +108,11 @@ const styles = stylex.create({
     },
     position: 'relative',
     transformOrigin: {
-      default: null,
       [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: '0 0',
     },
     willChange: {
-      default: null,
       [stylex.when.ancestor('[data-gpu="on"]', houseMarker)]: 'transform',
     },
-    // The front door: a gap in the bottom wall.
     '::after': {
       content: '""',
       position: 'absolute',
@@ -158,16 +150,15 @@ const styles = stylex.create({
   },
   link: {
     color: { default: 'inherit', ':hover': blueprint.hi, ':focus-visible': blueprint.hi },
-    backgroundColor: { default: null, ':hover': blueprint.wash, ':focus-visible': blueprint.wash },
-    outlineStyle: { default: null, ':focus-visible': 'dashed' },
-    outlineOffset: { default: null, ':focus-visible': -4 },
+    backgroundColor: { ':hover': blueprint.wash, ':focus-visible': blueprint.wash },
+    outlineStyle: { ':focus-visible': 'dashed' },
+    outlineOffset: { ':focus-visible': -4 },
   },
   locked: { gridColumn: 4, color: blueprint.hi },
   name: { fontSize: { default: 12, [media.narrow]: 10 }, letterSpacing: '.08em' },
   note: { fontSize: 8, letterSpacing: '.12em', color: blueprint.hi },
 })
 
-// Where each room sits on the plan, and the walls it draws.
 const rooms = stylex.create({
   library: { gridColumn: 1, borderRightWidth: 1.5, borderBottomWidth: 1.5 },
   work: { gridColumn: 2, borderRightWidth: 1.5, borderBottomWidth: 1.5 },

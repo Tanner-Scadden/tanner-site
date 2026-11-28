@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["./node_modules/oxlint-plugin-effect/presets/recommended.json"],
+  "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  "jsPlugins": [
+    "oxlint-plugin-effect/plugin",
+    { "name": "stylex", "specifier": "@stylexjs/eslint-plugin" },
+    "./lint/site.ts"
+  ],
+  "options": { "typeAware": true, "denyWarnings": true, "reportUnusedDisableDirectives": "error" },
+  "ignorePatterns": ["dist", "infra", "node_modules"],
+  "rules": {
+    "site/noSwitch": "error",
+    "stylex/valid-styles": "error",
+    "stylex/valid-shorthands": "error",
+    "stylex/no-unused": "error",
+    "stylex/no-conflicting-props": "error",
+    "stylex/no-legacy-contextual-styles": "error",
+    "stylex/no-lookahead-selectors": "error",
+    "stylex/no-nonstandard-styles": "error",
+    "stylex/enforce-extension": "error",
+    "typescript/await-thenable": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unsafe-argument": "error",
+    "typescript/no-unsafe-assignment": "error",
+    "typescript/no-unsafe-call": "error",
+    "typescript/no-unsafe-member-access": "error",
+    "typescript/no-unsafe-return": "error",
+    "typescript/require-await": "error",
+    "typescript/restrict-template-expressions": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/unbound-method": "error"
+  }
+}

@@ -1,13 +1,14 @@
-import { Data, Effect, Option, Queue, Ref, type Scope, Stream } from 'effect'
+import { Array as Arr, Data, Effect, Filter, Option, Queue, Ref, type Scope, Stream } from 'effect'
 
 import { fitCanvas } from '../../gpu/canvas.ts'
 import { type GpuUnavailable, acquireBuffer, acquireGpu, markDrawing } from '../../gpu/device.ts'
-import { nextFrame, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
+import { frameTime, nextFrame, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
 import { fontsReady, resizes } from '../../gpu/observe.ts'
 import { GOLD as GOLD_RGB, type Rgb, float } from '../../gpu/palette.ts'
 import { bound, renderPipeline, whole } from '../../gpu/pipeline.ts'
 import {
   type Hovered,
+  type JobState,
   STEPS,
   type WorkState,
   replayed,
@@ -28,24 +29,18 @@ export interface WorkSettings {
 
 const VIEW_FLOATS = 4
 const GAPS = STEPS - 1
-// The wave's length along the path, in px, at most.
 const WAVE_PX = 120
-// The site's gold, for a job without its own wave colour.
 const GOLD = float(GOLD_RGB)
 
-// A `#rrggbb` colour as 0 to 1 channels, if it is one.
 const parseHex = (hex: string): Option.Option<Rgb> => {
-  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim())
-  return match === null
-    ? Option.none()
-    : Option.some([
-        parseInt(match[1]!, 16) / 255,
-        parseInt(match[2]!, 16) / 255,
-        parseInt(match[3]!, 16) / 255,
-      ])
+  const found = Option.fromNullishOr(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim()))
+  return Option.map(found, match => [
+    parseInt(match[1]!, 16) / 255,
+    parseInt(match[2]!, 16) / 255,
+    parseInt(match[3]!, 16) / 255,
+  ])
 }
 
-// A job can ask for its own wave colour with `data-wave`.
 const waveColor = (job: HTMLElement): Rgb =>
   Option.fromNullishOr(job.dataset['wave']).pipe(
     Option.flatMap(parseHex),
@@ -64,13 +59,9 @@ interface Segment {
   readonly to: readonly [number, number]
 }
 
-// One job's boxes and arrows, and where the wave's path reaches each: it
-// enters a box at one side, goes both ways round to the far side, crosses
-// the arrow, and so on.
 interface Row {
   readonly boxes: ReadonlyArray<Rect>
   readonly gaps: ReadonlyArray<Segment>
-  // Whether the boxes stack, so the wave enters each at its top.
   readonly stacked: boolean
   readonly boxStarts: ReadonlyArray<number>
   readonly gapStarts: ReadonlyArray<number>
@@ -78,21 +69,20 @@ interface Row {
   readonly color: Rgb
 }
 
-// Where every box and arrow sits, in CSS px from the canvas's corner.
 type Layout = ReadonlyArray<Row>
 
-// The arrow between two boxes runs across the gap between them: sideways
-// when they sit in a row, downward when the list stacks on a phone.
-const gapBetween = (a: Rect, b: Rect): Segment =>
-  b.x >= a.x + a.w - 1
-    ? {
-        from: [a.x + a.w, a.y + a.h / 2],
-        to: [b.x, b.y + b.h / 2],
-      }
-    : {
-        from: [a.x + a.w / 2, a.y + a.h],
-        to: [b.x + b.w / 2, b.y],
-      }
+const gapBetween = (a: Rect, b: Rect): Segment => {
+  if (b.x >= a.x + a.w - 1) {
+    return {
+      from: [a.x + a.w, a.y + a.h / 2],
+      to: [b.x, b.y + b.h / 2],
+    }
+  }
+  return {
+    from: [a.x + a.w / 2, a.y + a.h],
+    to: [b.x + b.w / 2, b.y],
+  }
+}
 
 const rowOf = (boxes: ReadonlyArray<Rect>, color: Rgb): Row => {
   const gaps = boxes.slice(1).map((box, i) => gapBetween(boxes[i]!, box))
@@ -103,10 +93,10 @@ const rowOf = (boxes: ReadonlyArray<Rect>, color: Rgb): Row => {
   boxes.forEach((box, i) => {
     boxStarts.push(at)
     at += box.w + box.h
-    const gap = gaps[i]
-    if (gap === undefined) return
+    const gap = Arr.get(gaps, i)
+    if (Option.isNone(gap)) return
     gapStarts.push(at)
-    at += Math.hypot(gap.to[0] - gap.from[0], gap.to[1] - gap.from[1])
+    at += Math.hypot(gap.value.to[0] - gap.value.from[0], gap.value.to[1] - gap.value.from[1])
   })
   return { boxes, gaps, stacked, boxStarts, gapStarts, length: at, color }
 }
@@ -166,6 +156,57 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
 
 type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
 
+const flag = (on: boolean): number => {
+  if (on) return 1
+  return 0
+}
+
+const at = (values: ReadonlyArray<number>, i: number): number => Option.getOrElse(Arr.get(values, i), () => 0)
+
+interface RowFill {
+  readonly job: JobState
+  readonly j: number
+  readonly row: Row
+  readonly now: number
+  readonly still: boolean
+}
+
+const fillRow = (gpu: Gpu, { job, j, row, now, still }: RowFill) => {
+  const t = waveOf(job, { now, still })
+  const front = Option.getOrElse(t, () => 0) * row.length
+  const length = Math.min(WAVE_PX, row.length * WAVE_TAIL)
+  const on = flag(Option.isSome(t))
+  const ping = pingOf(job, { now, still })
+  row.boxes.forEach((rect, b) => {
+    const last = b === STEPS - 1
+    gpu.boxData.set(
+      [
+        rect.x,
+        rect.y,
+        rect.w,
+        rect.h,
+        at(job.hover, b),
+        flag(last),
+        flag(last) * ping,
+        flag(row.stacked),
+        at(row.boxStarts, b),
+        front,
+        length,
+        on,
+        ...row.color,
+        0,
+      ],
+      (j * STEPS + b) * BOX_FLOATS,
+    )
+  })
+  row.gaps.forEach((gap, g) => {
+    gpu.gapData.set(
+      [...gap.from, ...gap.to, at(row.gapStarts, g), front, length, on, ...row.color, 0],
+      (j * GAPS + g) * GAP_FLOATS,
+    )
+  })
+}
+
 const render = (
   gpu: Gpu,
   canvas: HTMLCanvasElement,
@@ -175,8 +216,6 @@ const render = (
   still: boolean,
 ) =>
   Effect.sync(() => {
-    // The backing store follows the CSS size, at a pixel ratio the GPU can
-    // hold even for a long list on a phone.
     const dpr = fitCanvas(canvas, { round: Math.floor, maxSize: gpu.device.limits.maxTextureDimension2D }).ratio
     gpu.viewData.set([canvas.clientWidth, canvas.clientHeight, dpr, 0])
     gpu.device.queue.writeBuffer(gpu.viewBuffer, 0, gpu.viewData)
@@ -184,41 +223,8 @@ const render = (
     gpu.boxData.fill(0)
     gpu.gapData.fill(0)
     state.jobs.forEach((job, j) => {
-      const row = layout[j]
-      if (row === undefined) return
-      const t = waveOf(job, { now, still })
-      const front = (t ?? 0) * row.length
-      // Short enough to run out within the tail, so it's gone at the end.
-      const length = Math.min(WAVE_PX, row.length * WAVE_TAIL)
-      const on = t === null ? 0 : 1
-      const ping = pingOf(job, { now, still })
-      row.boxes.forEach((rect, b) => {
-        gpu.boxData.set(
-          [
-            rect.x,
-            rect.y,
-            rect.w,
-            rect.h,
-            job.hover[b] ?? 0,
-            b === STEPS - 1 ? 1 : 0,
-            b === STEPS - 1 ? ping : 0,
-            row.stacked ? 1 : 0,
-            row.boxStarts[b] ?? 0,
-            front,
-            length,
-            on,
-            ...row.color,
-            0,
-          ],
-          (j * STEPS + b) * BOX_FLOATS,
-        )
-      })
-      row.gaps.forEach((gap, g) => {
-        gpu.gapData.set(
-          [...gap.from, ...gap.to, row.gapStarts[g] ?? 0, front, length, on, ...row.color, 0],
-          (j * GAPS + g) * GAP_FLOATS,
-        )
-      })
+      const row = Arr.get(layout, j)
+      if (Option.isSome(row)) fillRow(gpu, { job, j, row: row.value, now, still })
     })
     gpu.device.queue.writeBuffer(gpu.boxBuffer, 0, gpu.boxData)
     gpu.device.queue.writeBuffer(gpu.gapBuffer, 0, gpu.gapData)
@@ -248,18 +254,11 @@ const render = (
     gpu.device.queue.submit([encoder.finish()])
   })
 
-// ---------------------------------------------------------------------------
-// Input
-// ---------------------------------------------------------------------------
 
 type Input = Data.TaggedEnum<{
-  // A job came into view for the first time.
   Seen: { readonly job: number }
-  // A mouse is over a box (or between boxes), or left the list.
-  Pointed: { readonly hovered: Hovered | null }
-  // A finger or button went down on a job.
+  Pointed: { readonly hovered: Option.Option<Hovered> }
   Tapped: { readonly job: number }
-  // The list's layout changed, so every box is measured again.
   Moved: {}
 }>
 const Input = Data.taggedEnum<Input>()
@@ -272,13 +271,12 @@ const seenJobs = (jobs: ReadonlyArray<HTMLElement>): Stream.Stream<Input> =>
           entries => {
             for (const entry of entries) {
               if (!entry.isIntersecting) continue
-              const job = jobs.indexOf(entry.target as HTMLElement)
-              if (job < 0) continue
+              const job = Arr.findFirstIndex(jobs, el => el === entry.target)
+              if (Option.isNone(job)) continue
               observer.unobserve(entry.target)
-              Queue.offerUnsafe(queue, Input.Seen({ job }))
+              Queue.offerUnsafe(queue, Input.Seen({ job: job.value }))
             }
           },
-          // A job's wave leaves once a good part of it is on screen.
           { rootMargin: '0px 0px -12% 0px', threshold: 0.2 },
         )
         for (const job of jobs) observer.observe(job)
@@ -288,18 +286,24 @@ const seenJobs = (jobs: ReadonlyArray<HTMLElement>): Stream.Stream<Input> =>
     ),
   )
 
-const hoveredAt = (
-  jobs: ReadonlyArray<HTMLElement>,
-  target: EventTarget | null,
-): Hovered | null => {
-  if (!(target instanceof Element)) return null
-  const jobEl = target.closest<HTMLElement>('[data-job]')
-  const job = jobEl === null ? -1 : jobs.indexOf(jobEl)
-  if (job < 0) return null
-  const stepEl = target.closest('[data-step]')
-  const steps = Array.from(jobs[job]!.querySelectorAll('[data-step]'))
-  const index = stepEl === null ? -1 : steps.indexOf(stepEl)
-  return { job, step: index < 0 ? null : index }
+const indexIn = <A>(items: ReadonlyArray<A>, item: Option.Option<A>): Option.Option<number> =>
+  Option.flatMap(item, found => Arr.findFirstIndex(items, candidate => candidate === found))
+
+const hoveredOn = (jobs: ReadonlyArray<HTMLElement>, target: Element): Option.Option<Hovered> =>
+  Option.map(
+    indexIn(jobs, Option.fromNullishOr(target.closest<HTMLElement>('[data-job]'))),
+    (job): Hovered => ({
+      job,
+      step: indexIn(
+        Array.from(jobs[job]!.querySelectorAll('[data-step]')),
+        Option.fromNullishOr(target.closest('[data-step]')),
+      ),
+    }),
+  )
+
+const hoveredAt = (jobs: ReadonlyArray<HTMLElement>, event: Event): Option.Option<Hovered> => {
+  if (event.target instanceof Element) return hoveredOn(jobs, event.target)
+  return Option.none()
 }
 
 const pointed = (
@@ -309,50 +313,41 @@ const pointed = (
   Stream.merge(
     Stream.fromEventListener<PointerEvent>(container, 'pointerover', { passive: true }).pipe(
       Stream.filter(event => event.pointerType === 'mouse'),
-      Stream.map(event => Input.Pointed({ hovered: hoveredAt(jobs, event.target) })),
+      Stream.map(event => Input.Pointed({ hovered: hoveredAt(jobs, event) })),
     ),
     Stream.fromEventListener(container, 'pointerleave').pipe(
-      Stream.as(Input.Pointed({ hovered: null })),
+      Stream.as(Input.Pointed({ hovered: Option.none() })),
     ),
   )
 
-// A tap or click on a job sends its wave again.
 const taps = (
   container: HTMLElement,
   jobs: ReadonlyArray<HTMLElement>,
 ): Stream.Stream<Input> =>
   Stream.fromEventListener<PointerEvent>(container, 'pointerdown', { passive: true }).pipe(
     Stream.filter(event => event.isPrimary),
-    Stream.map(event => hoveredAt(jobs, event.target)),
-    Stream.filter(at => at !== null),
+    Stream.filterMap(Filter.fromPredicateOption(event => hoveredAt(jobs, event))),
     Stream.map(({ job }) => Input.Tapped({ job })),
   )
 
-// ---------------------------------------------------------------------------
-// The drawing
-// ---------------------------------------------------------------------------
 
-// Starts the drawing on `canvas`, which sits inside the job list, and
-// returns once it's running. It follows `changes` and the list for as long
-// as `Scope` stays open, and fails with GpuUnavailable when this browser
-// can't run it.
 export const runWorkDrawing = (
   canvas: HTMLCanvasElement,
   initial: WorkSettings,
   changes: Stream.Stream<WorkSettings>,
 ): Effect.Effect<void, GpuUnavailable, Scope.Scope> =>
   Effect.gen(function* () {
-    const container = canvas.parentElement
-    if (container === null) return
+    const parent = Option.fromNullishOr(canvas.parentElement)
+    if (Option.isNone(parent)) return
+    const container = parent.value
     const jobs = Array.from(container.querySelectorAll<HTMLElement>('[data-job]'))
     const gpu = yield* makeGpu(canvas, jobs.length)
 
     const settings = yield* Ref.make(initial)
-    const hovered = yield* Ref.make<Hovered | null>(null)
+    const hovered = yield* Ref.make<Option.Option<Hovered>>(Option.none())
     const state = yield* Ref.make(initialWork(jobs.length))
     const layout = yield* Ref.make(measure(canvas, jobs))
 
-    // Draws frames until nothing moves, then returns.
     const animate = Effect.gen(function* () {
       yield* Ref.update(state, wake)
       while (true) {
@@ -366,17 +361,21 @@ export const runWorkDrawing = (
       }
     })
 
+    const replay = (job: number) =>
+      Effect.flatMap(frameTime, now => Ref.update(state, s => replayed(s, { job, now })))
+
     const handle = Input.$match({
-      Seen: ({ job }) => Ref.update(state, s => seen(s, { job, now: performance.now() })),
+      Seen: ({ job }) => Effect.flatMap(frameTime, now => Ref.update(state, s => seen(s, { job, now }))),
       Pointed: ({ hovered: next }) =>
         Effect.gen(function* () {
           const before = yield* Ref.getAndSet(hovered, next)
-          if (next !== null && next.job !== before?.job) {
-            yield* Ref.update(state, s => replayed(s, { job: next.job, now: performance.now() }))
-          }
+          const entered = Option.filter(
+            next,
+            ({ job }) => !Option.exists(before, previous => previous.job === job),
+          )
+          if (Option.isSome(entered)) yield* replay(entered.value.job)
         }),
-      Tapped: ({ job }) =>
-        Ref.update(state, s => replayed(s, { job, now: performance.now() })),
+      Tapped: ({ job }) => replay(job),
       Moved: () => Ref.set(layout, measure(canvas, jobs)),
     })
 
@@ -387,7 +386,6 @@ export const runWorkDrawing = (
         taps(container, jobs),
         resizes([container, ...container.querySelectorAll('[data-step]')]).pipe(Stream.as(Input.Moved())),
         Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Moved())),
-        // Web fonts landing can reflow every box.
         fontsReady.pipe(Stream.as(Input.Moved())),
       ],
       { concurrency: 'unbounded' },
@@ -397,9 +395,6 @@ export const runWorkDrawing = (
     yield* wakeOn({ stream: inputs, wake: drawing.wake, handle })
     yield* wakeOn({ stream: changes, wake: drawing.wake, handle: next => Ref.set(settings, next) })
 
-    // Marks the list while the GPU draws it, so the CSS borders step aside.
-    // Closing the scope, or losing the device, hands the outlines back to
-    // CSS, so the list still reads.
     yield* markDrawing({ element: container, device: gpu.device })
     yield* drawing.wake
   })

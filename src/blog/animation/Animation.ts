@@ -1,19 +1,17 @@
 import { Mount, UiSchema } from '@effect/ui'
 import { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr, Effect, Number as Num, Option, Queue, Schema, Stream } from 'effect'
+import { Array as Arr, Boolean as Bool, Effect, Number as Num, Option, Queue, Schema, Stream } from 'effect'
 
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, post } from '../../styles/tokens.stylex.ts'
 import { isFull } from './clock.ts'
-import { Controls, PlayerUnavailable, type Report, SLIDER_STEPS, Started } from './controls.ts'
+import { Controls, PlayerUnavailable, Report, SLIDER_STEPS, Started } from './controls.ts'
 import { type Scene, type Variant, rememberLast } from './scene.ts'
 
-// How a scene sits on the page. A figure is framed in the text column, with
-// its controls and caption. A hero sits bare beside a post's title and just
-// plays: no frame and no controls, only its caption, if it has one, and the
-// versions to switch between when it has more than one.
+const loadPlayer = () => import('./play.ts')
+
 export interface Look {
   readonly hero?: boolean
 }
@@ -26,16 +24,15 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     (canvas: HTMLCanvasElement, controls, changes) =>
       Stream.callback<Report>(queue =>
         Effect.tryPromise({
-          try: () => import('./play.ts'),
+          try: loadPlayer,
           catch: cause => PlayerUnavailable.make({ cause }),
         }).pipe(
           Effect.flatMap(({ playScene }) =>
             playScene(canvas, scene, controls, changes, report => Queue.offer(queue, report)),
           ),
-          // No WebGPU and no 2D canvas, or the player didn't load.
           Effect.catch(error =>
             Effect.logDebug(`No ${name}`, error).pipe(
-              Effect.andThen(Queue.offer(queue, { _tag: 'Started' as const, drawable: false, still: false })),
+              Effect.andThen(Queue.offer(queue, Report.cases.Started.make({ drawable: false, still: false }))),
             ),
           ),
         ),
@@ -47,11 +44,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     ClickedPlay: {},
     ClickedReplay: {},
     ClickedInteract: {},
-    // The reader clicked the drawing and it added an interaction.
     Aimed: {},
-    // How many interactions the run has now.
     Counted: { interactions: Schema.Finite },
-    // A scene that plays once has stopped on its last frame.
     Ended: {},
     MovedSlider: { value: Schema.String },
     Started: Started.fields,
@@ -67,10 +61,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     name,
     model: Schema.Struct({
       ...Controls.fields,
-      // Until the drawing says otherwise, it can be drawn on.
       drawable: Schema.Boolean,
       still: Schema.Boolean,
-      // How many interactions the run has, as the drawing last said.
       interactions: Schema.Finite,
     }),
     message: Message,
@@ -87,26 +79,23 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       interactions: 0,
     }),
     update: {
-      // Reduced motion starts paused, on the finished frame.
       Started: ($, { drawable, still }) =>
         $.evolve({ drawable: () => drawable, still: () => still, playing: playing => playing && !still }),
-      ChoseVariant: ($, { variant }) =>
-        variant === $.model.variant ? $.model : $.evolve({ variant: () => variant, playing: () => !$.model.still }),
+      ChoseVariant: ($, { variant }) => {
+        if (variant === $.model.variant) return $.model
+        return $.evolve({ variant: () => variant, playing: () => !$.model.still })
+      },
       ClickedPlay: $ => $.evolve({ playing: playing => !playing }),
       ClickedReplay: $ =>
         $.evolve({ playing: () => true, seek: () => 0, seeks: seeks => seeks + 1, restarts: restarts => restarts + 1 }),
-      // It plays on so the reader sees what they did, except under reduced
-      // motion, where the still frame repaints with it. A full run drops
-      // the press, so nothing changes. It counts the press at once, so a
-      // quick second one can't slip past before the drawing says.
-      ClickedInteract: $ =>
-        isFull(scene, $.model.interactions)
-          ? $.model
-          : $.evolve({
-              interacts: interacts => interacts + 1,
-              interactions: interactions => interactions + 1,
-              playing: playing => playing || !$.model.still,
-            }),
+      ClickedInteract: $ => {
+        if (isFull(scene, $.model.interactions)) return $.model
+        return $.evolve({
+          interacts: interacts => interacts + 1,
+          interactions: interactions => interactions + 1,
+          playing: playing => playing || !$.model.still,
+        })
+      },
       Aimed: $ => $.evolve({ playing: playing => playing || !$.model.still }),
       Counted: ($, { interactions }) => $.evolve({ interactions: () => interactions }),
       Ended: $ => $.evolve({ playing: () => false }),
@@ -119,7 +108,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     view: (h, model) => {
       const shown = variantOf(model.variant)
       const alarm = shown.tone === 'alarm'
-      return sx(h.figure, hero ? styles.hero : styles.figure)
+      return sx(h.figure, Bool.match(hero, { onTrue: () => styles.hero, onFalse: () => styles.figure }))
         .attr('data-blueprint-quiet', '')
         .children(
           sx(h.canvas, styles.canvas, scene.drag === true && styles.grab)
@@ -133,14 +122,13 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                 restarts: model.restarts,
                 interacts: model.interacts,
               }).pipe(
-                Mount.map(report =>
-                  report._tag === 'Aimed'
-                    ? Message.Aimed()
-                    : report._tag === 'Counted'
-                      ? Message.Counted({ interactions: report.interactions })
-                      : report._tag === 'Ended'
-                        ? Message.Ended()
-                        : Message.Started({ drawable: report.drawable, still: report.still }),
+                Mount.map(
+                  Report.match({
+                    Aimed: () => Message.Aimed(),
+                    Counted: ({ interactions }) => Message.Counted({ interactions }),
+                    Ended: () => Message.Ended(),
+                    Started: ({ drawable, still }) => Message.Started({ drawable, still }),
+                  }),
                 ),
               ),
             ),
@@ -162,11 +150,11 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
               sx(h.button, base.button, styles.icon, styles.lead, alarm && styles.alarmLead)
                 .attrs({
                   type: 'button',
-                  'aria-label': model.playing ? 'Pause' : 'Play',
-                  title: model.playing ? 'Pause' : 'Play',
+                  'aria-label': playLabel(model.playing),
+                  title: playLabel(model.playing),
                 })
                 .on('click', Message.ClickedPlay())
-                .children(Icon(h, model.playing ? 'pause' : 'play')),
+                .children(Icon(h, playIcon(model.playing))),
               sx(h.button, base.button, styles.icon)
                 .attrs({ type: 'button', 'aria-label': 'Restart', title: 'Restart' })
                 .on('click', Message.ClickedReplay())
@@ -181,21 +169,23 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                   'aria-label': 'Time',
                 })
                 .on('input', ({ value }) => Message.MovedSlider({ value })),
-              // The drawing keeps this up to date as it plays.
               sx(h.span, styles.clock).attrs({ 'data-clock': '', 'aria-hidden': 'true' }).children('0:00'),
-              scene.interact !== undefined &&
-                sx(h.button, base.button, styles.button, styles.interact)
-                  .attrs({
-                    type: 'button',
-                    'aria-label': `Interact: ${scene.interact.hint}`,
-                    title: scene.interact.hint,
-                  })
-                  .disabled(isFull(scene, model.interactions))
-                  .on('click', Message.ClickedInteract())
-                  .children(
-                    sx(h.span, styles.glyph, styles.small, glyphs.interact).attr('aria-hidden', 'true'),
-                    sx(h.span, styles.word).children('INTERACT'),
-                  ),
+              Option.match(Option.fromNullishOr(scene.interact), {
+                onNone: () => false,
+                onSome: ({ hint }) =>
+                  sx(h.button, base.button, styles.button, styles.interact)
+                    .attrs({
+                      type: 'button',
+                      'aria-label': `Interact: ${hint}`,
+                      title: hint,
+                    })
+                    .disabled(isFull(scene, model.interactions))
+                    .on('click', Message.ClickedInteract())
+                    .children(
+                      sx(h.span, styles.glyph, styles.small, glyphs.interact).attr('aria-hidden', 'true'),
+                      sx(h.span, styles.word).children('INTERACT'),
+                    ),
+              }),
               scene.variants.length > 1 &&
                 sx(h.div, styles.variants)
                   .attrs({ role: 'group', 'aria-label': 'Version' })
@@ -205,7 +195,11 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                         h.button,
                         base.button,
                         styles.button,
-                        variant.id === model.variant && (variant.tone === 'alarm' ? styles.onAlarm : styles.on),
+                        variant.id === model.variant &&
+                          Bool.match(variant.tone === 'alarm', {
+                            onTrue: () => styles.onAlarm,
+                            onFalse: () => styles.on,
+                          }),
                       )
                         .attrs({ type: 'button', 'aria-pressed': String(variant.id === model.variant) })
                         .on('click', Message.ChoseVariant({ variant: variant.id }))
@@ -218,21 +212,20 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
         )
     },
   })
-  // How long the first version plays, worked out once. Seeds move it by a
-  // fraction of a second at most, so any one will do.
   const seconds = rememberLast((played: Scene): number => played.run(Arr.headNonEmpty(played.variants).id, 0).end)
   return Object.assign(component, { seconds: () => seconds(scene) })
 }
 
-// The usual media icons (Material's, Apache 2.0): play, pause, replay
-// from the start, and a tap for INTERACT. Each is a mask over the text
-// colour, so it takes the button's colour and hover like a word would.
+const playLabel = (playing: boolean): string =>
+  Bool.match(playing, { onTrue: () => 'Pause', onFalse: () => 'Play' })
+
+const playIcon = (playing: boolean): keyof typeof glyphs =>
+  Bool.match(playing, { onTrue: () => 'pause' as const, onFalse: () => 'play' as const })
 
 const Icon = <M>(h: Html.H<M>, icon: keyof typeof glyphs) =>
   sx(h.span, styles.glyph, glyphs[icon]).attr('aria-hidden', 'true')
 
 const styles = stylex.create({
-  // A frame in the text column, drawn like a detail on the sheet.
   figure: {
     marginBlock: '2em',
     borderWidth: 1,
@@ -243,10 +236,8 @@ const styles = stylex.create({
     outlineColor: blueprint.faint,
     outlineOffset: 4,
   },
-  // Bare beside the title, and gone on paper.
   hero: { display: { default: 'block', [media.print]: 'none' }, margin: 0 },
   canvas: { display: 'block', width: '100%', aspectRatio: '16 / 9', touchAction: 'pan-y' },
-  // A drawing you can grab keeps the drag for itself, rather than scrolling.
   grab: { touchAction: 'none', cursor: 'grab' },
   controls: {
     display: { default: 'flex', [media.print]: 'none' },
@@ -273,7 +264,6 @@ const styles = stylex.create({
     paddingBlock: 7,
     paddingInline: 10,
   },
-  // A square icon button, a comfortable size to hit.
   icon: {
     display: 'grid',
     placeItems: 'center',
@@ -295,9 +285,7 @@ const styles = stylex.create({
     maskPosition: 'center',
     maskSize: 'contain',
   },
-  // Play and pause leads the row, in gold.
   lead: { color: blueprint.hi, borderColor: { default: blueprint.hiSoft, ':hover': blueprint.hi } },
-  // Elapsed and total, fixed-width digits so it doesn't jiggle.
   clock: {
     flexShrink: 0,
     fontFamily: fonts.mono,
@@ -307,9 +295,6 @@ const styles = stylex.create({
     color: blueprint.dim,
     whiteSpace: 'nowrap',
   },
-  // A word and an icon, the height of the icon buttons. On a phone just
-  // the icon, square like the others, so the row still fits on one line.
-  // Faded once the run takes no more.
   interact: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -354,7 +339,6 @@ const styles = stylex.create({
   heroCaption: { paddingInline: 0, borderTopWidth: 0 },
 })
 
-// Each glyph's path is written out in full: StyleX only takes literals.
 const glyphs = stylex.create({
   play: {
     maskImage:

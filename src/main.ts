@@ -1,5 +1,5 @@
 import { Router } from '@effect/ui'
-import { Effect, Layer } from 'effect'
+import { Console, Effect, Layer } from 'effect'
 
 import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 
@@ -9,17 +9,12 @@ import { SiteRoute } from './routes.ts'
 import { Site } from './Site.ts'
 import './styles/reset.css'
 
-const greetDevtools = Effect.sync(() => {
-  // @effect-diagnostics-next-line globalConsoleInEffect:off
-  console.log(
-    '%cHey, you opened devtools.',
-    'font:700 14px monospace;color:#ffd166',
-  )
-  // @effect-diagnostics-next-line globalConsoleInEffect:off
-  console.log(
+const greetDevtools = Effect.andThen(
+  Console.log('%cHey, you opened devtools.', 'font:700 14px monospace;color:#ffd166'),
+  Console.log(
     'Type tanner.hello() to say hi. There are a few more things hidden on the page.',
-  )
-})
+  ),
+)
 
 const main = Effect.gen(function* () {
   yield* greetDevtools

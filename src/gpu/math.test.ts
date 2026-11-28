@@ -3,7 +3,6 @@ import { Array as Arr } from 'effect'
 
 import { approach, clamp01, nextRandom, random } from './math.ts'
 
-// Draws `count` numbers by threading the seed through `nextRandom`.
 const threaded = (seed: number, count: number): ReadonlyArray<number> =>
   Arr.reduce(Arr.range(1, count), { seed, values: Arr.empty<number>() }, ({ seed: s, values }) => {
     const [next, value] = nextRandom(s)

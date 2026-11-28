@@ -1,8 +1,8 @@
-import { Data, Effect, Ref, type Scope, Stream } from 'effect'
+import { Array as Arr, Boolean as Bool, Data, Effect, Option, Ref, type Scope, Stream } from 'effect'
 
 import { fitCanvas } from '../../gpu/canvas.ts'
 import { type GpuUnavailable, acquireBuffer, acquireGpu, markDrawing } from '../../gpu/device.ts'
-import { nextFrame, stepBetween, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
+import { nextFrame, stepSince, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
 import { fontsReady, resizes, visibility } from '../../gpu/observe.ts'
 import { bound, renderPipeline, whole } from '../../gpu/pipeline.ts'
 import {
@@ -15,6 +15,7 @@ import {
   type Pets,
   type Plan,
   type Point,
+  type Rect,
   barkOf,
   draftOf,
   drafted,
@@ -72,37 +73,46 @@ export interface HouseSettings {
 
 const VIEW_FLOATS = 32
 const MAX_ROOMS = ROOM_ORDER.length
-// Five dots a paw print.
 const MAX_DOTS = PRINTS * 2 * 5
 const MAX_SPRITES = 2
 const MAX_BARKS = 3
 const DEPTH_FORMAT: GPUTextureFormat = 'depth24plus'
 
-const rectOf = (el: Element | null, origin: DOMRect) => {
-  if (el === null) return { x: 0, y: 0, w: 0, h: 0 }
+const NO_RECT: Rect = { x: 0, y: 0, w: 0, h: 0 }
+
+const rectOf = (el: Element, origin: DOMRect): Rect => {
   const r = el.getBoundingClientRect()
   return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height }
+}
+
+const flag = (on: boolean): number => {
+  if (on) return 1
+  return 0
 }
 
 const measure = (canvas: HTMLCanvasElement, plan: HTMLElement): Plan => {
   const transform = plan.style.transform
   plan.style.transform = ''
   const origin = canvas.getBoundingClientRect()
-  const room = (name: string) => plan.querySelector(`[data-room="${name}"]`)
+  const room = (name: string): Rect =>
+    Option.match(Option.fromNullishOr(plan.querySelector(`[data-room="${name}"]`)), {
+      onNone: () => NO_RECT,
+      onSome: el => rectOf(el, origin),
+    })
   const measured = planFor({
     house: rectOf(plan, origin),
-    library: rectOf(room('library'), origin),
-    work: rectOf(room('work'), origin),
-    oss: rectOf(room('oss'), origin),
-    outside: rectOf(room('outside'), origin),
-    locked: rectOf(room('locked'), origin),
+    library: room('library'),
+    work: room('work'),
+    oss: room('oss'),
+    outside: room('outside'),
+    locked: room('locked'),
   })
   plan.style.transform = transform
   return measured
 }
 
 interface Depth {
-  texture: GPUTexture | null
+  texture: Option.Option<GPUTexture>
 }
 
 const makeGpu = (canvas: HTMLCanvasElement) =>
@@ -121,13 +131,14 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
     const dotBuffer = yield* storage(MAX_DOTS * DOT_FLOATS * 4)
     const spriteBuffer = yield* storage(MAX_SPRITES * SPRITE_FLOATS * 4)
 
-    // Teddy and Rain, drawn once onto a sheet, a level at a time.
     const sheet = yield* Effect.acquireRelease(
       Effect.sync(() => {
         const levels = Array.from({ length: SHEET_LEVELS }, (_, level) => drawSheet(level))
-        const [top] = levels
         const texture = device.createTexture({
-          size: [top?.width ?? 1, top?.height ?? 1],
+          size: Option.match(Arr.head(levels), {
+            onNone: () => [1, 1],
+            onSome: top => [top.width, top.height],
+          }),
           format: 'rgba8unorm',
           mipLevelCount: levels.length,
           usage:
@@ -152,10 +163,12 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       mipmapFilter: 'linear',
     })
 
-    // Sized to the canvas on the first frame and whenever it changes.
     const depth = yield* Effect.acquireRelease(
-      Effect.sync((): Depth => ({ texture: null })),
-      d => Effect.sync(() => d.texture?.destroy()),
+      Effect.sync((): Depth => ({ texture: Option.none() })),
+      d =>
+        Effect.sync(() => {
+          if (Option.isSome(d.texture)) d.texture.value.destroy()
+        }),
     )
 
     const pipeline = (
@@ -204,7 +217,6 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       floor: bind(pipeline(FLOOR), [whole(viewBuffer)]),
       rooms: bind(pipeline(ROOMS), [whole(viewBuffer), whole(roomBuffer)]),
       strokes: bind(pipeline(STROKES), [whole(viewBuffer), whole(wallBuffer)]),
-      // The walls give way to whatever pet stands in front of them.
       panels: bind(pipeline(PANELS, { depthCompare: 'less' }), [
         whole(viewBuffer),
         whole(wallBuffer),
@@ -228,19 +240,26 @@ type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
 
 const depthView = (gpu: Gpu, canvas: HTMLCanvasElement): GPUTextureView => {
   const current = gpu.depth.texture
-  if (current === null || current.width !== canvas.width || current.height !== canvas.height) {
-    current?.destroy()
-    gpu.depth.texture = gpu.device.createTexture({
-      size: [canvas.width, canvas.height],
-      format: DEPTH_FORMAT,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    })
+  if (Option.isSome(current)) {
+    if (current.value.width === canvas.width && current.value.height === canvas.height) {
+      return current.value.createView()
+    }
+    current.value.destroy()
   }
-  return gpu.depth.texture!.createView()
+  const texture = gpu.device.createTexture({
+    size: [canvas.width, canvas.height],
+    format: DEPTH_FORMAT,
+    usage: GPUTextureUsage.RENDER_ATTACHMENT,
+  })
+  gpu.depth.texture = Option.some(texture)
+  return texture.createView()
 }
 
-// One paw print on the floor: a pad and four toes ahead of it, fading with
-// age, each placed in the house and then on the screen.
+const pawSize = (gold: number): number => {
+  if (gold === 1) return 1.3
+  return 1.1
+}
+
 const pawDots = (
   print: Print,
   gold: number,
@@ -250,7 +269,7 @@ const pawDots = (
   const alpha = printAlpha(print, now) * 0.8
   if (alpha <= 0) return []
   const { at, heading: h } = print
-  const size = gold === 1 ? 1.3 : 1.1
+  const size = pawSize(gold)
   const dot = (x: number, y: number, radius: number) => {
     const p = project(view, { x, y, z: 0 })
     return [p.x, p.y, radius * p.scale, 0, gold, alpha, 0, 0]
@@ -271,11 +290,8 @@ const pawDots = (
   ]
 }
 
-// How big the pets are: about a tenth of the house, within reason.
 const petWidth = (plan: Plan): number => Math.min(50, Math.max(30, (plan.inside.w + 16) / 10))
 
-// Where a pet stands on the screen: upright and facing the viewer, its feet
-// on its spot on the floor, smaller the further back it is.
 interface Placed {
   readonly left: number
   readonly top: number
@@ -284,12 +300,21 @@ interface Placed {
   readonly depth: number
 }
 
+const petScale = (pet: Pet): number => {
+  if (pet.name === 'rain') return 0.92
+  return 1
+}
+
+const rowOf = (pet: Pet): number => {
+  if (pet.name === 'teddy') return TEDDY_ROW
+  return RAIN_ROW
+}
+
 const place = (pet: Pet, plan: Plan, view: View): Placed => {
   const feet = project(view, { x: pet.at.x, y: pet.at.y, z: 0 })
-  const w = petWidth(plan) * (pet.name === 'rain' ? 0.92 : 1) * feet.scale
+  const w = petWidth(plan) * petScale(pet) * feet.scale
   const h = (w * CELL_H) / CELL_W
   const ground = (44 / CELL_H) * h
-  // A hair toward the viewer, so a pet right against a wall stays in front.
   return { left: feet.x - w / 2, top: feet.y - ground, w, h, depth: Math.max(0, feet.depth - 0.002) }
 }
 
@@ -299,8 +324,8 @@ const spriteFor = (pet: Pet, at: Placed): ReadonlyArray<number> => [
   at.w,
   at.h,
   frameOf(pet),
-  pet.name === 'teddy' ? TEDDY_ROW : RAIN_ROW,
-  pet.facing < 0 ? 1 : 0,
+  rowOf(pet),
+  flag(pet.facing < 0),
   1,
   at.depth,
   0,
@@ -308,12 +333,20 @@ const spriteFor = (pet: Pet, at: Placed): ReadonlyArray<number> => [
   0,
 ]
 
-// A bark: three short gold lines bursting out of Teddy's mouth, `t` of the
-// way through.
+const facingSign = (pet: Pet): number => {
+  if (pet.facing < 0) return -1
+  return 1
+}
+
+const mouthXFor = (facing: number): number => {
+  if (facing > 0) return BARK_FROM[0]
+  return CELL_W - BARK_FROM[0]
+}
+
 const barkLines = (pet: Pet, at: Placed, t: number): ReadonlyArray<ReadonlyArray<number>> => {
   const unit = at.w / CELL_W
-  const facing = pet.facing < 0 ? -1 : 1
-  const mouthX = facing > 0 ? BARK_FROM[0] : CELL_W - BARK_FROM[0]
+  const facing = facingSign(pet)
+  const mouthX = mouthXFor(facing)
   const x = at.left + mouthX * unit
   const y = at.top + BARK_FROM[1] * unit
   const near = (3 + t * 9) * unit
@@ -328,11 +361,88 @@ const barkLines = (pet: Pet, at: Placed, t: number): ReadonlyArray<ReadonlyArray
 interface Scene {
   readonly plan: Plan
   readonly draft: Draft
-  readonly pets: Pets | null
+  readonly pets: Option.Option<Pets>
   readonly view: View
   readonly lift: number
   readonly now: number
 }
+
+interface Counts {
+  readonly dots: number
+  readonly sprites: number
+  readonly barks: number
+}
+
+const NO_PETS: Counts = { dots: 0, sprites: 0, barks: 0 }
+
+const fillPrints = (gpu: Gpu, pets: Pets, view: View, now: number): number => {
+  let dots = 0
+  for (const pet of [pets.rain, pets.teddy]) {
+    const gold = flag(pet.name === 'teddy')
+    for (const print of pet.prints) {
+      for (const dot of pawDots(print, gold, now, view)) {
+        if (dots < MAX_DOTS) gpu.dotData.set(dot, dots++ * DOT_FLOATS)
+      }
+    }
+  }
+  return dots
+}
+
+const fillPets = (gpu: Gpu, plan: Plan, pets: Pets, view: View, now: number): Counts => {
+  const dots = fillPrints(gpu, pets, view, now)
+  let sprites = 0
+  let barks = 0
+  const placed = [pets.rain, pets.teddy]
+    .map(pet => ({ pet, at: place(pet, plan, view) }))
+    .sort((a, b) => b.at.depth - a.at.depth)
+  for (const { pet, at } of placed) {
+    if (sprites < MAX_SPRITES) gpu.spriteData.set(spriteFor(pet, at), sprites++ * SPRITE_FLOATS)
+    const bark = Option.filter(barkOf(pet, now), () => pet.name === 'teddy')
+    if (Option.isSome(bark)) {
+      for (const line of barkLines(pet, at, bark.value)) {
+        if (barks < MAX_BARKS) gpu.barkData.set(line, barks++ * WALL_FLOATS)
+      }
+    }
+  }
+  return { dots, sprites, barks }
+}
+
+const fillWalls = (gpu: Gpu, plan: Plan, draft: Draft): number => {
+  const walls = Math.min(plan.walls.length, MAX_WALLS)
+  plan.walls.slice(0, walls).forEach((w, i) =>
+    gpu.wallData.set(
+      [
+        w.from.x,
+        w.from.y,
+        w.to.x,
+        w.to.y,
+        w.width,
+        draft.sketch,
+        w.gold,
+        w.dash,
+        w.alpha,
+        w.rise,
+        w.base,
+        0,
+        w.lean.x,
+        w.lean.y,
+        0,
+        0,
+      ],
+      i * WALL_FLOATS,
+    ),
+  )
+  return walls
+}
+
+const fillRooms = (gpu: Gpu, plan: Plan, draft: Draft) =>
+  ROOM_ORDER.forEach((name, i) => {
+    const r = plan.rooms[name]
+    gpu.roomData.set(
+      [r.x, r.y, r.w, r.h, flag(name === 'locked'), Option.getOrElse(Arr.get(draft.rooms, i), () => 0), 0, 0],
+      i * ROOM_FLOATS,
+    )
+  })
 
 const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, lift, now }: Scene) =>
   Effect.sync(() => {
@@ -351,65 +461,12 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
     gpu.barkData.fill(0)
     gpu.dotData.fill(0)
     gpu.spriteData.fill(0)
-    const walls = Math.min(plan.walls.length, MAX_WALLS)
-    plan.walls.slice(0, walls).forEach((w, i) =>
-      gpu.wallData.set(
-        [
-          w.from.x,
-          w.from.y,
-          w.to.x,
-          w.to.y,
-          w.width,
-          draft.sketch,
-          w.gold,
-          w.dash,
-          w.alpha,
-          w.rise,
-          w.base,
-          0,
-          w.lean.x,
-          w.lean.y,
-          0,
-          0,
-        ],
-        i * WALL_FLOATS,
-      ),
-    )
-
-    ROOM_ORDER.forEach((name, i) => {
-      const r = plan.rooms[name]
-      gpu.roomData.set(
-        [r.x, r.y, r.w, r.h, name === 'locked' ? 1 : 0, draft.rooms[i] ?? 0, 0, 0],
-        i * ROOM_FLOATS,
-      )
+    const walls = fillWalls(gpu, plan, draft)
+    fillRooms(gpu, plan, draft)
+    const { dots, sprites, barks } = Option.match(pets, {
+      onNone: () => NO_PETS,
+      onSome: home => fillPets(gpu, plan, home, view, now),
     })
-
-    let dots = 0
-    let sprites = 0
-    let barks = 0
-    if (pets !== null) {
-      for (const pet of [pets.rain, pets.teddy]) {
-        const gold = pet.name === 'teddy' ? 1 : 0
-        for (const print of pet.prints) {
-          for (const dot of pawDots(print, gold, now, view)) {
-            if (dots < MAX_DOTS) gpu.dotData.set(dot, dots++ * DOT_FLOATS)
-          }
-        }
-      }
-      // Whoever is nearer the viewer is drawn over the other.
-      const placed = [pets.rain, pets.teddy]
-        .map(pet => ({ pet, at: place(pet, plan, view) }))
-        .sort((a, b) => b.at.depth - a.at.depth)
-      for (const { pet, at } of placed) {
-        if (sprites < MAX_SPRITES) gpu.spriteData.set(spriteFor(pet, at), sprites++ * SPRITE_FLOATS)
-        const bark = pet.name === 'teddy' ? barkOf(pet, now) : null
-        if (bark !== null) {
-          for (const line of barkLines(pet, at, bark)) {
-            if (barks < MAX_BARKS) gpu.barkData.set(line, barks++ * WALL_FLOATS)
-          }
-        }
-      }
-    }
     gpu.device.queue.writeBuffer(gpu.wallBuffer, 0, gpu.wallData)
     gpu.device.queue.writeBuffer(gpu.roomBuffer, 0, gpu.roomData)
     gpu.device.queue.writeBuffer(gpu.barkBuffer, 0, gpu.barkData)
@@ -443,8 +500,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
       pass.setBindGroup(0, stage.group)
       pass.draw(vertices, instances)
     }
-    // The floor and everything on it, then the pets, then the walls over
-    // them wherever a wall stands in front.
     if (lift > 0) draw(gpu.floor, 6, 1)
     draw(gpu.rooms, 6, MAX_ROOMS)
     draw(gpu.strokes, 6, walls)
@@ -457,26 +512,19 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, 
     gpu.device.queue.submit([encoder.finish()])
   })
 
-// ---------------------------------------------------------------------------
-// Input
-// ---------------------------------------------------------------------------
 
 type Input = Data.TaggedEnum<{
-  // The house came onto the screen, or left it.
   Shown: { readonly visible: boolean }
-  // The pointer moved on the house, or left it.
-  Pointed: { readonly pointer: Point | null }
-  // The layout changed, so every room is measured again.
+  Pointed: { readonly pointer: Option.Option<Point> }
   Moved: {}
 }>
 const Input = Data.taggedEnum<Input>()
 
-// A mouse over the house, or a finger on it, calls Teddy over.
 const pointed = (canvas: HTMLCanvasElement, house: HTMLElement): Stream.Stream<Input> => {
   const at = (event: PointerEvent): Input => {
     const origin = canvas.getBoundingClientRect()
     return Input.Pointed({
-      pointer: { x: event.clientX - origin.left, y: event.clientY - origin.top },
+      pointer: Option.some({ x: event.clientX - origin.left, y: event.clientY - origin.top }),
     })
   }
   return Stream.mergeAll(
@@ -488,21 +536,14 @@ const pointed = (canvas: HTMLCanvasElement, house: HTMLElement): Stream.Stream<I
         Stream.map(at),
       ),
       Stream.fromEventListener(house, 'pointerleave').pipe(
-        Stream.as(Input.Pointed({ pointer: null })),
+        Stream.as(Input.Pointed({ pointer: Option.none() })),
       ),
     ],
     { concurrency: 'unbounded' },
   )
 }
 
-// ---------------------------------------------------------------------------
-// The drawing
-// ---------------------------------------------------------------------------
 
-// Marks the house while the GPU draws it, so the CSS walls step aside and
-// the labels wait for the walls. Closing the scope hands both back to CSS,
-// and lays the plan flat again. A lost device hands the walls back too,
-// flat, so the plan still reads.
 const markHouse = (house: HTMLElement, plan: HTMLElement, device: GPUDevice) =>
   Effect.gen(function* () {
     yield* Effect.sync(() => {
@@ -521,100 +562,149 @@ const markHouse = (house: HTMLElement, plan: HTMLElement, device: GPUDevice) =>
     })
   })
 
-// Starts the drawing on `canvas`, which sits inside the house figure, and
-// returns once it's running. It follows `changes` and the page for as long
-// as `Scope` stays open, runs `played` each time Teddy starts playing, and
-// fails with GpuUnavailable when this browser can't run it.
+interface Frame {
+  readonly now: number
+  readonly still: boolean
+  readonly current: Plan
+}
+
+interface Lean {
+  readonly still: boolean
+  readonly lift: number
+  readonly at: Option.Option<Point>
+  readonly outline: Rect
+}
+
+const leaningOf = ({ still, lift, at, outline }: Lean): Tilt => {
+  if (still || lift < 1) return LEVEL
+  return tiltToward(at, outline)
+}
+
+const cssOf = (view: View, outline: Rect, lift: number): string => {
+  if (lift > 0) return cssTransform(view, { x: outline.x, y: outline.y })
+  return ''
+}
+
+const arrivePets = (current: Plan, now: number, still: boolean): Pets => {
+  if (still) return restingPets(current)
+  return initialPets(current, Math.floor(now))
+}
+
+interface Herd {
+  readonly home: Option.Option<Pets>
+  readonly floor: Option.Option<Point>
+  readonly lift: number
+}
+
+const herd = ({ now, still, current }: Frame, { home, floor, lift }: Herd): Option.Option<Pets> => {
+  if (lift < 1) return Option.none()
+  return Option.some(
+    Option.match(home, {
+      onNone: () => arrivePets(current, now, still),
+      onSome: pets => stepPets(pets, { now, plan: current, pointer: floor, still }),
+    }),
+  )
+}
+
+const startsPlaying = (moved: Option.Option<Pets>, home: Option.Option<Pets>): boolean =>
+  Option.exists(moved, pets => pets.teddy.alert) && !Option.exists(home, pets => pets.teddy.alert)
+
+const findPlan = (canvas: HTMLCanvasElement) =>
+  Option.flatMap(Option.fromNullishOr(canvas.parentElement), house =>
+    Option.map(Option.fromNullishOr(house.querySelector<HTMLElement>('[data-plan]')), planEl => ({
+      house,
+      planEl,
+    })),
+  )
+
 export const runHouseDrawing = (
   canvas: HTMLCanvasElement,
   initial: HouseSettings,
   changes: Stream.Stream<HouseSettings>,
   played: Effect.Effect<void>,
 ): Effect.Effect<void, GpuUnavailable, Scope.Scope> =>
+  Option.match(findPlan(canvas), {
+    onNone: () => Effect.void,
+    onSome: ({ house, planEl }) => drawHouse({ canvas, house, planEl, initial, changes, played }),
+  })
+
+interface Drawing {
+  readonly canvas: HTMLCanvasElement
+  readonly house: HTMLElement
+  readonly planEl: HTMLElement
+  readonly initial: HouseSettings
+  readonly changes: Stream.Stream<HouseSettings>
+  readonly played: Effect.Effect<void>
+}
+
+const drawHouse = ({ canvas, house, planEl, initial, changes, played }: Drawing) =>
   Effect.gen(function* () {
-    const house = canvas.parentElement
-    const planEl = house?.querySelector<HTMLElement>('[data-plan]') ?? null
-    if (house === null || planEl === null) return
     const gpu = yield* makeGpu(canvas)
 
     const settings = yield* Ref.make(initial)
     const plan = yield* Ref.make(measure(canvas, planEl))
-    // The pointer on the canvas, on the screen, or null.
-    const pointer = yield* Ref.make<Point | null>(null)
+    const pointer = yield* Ref.make<Option.Option<Point>>(Option.none())
     const visible = yield* Ref.make(true)
-    // When drafting started, or null until the house is first on screen.
-    const draftStart = yield* Ref.make<number | null>(null)
-    // Null until the pets move in.
-    const pets = yield* Ref.make<Pets | null>(null)
+    const draftStart = yield* Ref.make<Option.Option<number>>(Option.none())
+    const pets = yield* Ref.make<Option.Option<Pets>>(Option.none())
     const tilt = yield* Ref.make<Tilt>(LEVEL)
-    // The previous frame's time, or null at the start of a burst.
-    const last = yield* Ref.make<number | null>(null)
-    // The plan's CSS transform, as last set.
+    const last = yield* Ref.make<Option.Option<number>>(Option.none())
     const transform = yield* Ref.make('')
 
-    // Draws frames while anything moves, then returns.
+    const frame = Effect.fn('House.frame')(function* ({ now, still, current }: Frame) {
+      const { house: outline } = current.rooms
+      const started = yield* Ref.updateAndGet(draftStart, s => Option.orElse(s, () => Option.some(now)))
+      const start = Option.getOrElse(started, () => now)
+      const since = now - start
+      const done = drafted({ since, still })
+      const lift = liftOf({ since, still })
+      const before = yield* Ref.getAndSet(last, Option.some(now))
+      const dt = stepSince({ before, now })
+
+      const at = yield* Ref.get(pointer)
+      const leaning = leaningOf({ still, lift, at, outline })
+      const leaned = yield* Ref.updateAndGet(tilt, t =>
+        Bool.match(still, { onTrue: () => LEVEL, onFalse: () => followTilt(t, { to: leaning, dt }) }),
+      )
+      const view = viewOf(outline, { tilt: leaned, lift, fit: fitFor(outline) })
+
+      const css = cssOf(view, outline, lift)
+      if ((yield* Ref.getAndSet(transform, css)) !== css) {
+        yield* Effect.sync(() => {
+          planEl.style.transform = css
+        })
+      }
+      if (done) {
+        yield* Effect.sync(() => {
+          delete house.dataset['drafting']
+        })
+      }
+
+      const floor = Option.flatMap(at, p => unproject(view, p))
+      const home = yield* Ref.get(pets)
+      const moved = herd({ now, still, current }, { home, floor, lift })
+      yield* Ref.set(pets, moved)
+      if (startsPlaying(moved, home)) yield* played
+
+      yield* render(gpu, canvas, {
+        plan: current,
+        draft: draftOf({ since, still }),
+        pets: moved,
+        view,
+        lift,
+        now,
+      })
+      return lift
+    })
+
     const animate = Effect.gen(function* () {
-      yield* Ref.update(pets, p => (p === null ? p : wakePets(p)))
-      yield* Ref.set(last, null)
+      yield* Ref.update(pets, Option.map(wakePets))
+      yield* Ref.set(last, Option.none())
       while (true) {
         const now = yield* nextFrame
         const { still } = yield* Ref.get(settings)
         const current = yield* Ref.get(plan)
-        const { house: outline } = current.rooms
-        const start = (yield* Ref.updateAndGet(draftStart, s => s ?? now)) ?? now
-        const since = now - start
-        const done = drafted({ since, still })
-        const lift = liftOf({ since, still })
-        const before = yield* Ref.getAndSet(last, now)
-        const dt = stepBetween({ before, now })
-
-        // The house leans toward the pointer once it's up.
-        const at = yield* Ref.get(pointer)
-        const leaning = still || lift < 1 ? LEVEL : tiltToward(at, outline)
-        const leaned = yield* Ref.updateAndGet(tilt, t =>
-          still ? LEVEL : followTilt(t, { to: leaning, dt }),
-        )
-        const view = viewOf(outline, { tilt: leaned, lift, fit: fitFor(outline) })
-
-        // The room links ride the same view, so they stay on their floors.
-        const css = lift > 0 ? cssTransform(view, { x: outline.x, y: outline.y }) : ''
-        if ((yield* Ref.getAndSet(transform, css)) !== css) {
-          yield* Effect.sync(() => {
-            planEl.style.transform = css
-          })
-        }
-        if (done) {
-          yield* Effect.sync(() => {
-            delete house.dataset['drafting']
-          })
-        }
-
-        // The pets move in once the house is up, and chase the spot on the
-        // floor under the pointer.
-        const floor = at === null ? null : unproject(view, at)
-        const home = yield* Ref.get(pets)
-        const moved =
-          lift < 1
-            ? null
-            : home === null
-              ? still
-                ? restingPets(current)
-                : initialPets(current, Math.floor(now))
-              : stepPets(home, { now, plan: current, pointer: floor, still })
-        yield* Ref.set(pets, moved)
-        // Down into a play bow: someone's playing with Teddy.
-        if (moved !== null && moved.teddy.alert && !(home?.teddy.alert ?? false)) yield* played
-
-        yield* render(gpu, canvas, {
-          plan: current,
-          draft: draftOf({ since, still }),
-          pets: moved,
-          view,
-          lift,
-          now,
-        })
-
-        // Once it's up, a still house or one off screen can rest.
+        const lift = yield* frame({ now, still, current })
         if (lift >= 1 && (still || !(yield* Ref.get(visible)))) return
       }
     })
@@ -627,9 +717,8 @@ export const runHouseDrawing = (
           const before = yield* Ref.get(plan)
           const after = measure(canvas, planEl)
           yield* Ref.set(plan, after)
-          // The pointer's spot is stale once the rooms move.
-          yield* Ref.set(pointer, null)
-          yield* Ref.update(pets, p => (p === null ? p : movePets(p, { from: before, to: after })))
+          yield* Ref.set(pointer, Option.none())
+          yield* Ref.update(pets, Option.map(p => movePets(p, { from: before, to: after })))
         }),
     })
 
@@ -639,7 +728,6 @@ export const runHouseDrawing = (
         pointed(canvas, house),
         resizes([house, planEl]).pipe(Stream.as(Input.Moved())),
         Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Moved())),
-        // Web fonts landing can reflow every room.
         fontsReady.pipe(Stream.as(Input.Moved())),
       ],
       { concurrency: 'unbounded' },

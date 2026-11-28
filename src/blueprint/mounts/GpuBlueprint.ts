@@ -3,8 +3,6 @@ import { Data, Effect, Queue, Schema, Stream } from 'effect'
 
 import { runBlueprint } from '../webgpu/renderer.ts'
 
-// What the blueprint tells the page: once whether WebGPU started, then how
-// many pens are zombies while they run.
 export type BlueprintReport = Data.TaggedEnum<{
   Started: { readonly supported: boolean }
   Infected: { readonly count: number }

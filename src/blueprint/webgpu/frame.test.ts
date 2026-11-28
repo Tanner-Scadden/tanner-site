@@ -18,7 +18,6 @@ const pens: Settings = { flow: true, still: false }
 const frozenPens: Settings = { flow: true, still: true }
 const mouse: Pointer = { x: 200, y: 150, inside: true }
 
-// Steps 60fps frames until the state settles, or gives up.
 const run = (
   settings: Settings,
   pointer: Pointer,

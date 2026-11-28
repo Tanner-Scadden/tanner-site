@@ -29,7 +29,6 @@ export interface SiteSeed {
   readonly route: SiteRoute
 }
 
-// The snapshot the actors start in, so the first render matches them.
 export const initialSnapshot = ({
   found,
   reducedMotion,
@@ -44,8 +43,6 @@ export const initialSnapshot = ({
   toast: toastMachine.initial,
 })
 
-// Each actor's stream starts with its current state, so this emits a whole
-// snapshot at once and again on every write.
 export const siteSnapshots = Stream.unwrap(
   Effect.gen(function* () {
     const page = yield* Page

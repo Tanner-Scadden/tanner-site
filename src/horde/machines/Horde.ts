@@ -37,8 +37,6 @@ const hordeAt = (width: number): ReadonlyArray<Zombie> =>
   Arr.makeBy(HORDE_SIZE, n => ({
     id: n,
     x: width + n * ZOMBIE_GAP,
-    // A spread of speeds without randomness, so the horde shuffles a
-    // little out of step and every run looks the same.
     speed: 0.6 + ((n * 37) % 10) / 25,
   }))
 
@@ -55,7 +53,6 @@ export const hordeMachine = Machine.make({
   event: HordeEvent,
   initial: HordeState.Gone,
 })
-  // The code again while a horde is out sends a fresh one.
   .on(
     [HordeState.Gone, HordeState.Marching],
     HordeEvent.Summoned,
@@ -99,7 +96,11 @@ export const hordeMachine = Machine.make({
   )
 
 export const zombiesOf = (state: HordeState): ReadonlyArray<Zombie> =>
-  state._tag === 'Marching' ? state.zombies : []
+  HordeState.$match(state, {
+    Gone: () => [],
+    Arriving: () => [],
+    Marching: ({ zombies }) => zombies,
+  })
 
 export class Horde extends Context.Service<
   Horde,

@@ -116,7 +116,7 @@ time. The figure still tells its own story; the button adds to it.
   run takes, so the buffers still hold. Once a run has `max`, the button
   is disabled and a click on the drawing changes nothing.
 - The kit records each press as the clock time it happened, and passes
-  them all, in order, as the last argument to `shapesAt(time, width,
+  them all, in order, as the last argument to `marksAt(time, width,
   height, pointer, interactions)`. Show only the ones up to `time`, so
   scrubbing back shows the world without them. Restart, a new variant and
   the next seed clear them.
@@ -130,7 +130,7 @@ time. The figure still tells its own story; the button adds to it.
   so the scene picks a sensible target.
 - Pressing while paused applies at the paused time and plays on. Past the
   end, it goes in at the end, and the hold waits `settle` seconds for it
-  to play out before the next run. Keep `shapesAt` answering past `end`,
+  to play out before the next run. Keep `marksAt` answering past `end`,
   so a late press can play out. Under reduced motion the figure stays
   still: the press goes in `settle` seconds before the still frame, which
   repaints with it done.

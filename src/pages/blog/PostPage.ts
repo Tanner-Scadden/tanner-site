@@ -19,10 +19,11 @@ import { BlogBar } from './BlogPage.ts'
 export const PostPage = <M>(h: Html.H<M>, post: Post) => {
   const sheetNo = sheetOf(post)
   const { newer, older } = neighboursOf(post)
+  const hero = Option.fromNullishOr(post.hero)
   return sx(h.main, sheet.sheet).children(
     BlogBar(h, `SHEET ${sheetNo}`),
     h.article(
-      sx(h.header, sheet.hero, post.hero !== undefined && styles.withHero).children(
+      sx(h.header, sheet.hero, Option.isSome(hero) && styles.withHero).children(
         h.div(
           sx(h.p, styles.when).children(
             h.time.attr('datetime', post.date).children(formatDate(post.date)),
@@ -31,7 +32,7 @@ export const PostPage = <M>(h: Html.H<M>, post: Post) => {
           sx(h.h1, styles.title).children(post.title),
           sx(h.p, styles.dek).children(post.summary),
         ),
-        post.hero !== undefined && h.div(...post.hero(h)),
+        ...Option.match(hero, { onNone: () => [], onSome: drawing => [h.div(...drawing(h))] }),
       ),
       sx(h.div, styles.prose).children(...post.body(proseTags(h))),
       sx(h.p, styles.source).children(
@@ -63,8 +64,6 @@ const Pager = <M>(h: Html.H<M>, label: string, post: Option.Option<Post>, older:
   })
 
 const styles = stylex.create({
-  // The title on one side and its drawing on the other, stacked on a
-  // phone, like the home page's hello and house.
   withHero: {
     display: 'grid',
     gridTemplateColumns: { default: 'minmax(0, 1fr) minmax(0, 1fr)', [media.narrow]: '1fr' },
@@ -88,8 +87,6 @@ const styles = stylex.create({
     textWrap: 'balance',
   },
   dek: { marginTop: 18, maxWidth: 640, fontSize: 16, color: blueprint.dim },
-  // The body, in the sheet's own mono type. Prose.ts styles the tags
-  // inside, and reads the type size and the gap between blocks from here.
   prose: {
     [flow.size]: '15px',
     [flow.gap]: '1.1em',
@@ -102,9 +99,8 @@ const styles = stylex.create({
     lineHeight: 1.8,
     color: blueprint.line,
   },
-  // The way into the post's source, after the body: the encore.
   source: {
-    display: { default: null, [media.print]: 'none' },
+    display: { [media.print]: 'none' },
     paddingBottom: { default: 28, [media.narrowScreen]: 22 },
     paddingInline: { default: 40, [media.narrowScreen]: 20 },
     fontSize: 12,
@@ -139,9 +135,9 @@ const styles = stylex.create({
     alignSelf: 'stretch',
     display: 'grid',
     placeItems: 'center',
-    gridColumnStart: { default: null, [media.narrow]: 1 },
-    gridColumnEnd: { default: null, [media.narrow]: -1 },
-    gridRow: { default: null, [media.narrow]: 1 },
+    gridColumnStart: { [media.narrow]: 1 },
+    gridColumnEnd: { [media.narrow]: -1 },
+    gridRow: { [media.narrow]: 1 },
   },
   older: { textAlign: 'right' },
   pagerLabel: { display: 'block', fontSize: 10, letterSpacing: '.16em', color: blueprint.dim },

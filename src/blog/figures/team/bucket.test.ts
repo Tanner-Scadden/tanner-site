@@ -15,18 +15,41 @@ import {
   peakAt,
   withKicks,
 } from './bucket.ts'
-import { MAX_DOTS, MAX_LINES, shapesOf } from './shapes.ts'
+import { MAX_DOTS, MAX_LINES, marksOf } from './marks.ts'
 
 const SEEDS = Arr.range(1, 12)
 const moments = (from: number, to: number) => Arr.map(Arr.range(0, Math.round((to - from) / 0.1)), k => from + k * 0.1)
 
-// Every point a frame draws, in world units, should stay in the box.
 const pointsOf = (frame: ReturnType<typeof frameAt>) => [
   ...Arr.map(frame.people, p => [p.x, p.y] as const),
   ...Arr.flatMap(frame.drops, d => [[d.x, d.y] as const, d.tail]),
   ...Arr.map(frame.beads, b => [b.x, b.y] as const),
   ...Arr.flatMap(frame.puddles, p => [[p.from, 0] as const, [p.to, 0] as const]),
 ]
+
+const unit = (c: number) => c >= 0 && c <= 1
+
+const offBounds = (frame: ReturnType<typeof frameAt>, t: number): ReadonlyArray<string> =>
+  Arr.flatMap(pointsOf(frame), ([x, y]) => {
+    if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) return [`point ${x},${y} at ${t}`]
+    return []
+  })
+
+const badMarks = (marks: ReturnType<typeof marksOf>, w: number, h: number, t: number): ReadonlyArray<string> => {
+  const misses: Array<string> = []
+  if (marks.lines.length > MAX_LINES) misses.push(`${marks.lines.length} lines at ${t}`)
+  if (marks.dots.length > MAX_DOTS) misses.push(`${marks.dots.length} dots at ${t}`)
+  for (const dot of marks.dots) {
+    const on = dot.x >= 0 && dot.x <= w && dot.y >= 0 && dot.y <= h
+    if (!on || !Arr.every(dot.color, unit)) misses.push(`dot at ${t}`)
+  }
+  for (const line of marks.lines) {
+    if (!Arr.every(line.color, unit) || !Arr.every([...line.from, ...line.to], v => Number.isFinite(v))) {
+      misses.push(`line at ${t}`)
+    }
+  }
+  return misses
+}
 
 describe('team bucket', () => {
   it('replays the same run from the same seed', () => {
@@ -48,30 +71,15 @@ describe('team bucket', () => {
   it('stays inside its bounds and its buffer sizes', () => {
     for (const seed of SEEDS) {
       const timeline = withKicks(buildTimeline(seed), [3, 4.2, 6, 10.5, 12, 13])
-      // Checked by hand and gathered, since asserting every point is slow.
       const misses: Array<string> = []
-      const unit = (c: number) => c >= 0 && c <= 1
       for (const t of moments(0, timeline.end + 1)) {
         const frame = frameAt(timeline, t)
-        for (const [x, y] of pointsOf(frame)) {
-          if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) misses.push(`point ${x},${y} at ${t}`)
-        }
+        misses.push(...offBounds(frame, t))
         for (const [w, h] of [
           [800, 450],
           [314, 177],
         ] as const) {
-          const shapes = shapesOf(frame, w, h, Option.some([w / 2, h * 0.15]))
-          if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
-          if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
-          for (const dot of shapes.dots) {
-            const on = dot.x >= 0 && dot.x <= w && dot.y >= 0 && dot.y <= h
-            if (!on || !Arr.every(dot.color, unit)) misses.push(`dot at ${t}`)
-          }
-          for (const line of shapes.lines) {
-            if (!Arr.every(line.color, unit) || !Arr.every([...line.from, ...line.to], v => Number.isFinite(v))) {
-              misses.push(`line at ${t}`)
-            }
-          }
+          misses.push(...badMarks(marksOf(frame, w, h, Option.some([w / 2, h * 0.15])), w, h, t))
         }
       }
       assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
@@ -84,7 +92,6 @@ describe('team bucket', () => {
       const fill = Arr.map(moments(0, KICK_AT), t => fillAt(timeline, t))
       const steps = Arr.map(Arr.zip(fill, Arr.drop(fill, 1)), ([a, b]) => b - a)
       assert.isTrue(Arr.every(steps, step => step >= -1e-9), `seed ${seed}`)
-      // Never more than one drop's water in a tenth of a second.
       assert.isAtMost(Math.max(...steps), 1 + 1e-9, `seed ${seed}`)
       assert.isAtLeast(fillAt(timeline, KICK_AT), 12, `seed ${seed}`)
     }
@@ -98,9 +105,7 @@ describe('team bucket', () => {
       const lost = 1 - after / before
       assert.isAtLeast(lost, 0.4, `seed ${seed}`)
       assert.isAtMost(lost, 0.6, `seed ${seed}`)
-      // Most of it's gone within about half a second.
       assert.isBelow(fillAt(timeline, KICK_AT + 0.6), before * (1 - KICK_SHARE * 0.9), `seed ${seed}`)
-      // It lurches, then stands again well before the end.
       assert.isAbove(frameAt(timeline, KICK_AT + 0.25).angle, 0.3, `seed ${seed}`)
       assert.strictEqual(frameAt(timeline, KICK_AT + 2.5).angle, 0, `seed ${seed}`)
     }
@@ -114,8 +119,6 @@ describe('team bucket', () => {
       assert.isAbove(end, peak * 0.35, `seed ${seed}`)
       assert.isBelow(end, peak * 0.7, `seed ${seed}`)
       assert.strictEqual(frameAt(timeline, timeline.end).angle, 0, `seed ${seed}`)
-      // The drops after the kick are few and far between, and none from
-      // whoever kicked.
       const after = Arr.filter(dropsOf(timeline), drop => drop.start > KICK_AT)
       assert.isAtMost(after.length, 3, `seed ${seed}`)
       assert.isTrue(
@@ -129,12 +132,10 @@ describe('team bucket', () => {
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
       const last = Math.max(...Arr.map(dropsOf(timeline), drop => drop.lands))
-      // The last drop lands a good while before the end.
       assert.isAtLeast(timeline.end - last, 1.5, `seed ${seed}`)
       assert.isAtMost(timeline.end - last, 2.5, `seed ${seed}`)
-      // And for its last moments, nothing moves.
       const drawn = (t: number) => {
-        const { lines, dots } = shapesOf(frameAt(timeline, t), 800, 450)
+        const { lines, dots } = marksOf(frameAt(timeline, t), 800, 450)
         return [
           ...Arr.flatMap(lines, l => [...l.from, ...l.to, l.width, ...l.color]),
           ...Arr.flatMap(dots, d => [d.x, d.y, d.radius, d.glow, d.ring, ...d.color]),
@@ -156,17 +157,14 @@ describe('team bucket', () => {
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
       const frame = frameAt(timeline, timeline.end)
-      // Some water, still, and a mark of what it held.
       assert.isAbove(frame.water.amount, 4, `seed ${seed}`)
       assert.strictEqual(frame.water.ripples.length, 0, `seed ${seed}`)
       assert.isBelow(Math.abs(frame.water.slope), 1e-6, `seed ${seed}`)
       assert.isAbove(frame.peak - frame.water.amount, 4, `seed ${seed}`)
-      // The spill on the floor, and nothing in the air.
       assert.isAtLeast(frame.beads.length, 10, `seed ${seed}`)
       assert.isTrue(Arr.every(frame.beads, bead => !bead.flying), `seed ${seed}`)
       assert.isAbove(Math.abs(frame.puddles[0]!.to - frame.puddles[0]!.from), 0.3, `seed ${seed}`)
       assert.strictEqual(frame.drops.length, 0, `seed ${seed}`)
-      // Whoever kicked, still marked.
       assert.isAbove(frame.people[timeline.kicker]!.heat, 0.5, `seed ${seed}`)
     }
   })
@@ -176,7 +174,6 @@ describe('team bucket', () => {
       const timeline = withKicks(buildTimeline(seed), [4])
       const settled = frameAt(timeline, 4 + KICK_SETTLE)
       assert.strictEqual(settled.angle, 0, `seed ${seed}`)
-      // Only the drops still move the water, as they would with no kick.
       const unkicked = frameAt(buildTimeline(seed), 4 + KICK_SETTLE)
       assert.approximately(settled.water.slope, unkicked.water.slope, 1e-9, `seed ${seed}`)
       assert.isTrue(
@@ -190,14 +187,12 @@ describe('team bucket', () => {
     const timeline = buildTimeline(3)
     const shaken = withKicks(timeline, [5])
     assert.strictEqual(kicksOf(shaken).length, 2)
-    // A bad moment spills its share of what's there, and it builds again.
     const lost = fillAt(timeline, 6) - fillAt(shaken, 6)
     assert.approximately(lost, fillAt(timeline, 5) * 0.5, 1)
     assert.isBelow(fillAt(shaken, KICK_AT), fillAt(timeline, KICK_AT))
     assert.isAbove(frameAt(shaken, 5.25).angle, 0.2)
     const third = withKicks(timeline, [5], 0.3)
     assert.approximately(fillAt(timeline, 6) - fillAt(third, 6), fillAt(timeline, 5) * 0.3, 1)
-    // And never more than the run can draw.
     assert.strictEqual(kicksOf(withKicks(timeline, Arr.range(1, 20))).length, MAX_KICKS)
   })
 })

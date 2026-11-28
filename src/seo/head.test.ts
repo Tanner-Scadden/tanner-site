@@ -21,8 +21,15 @@ const all = (html: string, re: RegExp): ReadonlyArray<string> =>
 const metaOf = (html: string, key: string): ReadonlyArray<string> =>
   all(html, new RegExp(`<meta ${key} content="([^"]*)" />`, 'g'))
 
-const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)))
-const jsonLdOf = (html: string): Record<string, unknown> =>
+const JsonLd = Schema.Struct({
+  '@type': Schema.optional(Schema.String),
+  headline: Schema.optional(Schema.String),
+  datePublished: Schema.optional(Schema.String),
+  image: Schema.optional(Schema.String),
+  blogPost: Schema.optional(Schema.Array(Schema.Json)),
+})
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(JsonLd))
+const jsonLdOf = (html: string): typeof JsonLd.Type =>
   Option.getOrElse(decodeJson(all(html, /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)[0]), () => ({}))
 
 const count = (html: string, re: RegExp): number => Arr.length(Arr.fromIterable(Str.matchAll(re)(html)))
@@ -61,12 +68,12 @@ describe('withHead', () => {
   it('shares a post with its own card and alt text, where it has one', () => {
     const real = PUBLISHED[0]!
     assert.isDefined(real.image)
-    const url = `${SITE}${real.image!.path}`
+    const url = `${SITE}${real.image.path}`
     assert.deepStrictEqual(metaOf(page, 'property="og:image"'), [url])
     assert.deepStrictEqual(metaOf(page, 'name="twitter:image"'), [url])
-    assert.deepStrictEqual(metaOf(page, 'property="og:image:alt"'), [real.image!.alt])
-    assert.deepStrictEqual(metaOf(page, 'name="twitter:image:alt"'), [real.image!.alt])
-    assert.strictEqual(jsonLdOf(page)['image'], url)
+    assert.deepStrictEqual(metaOf(page, 'property="og:image:alt"'), [real.image.alt])
+    assert.deepStrictEqual(metaOf(page, 'name="twitter:image:alt"'), [real.image.alt])
+    assert.strictEqual(jsonLdOf(page).image, url)
   })
 
   it('keeps the site card and its alt text for a post without one, and for /blog', () => {
@@ -83,7 +90,7 @@ describe('withHead', () => {
     const images = [
       ...metaOf(INDEX, 'property="og:image"'),
       ...metaOf(INDEX, 'name="twitter:image"'),
-      jsonLdOf(INDEX)['image'] as string,
+      Option.getOrElse(Option.fromNullishOr(jsonLdOf(INDEX).image), () => ''),
     ]
     assert.lengthOf(Arr.dedupe(images), 1)
     assert.include(files, Str.slice(SITE.length)(images[0]!))
@@ -92,8 +99,8 @@ describe('withHead', () => {
   it('describes it as a BlogPosting', () => {
     const ld = jsonLdOf(page)
     assert.strictEqual(ld['@type'], 'BlogPosting')
-    assert.strictEqual(ld['headline'], PUBLISHED[0]!.title)
-    assert.strictEqual(ld['datePublished'], PUBLISHED[0]!.date)
+    assert.strictEqual(ld.headline, PUBLISHED[0]!.title)
+    assert.strictEqual(ld.datePublished, PUBLISHED[0]!.date)
   })
 
   it('makes /blog a Blog listing its posts, and no article', () => {
@@ -102,7 +109,7 @@ describe('withHead', () => {
     assert.deepStrictEqual(metaOf(html, 'property="article:published_time"'), [])
     const ld = jsonLdOf(html)
     assert.strictEqual(ld['@type'], 'Blog')
-    assert.lengthOf(ld['blogPost'] as ReadonlyArray<unknown>, PUBLISHED.length)
+    assert.lengthOf(Option.getOrElse(Option.fromNullishOr(ld.blogPost), () => []), PUBLISHED.length)
   })
 
   it('keeps everything else in index.html, like the app script', () => {

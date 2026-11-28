@@ -19,7 +19,7 @@ const styles = stylex.create({
     pointerEvents: 'none',
     zIndex: 15,
     overflow: 'hidden',
-    display: { default: null, [media.print]: 'none' },
+    display: { [media.print]: 'none' },
   },
   zombie: (x: number) => ({
     position: 'absolute',
@@ -33,7 +33,6 @@ const styles = stylex.create({
   }),
 })
 
-// The marching horde, each zombie a button that reports its munch.
 export const Zombies = <M>(
   h: Html.H<M>,
   zombies: ReadonlyArray<Zombie>,

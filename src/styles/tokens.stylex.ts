@@ -1,15 +1,11 @@
 import * as stylex from '@stylexjs/stylex'
 
-// Each page's paper. The head reads these too, for the browser's
-// theme-color, so they're constants rather than variables.
 export const paper = stylex.defineConsts({
   blueprint: '#0f3b78',
   manor: '#141022',
   rest: '#07090d',
 })
 
-// The blueprint: pale ink on blue paper. Printing turns it into black on
-// white, so the page prints as a plain resume.
 export const blueprint = stylex.defineVars({
   paper: { default: '#0f3b78', '@media print': '#fff' },
   line: { default: 'rgba(220, 235, 255, 0.9)', '@media print': '#111' },
@@ -17,11 +13,8 @@ export const blueprint = stylex.defineVars({
   faint: { default: 'rgba(200, 222, 255, 0.14)', '@media print': '#ddd' },
   grid: 'rgba(200, 222, 255, 0.05)',
   hi: { default: '#ffd166', '@media print': '#111' },
-  // The gold at half strength, for a button's border.
   hiSoft: 'rgba(255, 209, 102, 0.5)',
-  // The gold, washed over a hovered room.
   wash: 'rgba(255, 209, 102, 0.06)',
-  // The heavy rules between sections, lighter on paper.
   rule: { default: 'rgba(220, 235, 255, 0.9)', '@media print': '#bbb' },
   shadow: 'rgba(0, 0, 0, 0.35)',
   focus: '#fff',
@@ -35,7 +28,6 @@ export const fonts = stylex.defineConsts({
   sans: 'Inter, system-ui, sans-serif',
 })
 
-// Archivo's widths: the display type is set wide.
 export const widths = stylex.defineConsts({
   normal: '100%',
   slight: '108%',
@@ -44,10 +36,6 @@ export const widths = stylex.defineConsts({
   widest: '125%',
 })
 
-// What a blog post draws on the sheet beyond its prose: inline code's tint,
-// the code listings (their paper, brighter ink, rules, grid and the copy
-// button's states), and an animation's alarm red. Printing turns the
-// listings into black on white too.
 export const post = stylex.defineVars({
   ink: { default: '#e9f1ff', '@media print': '#111' },
   inkDim: { default: 'rgba(220, 235, 255, 0.72)', '@media print': '#555' },
@@ -57,11 +45,9 @@ export const post = stylex.defineVars({
   codeGrid: { default: 'rgba(200, 222, 255, 0.06)', '@media print': 'transparent' },
   copied: '#9be3b0',
   failed: '#ff8a80',
-  // Harm, in a blog animation.
   alarm: '#ff6b61',
 })
 
-// Shiki's token colors, for the code listings.
 export const syntax = stylex.defineConsts({
   comment: 'rgba(200, 222, 255, 0.5)',
   keyword: '#ffd166',
@@ -80,7 +66,6 @@ export const media = stylex.defineConsts({
   print: '@media print',
 })
 
-// The Manor: Munch Manor's palette.
 export const manor = stylex.defineConsts({
   night: '#141022',
   ink: '#1c1426',
@@ -94,13 +79,10 @@ export const manor = stylex.defineConsts({
   purple: '#8a5bd6',
   red: '#e8443a',
   wood: '#c98a2b',
-  // The rooms, while the Manor is broken.
   broken: '#2a0d14',
   shadow: '#000',
 })
 
-// Munch Manor's arcade screen: the Workshop board, and the outbreak HUD
-// that drops over the front page.
 export const arcade = stylex.defineConsts({
   screen: '#140c10',
   text: '#f4f1de',
@@ -119,7 +101,6 @@ export const arcade = stylex.defineConsts({
   scanline: 'rgba(0, 0, 0, 0.16)',
 })
 
-// Rest: the playing days, a dark esports broadcast.
 export const rest = stylex.defineConsts({
   night: '#07090d',
   text: '#e8edf5',

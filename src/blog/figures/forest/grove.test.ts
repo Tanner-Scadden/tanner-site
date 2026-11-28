@@ -1,5 +1,5 @@
 import { assert, describe, it } from '@effect/vitest'
-import { Array as Arr, Option } from 'effect'
+import { Array as Arr, Clock, Effect, Option } from 'effect'
 
 import {
   BOUNDS,
@@ -16,13 +16,11 @@ import {
   plantedIn,
 } from './grove.ts'
 import { ROOT_PIECES } from './roots.ts'
-import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
+import { MAX_DOTS, MAX_LINES, projection, marksOf } from './marks.ts'
 
 const SEEDS = Arr.range(1, 12)
 const STEP = 0.1
 
-// Every 0.1s of a run, and a little past its end. The forest plays once,
-// so it rests on its last frame rather than holding and fading.
 const momentsOf = (end: number) => Arr.makeBy(Math.ceil((end + 1) / STEP) + 1, k => k * STEP)
 
 const branchLength = (frame: ReturnType<typeof frameAt>, tree: number) =>
@@ -30,6 +28,51 @@ const branchLength = (frame: ReturnType<typeof frameAt>, tree: number) =>
     Arr.filter(frame.branches, branch => branch.tree === tree),
     0,
     (sum, { from, to }) => sum + Math.hypot(to[0] - from[0], to[1] - from[1]),
+  )
+
+type Frame = ReturnType<typeof frameAt>
+type Xy = readonly [number, number]
+
+const offSheet = (points: ReadonlyArray<Xy>, t: number): ReadonlyArray<string> =>
+  Arr.flatMap(points, ([x, y]) => {
+    if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) return [`point ${x},${y} at ${t}`]
+    return []
+  })
+
+const overBuffers = (marks: ReturnType<typeof marksOf>, t: number): ReadonlyArray<string> => [
+  ...Arr.filter([`${marks.lines.length} lines at ${t}`], () => marks.lines.length > MAX_LINES),
+  ...Arr.filter([`${marks.dots.length} dots at ${t}`], () => marks.dots.length > MAX_DOTS),
+]
+
+const shrunk = (before: Frame, now: Frame, t: number): ReadonlyArray<string> =>
+  Arr.flatMap(before.trees, tree => {
+    const after = Arr.findFirst(now.trees, other => other.id === tree.id)
+    return [
+      ...Arr.filter([`tree ${tree.id} at ${t}`], () => Option.isNone(after) || after.value.grown < tree.grown),
+      ...Arr.filter(
+        [`branches ${tree.id} at ${t}`],
+        () => branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id),
+      ),
+    ]
+  })
+
+const leavesOf = (frame: Frame, tree: number) =>
+  Arr.reduce(
+    Arr.filter(frame.leaves, leaf => leaf.tree === tree),
+    0,
+    (sum, leaf) => sum + leaf.size,
+  )
+
+const wilted = (before: Frame, now: Frame, t: number): ReadonlyArray<string> =>
+  Arr.flatMap(before.trees, tree =>
+    Arr.filter([`leaves ${tree.id} at ${t}`], () => leavesOf(now, tree.id) + 1e-9 < leavesOf(before, tree.id)),
+  )
+
+const goldOf = (frame: Frame) =>
+  Arr.reduce(
+    Arr.filter(frame.branches, b => b.root),
+    0,
+    (sum, b) => sum + b.bond,
   )
 
 describe('grove timeline', () => {
@@ -63,29 +106,24 @@ describe('grove timeline', () => {
     }
   })
 
-  // One test per seed, so each sweep has its own time limit.
   it.each(SEEDS)('stays on the sheet and inside its buffers at every 0.1s, seed %i', seed => {
     const timeline = buildTimeline(seed)
-    // Checked by hand and gathered, since asserting every point is slow.
     const misses: Array<string> = []
     for (const t of momentsOf(timeline.end)) {
       const frame = frameAt(timeline, t)
-      const points = [
+      const points: ReadonlyArray<Xy> = [
         ...Arr.flatMap(frame.branches, branch => [branch.from, branch.to]),
-        ...Arr.map(frame.leaves, leaf => [leaf.x, leaf.y] as const),
-        ...Arr.flatMap(frame.seeds, s => [[s.x, s.y] as const, s.tail]),
+        ...Arr.map(frame.leaves, (leaf): Xy => [leaf.x, leaf.y]),
+        ...Arr.flatMap(frame.seeds, (s): ReadonlyArray<Xy> => [[s.x, s.y], s.tail]),
       ]
-      for (const [x, y] of points) {
-        if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) misses.push(`point ${x},${y} at ${t}`)
-      }
+      misses.push(...offSheet(points, t))
       for (const [width, height] of [
         [800, 450],
         [358, 201],
       ] as const) {
-        const shapes = shapesOf(frame, width, height, Option.some([width / 2, height * 0.6]))
-        if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
-        if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
-        for (const dot of shapes.dots) {
+        const marks = marksOf(frame, width, height, Option.some([width / 2, height * 0.6]))
+        misses.push(...overBuffers(marks, t))
+        for (const dot of marks.dots) {
           const on = dot.x >= 0 && dot.x <= width && dot.y >= 0 && dot.y <= height
           if (!on || !Number.isFinite(dot.radius) || dot.radius < 0) misses.push(`dot at ${t}`)
         }
@@ -102,20 +140,7 @@ describe('grove timeline', () => {
       const now = frameAt(timeline, t)
       if (now.ground < before.ground) misses.push(`ground at ${t}`)
       if (now.trees.length < before.trees.length) misses.push(`trees at ${t}`)
-      for (const tree of before.trees) {
-        const after = Arr.findFirst(now.trees, other => other.id === tree.id)
-        if (Option.isNone(after) || after.value.grown < tree.grown) misses.push(`tree ${tree.id} at ${t}`)
-        if (branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id)) {
-          misses.push(`branches ${tree.id} at ${t}`)
-        }
-        const leavesOf = (frame: typeof now) =>
-          Arr.reduce(
-            Arr.filter(frame.leaves, leaf => leaf.tree === tree.id),
-            0,
-            (sum, leaf) => sum + leaf.size,
-          )
-        if (leavesOf(now) + 1e-9 < leavesOf(before)) misses.push(`leaves ${tree.id} at ${t}`)
-      }
+      misses.push(...shrunk(before, now, t), ...wilted(before, now, t))
       before = now
     }
     assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
@@ -129,10 +154,8 @@ describe('grove timeline', () => {
         assert.isAtMost(source.sprout + source.grow, flight.release, `seed ${seed}`)
         assert.isAtMost(source.leaves[flight.leaf]!.born, flight.release, `seed ${seed}`)
       }
-      // No leaf lets two seeds go.
       const leaves = Arr.map(flights.slice(1), flight => `${flight.tree}:${flight.leaf}`)
       assert.strictEqual(new Set(leaves).size, leaves.length)
-      // Each lands where its tree stands.
       for (const [k, flight] of flights.entries()) {
         assert.strictEqual(flight.to[0], trees[k]!.x)
         assert.strictEqual(flight.to[1], GROUND)
@@ -141,14 +164,17 @@ describe('grove timeline', () => {
     }
   })
 
-  it('builds quickly', () => {
-    for (const seed of SEEDS) {
-      const start = performance.now()
-      const timeline = buildTimeline(seed)
-      for (let t = 0; t < 30; t += 1) frameAt(timeline, t)
-      assert.isBelow(performance.now() - start, 100, `seed ${seed}`)
-    }
-  })
+  it.live('builds quickly', () =>
+    Effect.gen(function* () {
+      for (const seed of SEEDS) {
+        const start = yield* Clock.currentTimeNanos
+        const timeline = buildTimeline(seed)
+        for (let t = 0; t < 30; t += 1) frameAt(timeline, t)
+        const end = yield* Clock.currentTimeNanos
+        assert.isBelow(Number(end - start) / 1e6, 100, `seed ${seed}`)
+      }
+    }),
+  )
 })
 
 describe('grove frames', () => {
@@ -190,10 +216,8 @@ describe('grove frames', () => {
     assert.isTrue(Arr.every(last.trees, tree => tree.grown === 1))
     assert.deepStrictEqual(last.seeds, [])
     assert.deepStrictEqual(last.rings, [])
-    // Underground, nothing changes after the end: roots and ties are done.
     const under = (time: number) => Arr.filter(frameAt(timeline, time).branches, branch => branch.root)
     assert.deepStrictEqual(under(timeline.end), under(timeline.end + 10))
-    // The grove spans the sheet.
     const left = Arr.reduce(last.trees, 0, (m, tree) => Math.min(m, tree.left))
     const right = Arr.reduce(last.trees, 0, (m, tree) => Math.max(m, tree.right))
     assert.isBelow(left, -1.3)
@@ -202,14 +226,14 @@ describe('grove frames', () => {
 
   it('picks out the tree the pointer is over', () => {
     const frame = frameAt(timeline, timeline.end)
-    const plain = shapesOf(frame, 800, 450)
+    const plain = marksOf(frame, 800, 450)
     const { px } = projection(800, 450)
     const first = frame.trees[0]!
     const [x, y] = px([first.x, (first.top + GROUND) / 2])
-    const picked = shapesOf(frame, 800, 450, Option.some([x, y]))
+    const picked = marksOf(frame, 800, 450, Option.some([x, y]))
     assert.strictEqual(picked.lines.length, plain.lines.length)
     assert.isTrue(Arr.some(picked.dots, (dot, i) => dot.glow > plain.dots[i]!.glow))
-    assert.deepStrictEqual(shapesOf(frame, 800, 450, Option.some([-100, -100])), plain)
+    assert.deepStrictEqual(marksOf(frame, 800, 450, Option.some([-100, -100])), plain)
   })
 
   it('grows roots the whole way, and knots neighbours together underground', () => {
@@ -225,7 +249,6 @@ describe('grove frames', () => {
       assert.isAtLeast(length, last - 1e-9, `at ${t}`)
       last = length
     }
-    // Roots are still lengthening after the first tree's crown is done.
     const first = timeline.trees[0]!
     assert.isAbove(rootLength(first.sprout + first.grow + 3), rootLength(first.sprout + first.grow))
     const end = frameAt(timeline, timeline.end).branches
@@ -238,7 +261,6 @@ describe('grove frames', () => {
       const { trees, end } = buildTimeline(seed)
       const frame = frameAt({ ...buildTimeline(seed), end }, end)
       for (const [id, tree] of trees.entries()) {
-        // Only its own roots: reaching roots are drawn at a fixed depth.
         const own = Arr.filter(frame.branches, b => b.root && b.tree === id && b.bond === 0)
         if (own.length === 0) continue
         const tips = Arr.map(own, b => b.to)
@@ -246,26 +268,21 @@ describe('grove frames', () => {
         const span = Arr.reduce(tips, 0, (m, [x]) => Math.max(m, x)) - Arr.reduce(tips, 0, (m, [x]) => Math.min(m, x))
         const mature = end - tree.sprout > 8
         if (mature) {
-          // The deepest root goes down at least about as far as the tree's
-          // crown is wide in its trunk, and the laterals spread wider.
           assert.isAbove(depth, 0.32 * tree.scale, `seed ${seed} tree ${id} depth`)
           assert.isAbove(span, 0.7 * tree.scale, `seed ${seed} tree ${id} span`)
         }
-        // Their tips point all across the downward fan, not a few ways.
         const angles = Arr.map(tree.roots.pieces, p => Math.atan2(p.to[1] - GROUND, p.to[0] - tree.x))
         const spread = Math.max(...angles) - Math.min(...angles)
         assert.isAbove(spread, 1.6, `seed ${seed} tree ${id} spread`)
-        // And they fork, more than once over.
         assert.isTrue(Arr.some(tree.roots.pieces, p => p.order >= 2), `seed ${seed} tree ${id} forks`)
       }
-      // No two trees' roots are the same shape.
-      const shapes = Arr.map(trees, tree =>
+      const marks = Arr.map(trees, tree =>
         Arr.join(
           Arr.map(tree.roots.pieces, p => `${(p.to[0] - tree.x).toFixed(4)},${p.to[1].toFixed(4)}`),
           ';',
         ),
       )
-      assert.strictEqual(new Set(shapes).size, shapes.length, `seed ${seed}`)
+      assert.strictEqual(new Set(marks).size, marks.length, `seed ${seed}`)
     }
   })
 
@@ -274,10 +291,8 @@ describe('grove frames', () => {
       const timeline = buildTimeline(seed)
       const end = frameAt(timeline, timeline.end).branches
       const bonded = new Set(Arr.map(Arr.filter(end, b => b.root && b.bond > 0.5), b => b.tree))
-      // The first tree and the grove all stand long enough to have met.
       for (const id of Arr.range(0, GROVE)) assert.isTrue(bonded.has(id), `seed ${seed} tree ${id}`)
-      // The ties strengthen the longer they hold, right up to the end.
-      const gold = (t: number) => Arr.reduce(frameAt(timeline, t).branches, 0, (sum, b) => sum + (b.root ? b.bond : 0))
+      const gold = (t: number) => goldOf(frameAt(timeline, t))
       assert.isBelow(gold(timeline.end - 2), gold(timeline.end))
     }
   })
@@ -296,11 +311,9 @@ describe('grove plantings', () => {
     assert.strictEqual(flight.release, 5)
     assert.strictEqual(flight.to[0], tree.x)
     assert.isAbove(tree.sprout, landingOf(flight))
-    // It's grown by the time it's meant to have played out.
     const id = planted.trees.length - 1
     const grown = frameAt(planted, 5 + PLANT_SETTLE)
     assert.strictEqual(Option.getOrThrow(Arr.findFirst(grown.trees, t => t.id === id)).grown, 1)
-    // And it joins the grove underground: some of its roots knot.
     const later = frameAt(planted, 5 + PLANT_SETTLE + 6)
     assert.isTrue(Arr.some(later.branches, branch => branch.tree === id && branch.root && branch.bond > 0))
   })
@@ -313,10 +326,8 @@ describe('grove plantings', () => {
   it('plants where the reader aimed, else in the widest gap', () => {
     const aimed = plantedIn(timeline, [press(5, Option.some(-0.9))])
     assert.closeTo(aimed.trees[aimed.trees.length - 1]!.x, -0.9, 1e-9)
-    // Early on, only the first tree stands, so the gap is off to one side.
     const early = plantedIn(timeline, [press(1)])
     assert.isAbove(Math.abs(early.trees[early.trees.length - 1]!.x - timeline.trees[0]!.x), 0.6)
-    // Two unaimed seeds don't land on top of each other.
     const two = plantedIn(timeline, [press(1), press(1.5)])
     const [a, b] = Arr.takeRight(two.trees, 2)
     assert.isAbove(Math.abs(a!.x - b!.x), 0.5)
@@ -338,24 +349,13 @@ describe('grove plantings', () => {
       let before = frameAt(planted, 0)
       for (const t of momentsOf(planted.end).slice(1)) {
         const now = frameAt(planted, t)
-        for (const tree of before.trees) {
-          const after = Arr.findFirst(now.trees, other => other.id === tree.id)
-          if (Option.isNone(after) || after.value.grown < tree.grown) misses.push(`tree ${tree.id} at ${t}`)
-          if (branchLength(now, tree.id) + 1e-9 < branchLength(before, tree.id)) {
-            misses.push(`branches ${tree.id} at ${t}`)
-          }
-        }
-        const shapes = shapesOf(now, 800, 450, Option.some([400, 270]))
-        if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
-        if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
-        for (const dot of shapes.dots) {
+        misses.push(...shrunk(before, now, t))
+        const marks = marksOf(now, 800, 450, Option.some([400, 270]))
+        misses.push(...overBuffers(marks, t))
+        for (const dot of marks.dots) {
           if (dot.x < 0 || dot.x > 800 || dot.y < 0 || dot.y > 450) misses.push(`dot at ${t}`)
         }
-        for (const branch of now.branches) {
-          for (const [x, y] of [branch.from, branch.to]) {
-            if (Math.abs(x) > BOUNDS.x || Math.abs(y) > BOUNDS.y) misses.push(`point ${x},${y} at ${t}`)
-          }
-        }
+        misses.push(...offSheet(Arr.flatMap(now.branches, branch => [branch.from, branch.to]), t))
         before = now
       }
       assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)

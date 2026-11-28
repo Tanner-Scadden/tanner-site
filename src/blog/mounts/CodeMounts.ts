@@ -3,8 +3,6 @@ import { Effect, Schema, Stream } from 'effect'
 
 import { CodeLang, tokenize, tokenNodes } from '../highlight.ts'
 
-// Shows the code as plain text straight away, then swaps in the highlighted
-// tokens once Shiki loads. If it can't load, the plain text stays.
 export const HighlightCode = Mount.make(
   'HighlightCode',
   { args: { code: Schema.String, lang: CodeLang } },
@@ -31,8 +29,6 @@ class CopyFailed extends Schema.TaggedError<CopyFailed, { readonly brand: unique
 
 const COPIED_FOR = '1.6 seconds'
 
-// Copies the code on click. The button says COPIED (or FAILED) for a moment;
-// the label is CSS, keyed off data-state.
 const copy = (button: HTMLButtonElement, code: string) =>
   Effect.tryPromise({
     try: () => navigator.clipboard.writeText(code),

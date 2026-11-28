@@ -12,7 +12,6 @@ const SearchInput = Html.ref('BlogIndex.search', 'input')
 
 const Message = UiSchema.TaggedEnum({ Searched: { query: Schema.String }, PressedSlash: {} })
 
-// The posts a search found, in its order, each with its snippet.
 const rowsOf = (found: ReadonlyArray<Found>): ReadonlyArray<Row> =>
   Arr.filterMap(found, ({ id, snippet }) =>
     Result.fromOption(
@@ -24,8 +23,6 @@ const rowsOf = (found: ReadonlyArray<Found>): ReadonlyArray<Row> =>
     ),
   )
 
-// A search is only a search with a letter or digit in it: a query of just
-// punctuation or spaces finds no words, so it shows every post.
 const searchable = (query: string): boolean => /[\p{L}\p{N}]/u.test(query)
 
 const BlogIndexNoDeps = Html.component({
@@ -35,7 +32,8 @@ const BlogIndexNoDeps = Html.component({
   queries: {
     found: {
       query: SearchPosts,
-      args: ({ model }) => (searchable(model.query) ? { query: model.query } : undefined),
+      args: ({ model }) =>
+        Option.getOrUndefined(Option.map(Option.liftPredicate(model.query, searchable), query => ({ query }))),
     },
   },
 }).make({
@@ -47,7 +45,6 @@ const BlogIndexNoDeps = Html.component({
   subscriptions: () => [HtmlSubscription.shortcuts([{ key: '/', message: Message.PressedSlash() }])],
   view: (h, model) => {
     const searching = searchable(model.query)
-    // While a search runs, the last results stay up.
     const rows = Option.map(
       AsyncResult.match(h.queries.found, {
         onInitial: () => h.previous.found,
@@ -56,17 +53,16 @@ const BlogIndexNoDeps = Html.component({
       }),
       rowsOf,
     )
+    const shown = Option.filter(rows, () => searching)
     return h.div(
       SearchBar(h, input =>
         input.ref(SearchInput).on('input', ({ value }) => Message.Searched({ query: value })),
       ),
-      ResultCount(h, searching ? Option.map(rows, list => list.length) : Option.none()),
-      !searching
-        ? AllPosts(h)
-        : Option.match(rows, {
-            onNone: () => AllPosts(h),
-            onSome: list => (list.length === 0 ? NoMatch(h) : Register(h, list)),
-          }),
+      ResultCount(h, Option.map(shown, list => list.length)),
+      Option.match(shown, {
+        onNone: () => AllPosts(h),
+        onSome: list => Arr.match(list, { onEmpty: () => NoMatch(h), onNonEmpty: found => Register(h, found) }),
+      }),
     )
   },
 })

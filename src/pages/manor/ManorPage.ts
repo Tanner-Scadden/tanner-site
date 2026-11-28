@@ -1,6 +1,6 @@
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr } from 'effect'
+import { Array as Arr, Boolean as Bool } from 'effect'
 
 import { type SpriteName, Sprite } from '#components/Sprite'
 import {
@@ -47,7 +47,6 @@ const styles = stylex.create({
     paddingInline: 16,
     paddingBottom: 96,
   },
-  // Cut Rattles off too many times and the Manor breaks for a moment.
   quaking: {
     animationName: { default: quake, [media.reducedMotion]: 'none' },
     animationDuration: '.5s',
@@ -75,7 +74,7 @@ const styles = stylex.create({
     paddingBlock: 8,
     paddingInline: 12,
     boxShadow: `4px 4px 0 ${manor.shadow}`,
-    outlineColor: { default: null, ':focus-visible': manor.gold },
+    outlineColor: { ':focus-visible': manor.gold },
   },
   title: {
     fontFamily: fonts.pixel,
@@ -103,19 +102,19 @@ const styles = stylex.create({
     backgroundColor: { default: manor.plum, ':hover': manor.plumLit },
     minHeight: { default: 140, [media.narrow]: 0 },
     padding: 16,
-    paddingTop: { default: null, [media.narrow]: 10 },
-    paddingInline: { default: null, [media.narrow]: 4 },
-    paddingBottom: { default: null, [media.narrow]: 8 },
+    paddingTop: { [media.narrow]: 10 },
+    paddingInline: { [media.narrow]: 4 },
+    paddingBottom: { [media.narrow]: 8 },
     position: 'relative',
     display: 'flex',
-    flexDirection: { default: null, [media.narrow]: 'column' },
+    flexDirection: { [media.narrow]: 'column' },
     alignItems: { default: 'flex-end', [media.narrow]: 'center' },
-    justifyContent: { default: null, [media.narrow]: 'space-between' },
+    justifyContent: { [media.narrow]: 'space-between' },
     gap: { default: 10, [media.narrow]: 4 },
-    textAlign: { default: null, [media.narrow]: 'center' },
-    outlineWidth: { default: null, ':focus-visible': 4 },
-    outlineColor: { default: null, ':focus-visible': manor.green },
-    outlineOffset: { default: null, ':focus-visible': -4 },
+    textAlign: { [media.narrow]: 'center' },
+    outlineWidth: { ':focus-visible': 4 },
+    outlineColor: { ':focus-visible': manor.green },
+    outlineOffset: { ':focus-visible': -4 },
   },
   roomOn: {
     backgroundColor: manor.plumLit,
@@ -124,7 +123,6 @@ const styles = stylex.create({
     outlineColor: { default: manor.gold, ':focus-visible': manor.green },
     outlineOffset: -4,
   },
-  // The doors jam and hang crooked until he calms down.
   roomBroken: { pointerEvents: 'none', filter: 'saturate(.3) brightness(.7)' },
   roomName: {
     fontFamily: fonts.pixel,
@@ -145,12 +143,12 @@ const styles = stylex.create({
     top: 30,
     left: 16,
     right: 16,
-    display: { default: null, [media.narrow]: 'none' },
+    display: { [media.narrow]: 'none' },
   },
   roomTagOn: { color: manor.cream },
   roomSprite: {
-    transform: { default: null, [media.narrow]: 'scale(.55)' },
-    marginBlock: { default: null, [media.narrow]: -16 },
+    transform: { [media.narrow]: 'scale(.55)' },
+    marginBlock: { [media.narrow]: -16 },
   },
   play: {
     marginTop: 26,
@@ -171,8 +169,8 @@ const styles = stylex.create({
     paddingInline: 16,
     boxShadow: `4px 4px 0 ${manor.purple}`,
     textDecoration: 'none',
-    outlineColor: { default: null, ':focus-visible': manor.cream },
-    outlineOffset: { default: null, ':focus-visible': 3 },
+    outlineColor: { ':focus-visible': manor.cream },
+    outlineOffset: { ':focus-visible': 3 },
   },
   facts: {
     display: 'grid',
@@ -208,7 +206,6 @@ const styles = stylex.create({
   plaqueNote: { fontSize: 19, color: manor.lilac, lineHeight: 1.1 },
 })
 
-// How each room's door hangs while the Manor is broken.
 const crooked = stylex.create({
   parlour: { transform: 'rotate(-4deg) translateY(6px)' },
   trophy: { transform: 'rotate(3deg) translateY(-4px)' },
@@ -247,8 +244,8 @@ export const ManorPage = <M>(
                 upset && crooked[r],
               )
                 .attr('href', href(roomRoute(r)))
-                .attr('aria-current', r === room ? 'page' : 'false')
-                .attr('aria-disabled', upset ? 'true' : 'false')
+                .attr('aria-current', Bool.match(r === room, { onTrue: () => 'page', onFalse: () => 'false' }))
+                .attr('aria-disabled', Bool.match(upset, { onTrue: () => 'true', onFalse: () => 'false' }))
                 .children(
                   sx(h.b, styles.roomName).children(ROOM_NAMES[r]),
                   sx(h.small, styles.roomTag, r === room && styles.roomTagOn).children(

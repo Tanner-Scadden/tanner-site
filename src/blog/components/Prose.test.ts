@@ -1,10 +1,9 @@
 import { View } from '@effect/ui'
-import { Html } from '@effect/ui/html'
 import { assert, describe, it } from '@effect/vitest'
-
+import { tags } from '../search/text.ts'
 import { proseTags } from './Prose.ts'
 
-const h = proseTags(Html.tags as unknown as Html.H<never>)
+const h = proseTags(tags)
 
 const attrsOf = (link: ReturnType<typeof h.a>) => View.build(link, []).attrs
 
@@ -16,7 +15,8 @@ describe('proseTags', () => {
   })
 
   it('opens a link back into the site in place when it drops the target', () => {
+    // oxlint-disable-next-line effect/noNullish -- @effect/ui's attr drops an attribute only when given undefined
     const attrs = attrsOf(h.a.attr('href', '/blog').attr('target', undefined).children('the blog'))
-    assert.strictEqual(attrs['target'], undefined)
+    assert.notProperty(attrs, 'target')
   })
 })

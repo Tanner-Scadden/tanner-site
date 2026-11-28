@@ -1,5 +1,5 @@
 import { Router } from '@effect/ui'
-import { Context, Effect, Layer, Option, Schema } from 'effect'
+import { Boolean as Bool, Context, Effect, Layer, Option, Schema } from 'effect'
 import { Event, Machine, State } from 'effect-machine'
 
 import { RoomId } from '#domain/Room'
@@ -32,12 +32,16 @@ export const pageOf = (route: SiteRoute): PageState =>
     Manor: () => PageState.Manor({ room: 'parlour' }),
     ManorRoom: ({ params }) => PageState.Manor({ room: params.room }),
     Rest: () => PageState.Rest,
-    Blog: () => (BLOG_OPEN ? PageState.Blog : PageState.NotFound),
-    // A slug with no post (or a draft, in a build) is a sheet not in the set.
+    Blog: () =>
+      Bool.match(BLOG_OPEN, {
+        onTrue: (): PageState => PageState.Blog,
+        onFalse: () => PageState.NotFound,
+      }),
     BlogPost: ({ params }) =>
-      Option.isSome(findPost(params.slug))
-        ? PageState.Post({ slug: params.slug })
-        : PageState.NotFound,
+      Option.match(findPost(params.slug), {
+        onNone: (): PageState => PageState.NotFound,
+        onSome: () => PageState.Post({ slug: params.slug }),
+      }),
     NotFound: () => PageState.NotFound,
   })
 
@@ -47,7 +51,8 @@ const goTo =
     Effect.gen(function* () {
       const router = yield* Router.Router
       const outcome = yield* router.push(route)
-      return outcome === 'navigated' ? pageOf(route) : state
+      if (outcome === 'navigated') return pageOf(route)
+      return state
     })
 
 export const pageMachine = Machine.make({
@@ -61,12 +66,8 @@ export const pageMachine = Machine.make({
     PageEvent.Escaped,
     goTo(homeRoute),
   )
-  // Escape from a post goes up a level, to the index.
   .on(PageState.Post, PageEvent.Escaped, goTo(blogRoute))
   .on(PageState.Home, PageEvent.TypedRest, goTo(restRoute))
-  // Reaching the Manor or /rest finds its egg: by a link, a typed word, the
-  // back button or a URL pasted in. Moving between rooms stays in Manor, so
-  // it doesn't find it again.
   .spawn(PageState.Manor, () => findEgg('manor'), { name: 'findManorEgg' })
   .spawn(PageState.Rest, () => findEgg('worlds'), { name: 'findWorldsEgg' })
 

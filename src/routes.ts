@@ -23,9 +23,9 @@ export const blogRoute = SiteRoute.Blog()
 export const postRoute = (slug: string): SiteRoute =>
   SiteRoute.BlogPost({ params: { slug } })
 
-export const roomRoute = (room: RoomId): SiteRoute =>
-  room === 'parlour'
-    ? SiteRoute.Manor()
-    : SiteRoute.ManorRoom({ params: { room } })
+export const roomRoute = (room: RoomId): SiteRoute => {
+  if (room === 'parlour') return SiteRoute.Manor()
+  return SiteRoute.ManorRoom({ params: { room } })
+}
 
 export const href = (route: SiteRoute): string => SiteRoute.print(route)

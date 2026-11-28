@@ -47,7 +47,6 @@ export const keysMachine = Machine.make({
       yield* findEgg('konami')
       yield* Horde.use(horde => horde.send(HordeEvent.Summoned))
     } else if (event.key === 'Escape') {
-      // Escape puts the pens down first, and only then leaves the page.
       const gpu = yield* Gpu.use(gpu => gpu.call(GpuEvent.Escaped))
       if (!gpu.transitioned) yield* Page.use(page => page.send(PageEvent.Escaped))
     } else if (Arr.join(Arr.takeRight(recent, 4), '') === 'rest') {

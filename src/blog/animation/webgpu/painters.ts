@@ -1,12 +1,12 @@
-import { Effect } from 'effect'
+import { Effect, Option } from 'effect'
 
 import { acquireBuffer, acquireGpu, unavailable } from '../../../gpu/device.ts'
 import { bound, renderPipeline, whole } from '../../../gpu/pipeline.ts'
-import type { Rgba, Shapes } from '../scene.ts'
+import type { Rgba, Marks } from '../scene.ts'
 import { DOTS, DOT_FLOATS, LINES, LINE_FLOATS } from './shaders.ts'
 
 export interface Painter {
-  readonly paint: (shapes: Shapes, width: number, height: number, opacity: number) => void
+  readonly paint: (marks: Marks, width: number, height: number, opacity: number) => void
 }
 
 const VIEW_FLOATS = 4
@@ -42,13 +42,13 @@ const gpuPainter = (canvas: HTMLCanvasElement, maxLines: number, maxDots: number
     const dotData = new Float32Array(maxDots * DOT_FLOATS)
 
     const painter: Painter = {
-      paint: (shapes, width, height, opacity) => {
+      paint: (marks, width, height, opacity) => {
         viewData.set([width, height, opacity, 0])
         device.queue.writeBuffer(viewBuffer, 0, viewData)
 
-        const lineCount = Math.min(shapes.lines.length, maxLines)
+        const lineCount = Math.min(marks.lines.length, maxLines)
         for (let i = 0; i < lineCount; i++) {
-          const line = shapes.lines[i]!
+          const line = marks.lines[i]!
           lineData.set(
             [line.from[0], line.from[1], line.to[0], line.to[1], ...line.color, line.width, 0, 0, 0],
             i * LINE_FLOATS,
@@ -56,9 +56,9 @@ const gpuPainter = (canvas: HTMLCanvasElement, maxLines: number, maxDots: number
         }
         if (lineCount > 0) device.queue.writeBuffer(lineBuffer, 0, lineData, 0, lineCount * LINE_FLOATS)
 
-        const dotCount = Math.min(shapes.dots.length, maxDots)
+        const dotCount = Math.min(marks.dots.length, maxDots)
         for (let i = 0; i < dotCount; i++) {
-          const dot = shapes.dots[i]!
+          const dot = marks.dots[i]!
           dotData.set([dot.x, dot.y, dot.radius, dot.glow, ...dot.color, dot.ring, 0, 0, 0], i * DOT_FLOATS)
         }
         if (dotCount > 0) device.queue.writeBuffer(dotBuffer, 0, dotData, 0, dotCount * DOT_FLOATS)
@@ -96,16 +96,17 @@ const css = ([r, g, b, a]: Rgba): string =>
 
 const canvasPainter = (canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
-    const context = canvas.getContext('2d')
-    if (context === null) return yield* unavailable('no-context')
+    const found = Option.fromNullishOr(canvas.getContext('2d'))
+    if (Option.isNone(found)) return yield* unavailable('no-context')
+    const context = found.value
     const painter: Painter = {
-      paint: (shapes, width, height, opacity) => {
+      paint: (marks, width, height, opacity) => {
         const ratio = canvas.width / Math.max(1, width)
         context.setTransform(ratio, 0, 0, ratio, 0, 0)
         context.clearRect(0, 0, width, height)
         context.globalAlpha = opacity
         context.lineCap = 'round'
-        for (const line of shapes.lines) {
+        for (const line of marks.lines) {
           context.strokeStyle = css(line.color)
           context.lineWidth = line.width
           context.beginPath()
@@ -113,7 +114,7 @@ const canvasPainter = (canvas: HTMLCanvasElement) =>
           context.lineTo(line.to[0], line.to[1])
           context.stroke()
         }
-        for (const dot of shapes.dots) {
+        for (const dot of marks.dots) {
           if (dot.ring > 0) {
             context.strokeStyle = css(dot.color)
             context.lineWidth = dot.ring
@@ -141,14 +142,10 @@ const canvasPainter = (canvas: HTMLCanvasElement) =>
     return painter
   })
 
-// WebGPU, or the 2D canvas when the browser has none. A device or context
-// that fails after the canvas was claimed for WebGPU can't fall back, since
-// a canvas only ever gets one kind of context.
 export const painterFor = (canvas: HTMLCanvasElement, maxLines: number, maxDots: number) =>
   gpuPainter(canvas, maxLines, maxDots).pipe(
-    Effect.catchTag('GpuUnavailable', error =>
-      error.reason === 'no-webgpu' || error.reason === 'no-adapter'
-        ? canvasPainter(canvas)
-        : Effect.fail(error),
-    ),
+    Effect.catchTag('GpuUnavailable', error => {
+      if (error.reason === 'no-webgpu' || error.reason === 'no-adapter') return canvasPainter(canvas)
+      return Effect.fail(error)
+    }),
   )

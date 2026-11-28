@@ -1,4 +1,4 @@
-import { Array as Arr } from 'effect'
+import { Array as Arr, Option } from 'effect'
 import { dual } from 'effect/Function'
 
 import { approach, clamp01 } from '../../gpu/math.ts'
@@ -12,7 +12,6 @@ export interface Point3 {
   readonly z: number
 }
 
-// Where the pointer leans the house, from -1 to 1 on each axis.
 export interface Tilt {
   readonly x: number
   readonly y: number
@@ -22,42 +21,34 @@ export const LEVEL: Tilt = { x: 0, y: 0 }
 
 export const LIFT_MS = 1600
 const DEG = Math.PI / 180
-// The resting view: tipped back, and turned a little.
 const PITCH = 36 * DEG
 const YAW = -8 * DEG
-// How far the pointer leans it.
 const TILT_PITCH = 7 * DEG
 const TILT_YAW = 3 * DEG
 const TILT_ROLL = 9 * DEG
 const TILT_PER_S = 5
 const SNAP = 0.001
-// The risen house fits in its own footprint, give or take this much.
 const FIT_MARGIN = 10
-// How tall the walls stand at the peak of their rise, past full height.
 const OVERSHOOT = 1.12
 
 const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x))
 
 const easeOut = (t: number): number => 1 - (1 - t) ** 3
-// Rises past 1 a little, then settles back, like a wall going up on a spring.
 const easeOutBack = (t: number): number => {
   const c1 = 1.4
   const c3 = c1 + 1
   return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2
 }
 
-// 0 while the plan is still being drafted, 1 once it's fully up. With
-// motion reduced it's simply up.
-export const liftOf = ({ since, still }: Drafting): number =>
-  still ? 1 : clamp01((since - DRAFT_MS) / LIFT_MS)
+export const liftOf = ({ since, still }: Drafting): number => {
+  if (still) return 1
+  return clamp01((since - DRAFT_MS) / LIFT_MS)
+}
 
 export const wallHeight = (house: Rect): number => clamp(house.w * 0.085, 14, 42)
 
 const centre = (r: Rect): Point => ({ x: r.x + r.w / 2, y: r.y + r.h / 2 })
 
-// ---------------------------------------------------------------------------
-// Matrices
-// ---------------------------------------------------------------------------
 
 const mul = (a: Mat, b: Mat): Mat =>
   Arr.makeBy(16, i => {
@@ -74,7 +65,6 @@ const IDENTITY: Mat = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
 const translate = (x: number, y: number): Mat => [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, 0, 0, 0, 0, 1]
 const scaleXY = (s: number): Mat => [s, 0, 0, 0, 0, s, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
-// The same rotations as CSS rotateX, rotateY and rotateZ, with y down.
 const rotateX = (a: number): Mat => {
   const c = Math.cos(a)
   const s = Math.sin(a)
@@ -90,7 +80,6 @@ const rotateZ = (a: number): Mat => {
   const s = Math.sin(a)
   return [c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 }
-// CSS perspective(d): a point d px toward the viewer is at the eye.
 const perspective = (d: number): Mat => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -1 / d, 1]
 
 const apply = (m: Mat, { x, y, z }: Point3): readonly [number, number, number, number] => [
@@ -100,13 +89,9 @@ const apply = (m: Mat, { x, y, z }: Point3): readonly [number, number, number, n
   m[12]! * x + m[13]! * y + m[14]! * z + m[15]!,
 ]
 
-// Column-major, the order both WGSL and CSS matrix3d read.
 export const columns = (m: Mat): ReadonlyArray<number> =>
   Arr.makeBy(16, i => m[(i % 4) * 4 + Math.floor(i / 4)]!)
 
-// ---------------------------------------------------------------------------
-// The pose
-// ---------------------------------------------------------------------------
 
 export interface Pose {
   readonly pitch: number
@@ -115,10 +100,15 @@ export interface Pose {
   readonly height: number
 }
 
-// How far the house has risen, and which way the pointer leans it.
 export interface Stance {
   readonly tilt: Tilt
   readonly lift: number
+}
+
+const riseOf = (lift: number): number => {
+  if (lift <= 0) return 0
+  if (lift >= 1) return 1
+  return easeOutBack(lift)
 }
 
 export const poseOf: {
@@ -130,20 +120,17 @@ export const poseOf: {
     pitch: e * (PITCH + tilt.y * TILT_PITCH),
     yaw: e * (YAW + tilt.x * TILT_YAW),
     roll: e * -tilt.x * TILT_ROLL,
-    height: wallHeight(house) * (lift <= 0 ? 0 : lift >= 1 ? 1 : easeOutBack(lift)),
+    height: wallHeight(house) * riseOf(lift),
   }
 })
 
 const eyeDistance = (house: Rect): number => 2.6 * Math.max(house.w, house.h, 60)
 
-// Turns the house in place around its middle. What comes out is relative to
-// the middle, before perspective.
 const turn = (house: Rect, pose: Pose): Mat => {
   const c = centre(house)
   return chain(rotateY(pose.roll), rotateX(pose.pitch), rotateZ(pose.yaw), translate(-c.x, -c.y))
 }
 
-// Where a turned point lands, relative to the middle, before the fit.
 const turned = (house: Rect, pose: Pose, p: Point3): Point => {
   const [x, y, , w] = apply(mul(perspective(eyeDistance(house)), turn(house, pose)), p)
   return { x: x / w, y: y / w }
@@ -156,11 +143,14 @@ const corners = (house: Rect, height: number): ReadonlyArray<Point3> =>
     ),
   )
 
-// How the risen house is scaled and moved to fit its own footprint, so it
-// never spills off the canvas whichever way the pointer leans it.
 export interface Fit {
   readonly scale: number
   readonly shift: Point
+}
+
+const roomFor = (half: number, reach: number): number => {
+  if (reach > 0) return half / reach
+  return 1
 }
 
 export const fitFor = (house: Rect): Fit => {
@@ -179,23 +169,16 @@ export const fitFor = (house: Rect): Fit => {
       const q = turned(house, poseOf(house, { tilt, lift: 1 }), p)
       const dx = Math.abs(q.x + shift.x)
       const dy = Math.abs(q.y + shift.y)
-      return Math.min(s2, dx > 0 ? half.x / dx : 1, dy > 0 ? half.y / dy : 1)
+      return Math.min(s2, roomFor(half.x, dx), roomFor(half.y, dy))
     }),
   )
   return { scale, shift }
 }
 
-// ---------------------------------------------------------------------------
-// The view
-// ---------------------------------------------------------------------------
 
 export interface View {
-  // Plan space to canvas px, through homogeneous w. Row 2 is plain z, as CSS
-  // wants it.
   readonly m: Mat
-  // The same, but row 2 gives the GPU a depth from 0 (near) to 1 (far).
   readonly gpu: Mat
-  // Canvas px per plan px at w = 1.
   readonly scale: number
   readonly height: number
 }
@@ -220,8 +203,6 @@ export const viewOf: {
     perspective(eyeDistance(house)),
     n,
   )
-  // Every point of the house is within `range` of its middle, so depth stays
-  // between 0 and 1. It's closer than the eye, so depth keeps its order.
   const range = Math.max(house.w, house.h) + 2 * wallHeight(house) + 1
   const k = -1 / (2 * range)
   const depth = [n[8]! * k, n[9]! * k, n[10]! * k, 0.5 + n[11]! * k]
@@ -232,9 +213,7 @@ export const viewOf: {
 export interface Projected {
   readonly x: number
   readonly y: number
-  // 0 (near) to 1 (far), as the GPU sees it.
   readonly depth: number
-  // Canvas px per plan px here.
   readonly scale: number
 }
 
@@ -247,14 +226,11 @@ export const project: {
   return { x: x / w, y: y / w, depth: z / w, scale: view.scale / w }
 })
 
-// The spot on the floor under a canvas point, or null when the floor isn't
-// under it.
 export const unproject: {
-  (at: Point): (view: View) => Point | null
-  (view: View, at: Point): Point | null
-} = dual(2, (view: View, { x, y }: Point): Point | null => {
+  (at: Point): (view: View) => Option.Option<Point>
+  (view: View, at: Point): Option.Option<Point>
+} = dual(2, (view: View, { x, y }: Point): Option.Option<Point> => {
   const m = view.m
-  // On the floor (z = 0) the view is a plain 2D homography.
   const [a, b, c, d, e, f, g, h, i] = [m[0]!, m[1]!, m[3]!, m[4]!, m[5]!, m[7]!, m[12]!, m[13]!, m[15]!]
   const A = e * i - f * h
   const B = c * h - b * i
@@ -266,17 +242,14 @@ export const unproject: {
   const H = b * g - a * h
   const I = a * e - b * d
   const w = G * x + H * y + I
-  if (Math.abs(w) < 1e-9) return null
+  if (Math.abs(w) < 1e-9) return Option.none()
   const px = (A * x + B * y + C) / w
   const py = (D * x + E * y + F) / w
   const [, , , back] = apply(m, { x: px, y: py, z: 0 })
-  return back > 0 ? { x: px, y: py } : null
+  if (back > 0) return Option.some({ x: px, y: py })
+  return Option.none()
 })
 
-// The view as a CSS transform for an element whose corner sits at `origin`
-// on the canvas, with transform-origin at its own corner. Fixed digits, since
-// CSS can't always read exponents, and plenty of them, since the perspective
-// term is tiny.
 export const cssTransform: {
   (origin: Point): (view: View) => string
   (view: View, origin: Point): string
@@ -285,20 +258,16 @@ export const cssTransform: {
   return `matrix3d(${Arr.join(Arr.map(columns(m), v => v.toFixed(10)), ',')})`
 })
 
-// ---------------------------------------------------------------------------
-// Leaning toward the pointer
-// ---------------------------------------------------------------------------
 
-// Where the pointer wants the house to lean: toward it, harder near the edge.
 export const tiltToward: {
-  (house: Rect): (pointer: Point | null) => Tilt
-  (pointer: Point | null, house: Rect): Tilt
-} = dual(2, (pointer: Point | null, house: Rect): Tilt => {
-  if (pointer === null || house.w <= 0 || house.h <= 0) return LEVEL
+  (house: Rect): (pointer: Option.Option<Point>) => Tilt
+  (pointer: Option.Option<Point>, house: Rect): Tilt
+} = dual(2, (pointer: Option.Option<Point>, house: Rect): Tilt => {
+  if (Option.isNone(pointer) || house.w <= 0 || house.h <= 0) return LEVEL
   const c = centre(house)
   return {
-    x: clamp((pointer.x - c.x) / (house.w / 2), -1, 1),
-    y: clamp((pointer.y - c.y) / (house.h / 2), -1, 1),
+    x: clamp((pointer.value.x - c.x) / (house.w / 2), -1, 1),
+    y: clamp((pointer.value.y - c.y) / (house.h / 2), -1, 1),
   }
 })
 
@@ -307,14 +276,12 @@ export interface Follow {
   readonly dt: number
 }
 
-// Eases toward `to` at the same speed at any frame rate, landing on it once
-// it's close. Both axes land together, so neither snaps while the other
-// still moves.
 export const followTilt: {
   (follow: Follow): (from: Tilt) => Tilt
   (from: Tilt, follow: Follow): Tilt
 } = dual(2, (from: Tilt, { to, dt }: Follow): Tilt => {
   const x = approach({ from: from.x, to: to.x, dt, rate: TILT_PER_S })
   const y = approach({ from: from.y, to: to.y, dt, rate: TILT_PER_S })
-  return Math.abs(x - to.x) < SNAP && Math.abs(y - to.y) < SNAP ? to : { x, y }
+  if (Math.abs(x - to.x) < SNAP && Math.abs(y - to.y) < SNAP) return to
+  return { x, y }
 })

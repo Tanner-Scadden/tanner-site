@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema } from 'effect'
+import { Boolean as Bool, Context, Effect, Layer, Schema } from 'effect'
 import { Event, Machine, State } from 'effect-machine'
 
 import { Eggs, EggsEvent, findEgg } from '../../eggs/machines/Eggs.ts'
@@ -28,9 +28,8 @@ export const gpuMachine = Machine.make({
   initial: GpuState.Starting,
 })
   .on(GpuState.Starting, GpuEvent.Started, ({ event }) =>
-    event.supported ? GpuState.Resting : GpuState.Unsupported,
+    Bool.match(event.supported, { onTrue: () => GpuState.Resting, onFalse: () => GpuState.Unsupported }),
   )
-  // A click before WebGPU answers waits for the answer.
   .postpone(GpuState.Starting, GpuEvent.Clicked)
   .on(GpuState.Resting, GpuEvent.Clicked, () =>
     GpuState.Drafting({ infected: FIRST_INFECTED }),
@@ -41,8 +40,6 @@ export const gpuMachine = Machine.make({
   .on(GpuState.Drafting, GpuEvent.Clicked, () => GpuState.Resting)
   .on(GpuState.Drafting, GpuEvent.Escaped, () => GpuState.Resting)
   .spawn(GpuState.Drafting, () => findEgg('gpu'), { name: 'findGpuEgg' })
-  // A browser without WebGPU still finds the egg, and is told why nothing
-  // moved. The egg is counted first, so its toast is the one replaced.
   .on(GpuState.Unsupported, GpuEvent.Clicked, function explainNoWebGpu({ state }) {
     return Effect.gen(function* () {
       const eggs = yield* Eggs

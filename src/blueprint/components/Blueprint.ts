@@ -20,8 +20,6 @@ const styles = stylex.create({
   hidden: { display: 'none' },
 })
 
-// The blueprint canvas behind every page. It reports once whether WebGPU
-// started, draws while the pens are out, and counts the zombie pens.
 export const Blueprint = <M>(
   h: Html.H<M>,
   options: {
@@ -36,10 +34,9 @@ export const Blueprint = <M>(
     .attr('aria-hidden', 'true')
     .onMount(
       GpuBlueprint({ flow: options.gpu._tag === 'Drafting', still: options.still }).pipe(
-        Mount.map((report): M =>
-          report._tag === 'Started'
-            ? options.started(report.supported)
-            : options.infected(report.count),
-        ),
+        Mount.map((report): M => {
+          if (report._tag === 'Started') return options.started(report.supported)
+          return options.infected(report.count)
+        }),
       ),
     )

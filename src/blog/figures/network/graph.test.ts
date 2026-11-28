@@ -1,5 +1,5 @@
 import { assert, describe, it } from '@effect/vitest'
-import { Array as Arr, Option } from 'effect'
+import { Array as Arr, Clock, Effect, Option } from 'effect'
 
 import {
   BOUNDS,
@@ -14,7 +14,7 @@ import {
   tearsOf,
   tornAt,
 } from './graph.ts'
-import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
+import { MAX_DOTS, MAX_LINES, projection, marksOf } from './marks.ts'
 
 const SEEDS = Arr.range(1, 12)
 
@@ -32,7 +32,6 @@ describe('network timeline', () => {
       const timeline = buildTimeline(seed)
       assert.isAtMost(timeline.nodes.length, MAX_NODES)
       assert.isAtMost(timeline.edges.length, MAX_EDGES)
-      // Checked by hand and gathered, since asserting every point is slow.
       const misses: Array<string> = []
       for (const [k, key] of timeline.layout.entries()) {
         for (let i = 0; i < key.length; i += 2) {
@@ -40,9 +39,9 @@ describe('network timeline', () => {
         }
       }
       for (let t = 0; t <= timeline.end + 4; t += 0.1) {
-        const shapes = shapesOf(frameAt(timeline, t), 800, 450, Option.some([400, 225]))
-        if (shapes.lines.length > MAX_LINES) misses.push(`${shapes.lines.length} lines at ${t}`)
-        if (shapes.dots.length > MAX_DOTS) misses.push(`${shapes.dots.length} dots at ${t}`)
+        const marks = marksOf(frameAt(timeline, t), 800, 450, Option.some([400, 225]))
+        if (marks.lines.length > MAX_LINES) misses.push(`${marks.lines.length} lines at ${t}`)
+        if (marks.dots.length > MAX_DOTS) misses.push(`${marks.dots.length} dots at ${t}`)
       }
       assert.deepStrictEqual(Arr.take(misses, 5), [], `seed ${seed}`)
     }
@@ -54,11 +53,9 @@ describe('network timeline', () => {
       const keys = new Set<string>()
       for (const edge of edges) {
         assert.notStrictEqual(edge.a, edge.b)
-        // A link starts from someone who's there, and the person it brings
-        // in appears as it reaches them.
         assert.isAtMost(nodes[edge.a]!.born, edge.born)
         assert.isAtMost(nodes[edge.b]!.born, edge.born + 0.5)
-        const key = edge.a < edge.b ? `${edge.a}:${edge.b}` : `${edge.b}:${edge.a}`
+        const key = `${Math.min(edge.a, edge.b)}:${Math.max(edge.a, edge.b)}`
         assert.isFalse(keys.has(key))
         keys.add(key)
       }
@@ -83,12 +80,9 @@ describe('network timeline', () => {
         Arr.some(edges, edge => !edge.yours),
         `seed ${seed}`,
       )
-      // Most of the network isn't anyone you helped yourself.
       assert.isAtLeast(nodes.length, helps.length * 6, `seed ${seed}`)
-      // And it keeps growing right up to the end.
       const late = Arr.filter(nodes, node => node.born > end - 5)
       assert.isAbove(late.length, 0, `seed ${seed}`)
-      // Some people only know you through two or more people.
       const { distance } = distancesFrom(nodes.length, edges)
       assert.isTrue(
         Arr.some(Arr.fromIterable(distance), d => d >= 3),
@@ -108,8 +102,6 @@ describe('network timeline', () => {
   })
 
   it('barely moves anyone once they are there', () => {
-    // People appear on their settled spot, so nobody gets shoved across the
-    // canvas as the network grows around them.
     for (const seed of SEEDS) {
       const timeline = buildTimeline(seed)
       const misses: Array<string> = []
@@ -132,13 +124,16 @@ describe('network timeline', () => {
     assert.isAbove(Math.hypot(x, y), 0.1)
   })
 
-  it('builds quickly', () => {
-    for (const seed of SEEDS) {
-      const start = performance.now()
-      buildTimeline(seed)
-      assert.isBelow(performance.now() - start, 250, `seed ${seed}`)
-    }
-  })
+  it.live('builds quickly', () =>
+    Effect.gen(function* () {
+      for (const seed of SEEDS) {
+        const start = yield* Clock.currentTimeNanos
+        buildTimeline(seed)
+        const end = yield* Clock.currentTimeNanos
+        assert.isBelow(Number(end - start) / 1e6, 250, `seed ${seed}`)
+      }
+    }),
+  )
 })
 
 describe('network frames', () => {
@@ -158,7 +153,6 @@ describe('network frames', () => {
     const person = timeline.nodes[first.person]!
     const before = frameAt(timeline, first.start)
     assert.isUndefined(before.dots[first.person])
-    // Your help travels out to them.
     assert.strictEqual(frameAt(timeline, first.start + 0.2).sparks.length, 1)
     const after = frameAt(timeline, person.born + 0.4)
     assert.strictEqual(after.dots[first.person]?.kind, 'met')
@@ -177,25 +171,24 @@ describe('network frames', () => {
     assert.strictEqual(frame.dots.length, timeline.nodes.length)
     assert.strictEqual(frame.edges.length, timeline.edges.length)
     assert.isTrue(Arr.every(frame.dots, dot => dot.grown === 1))
-    // Nothing is still on its way.
     assert.strictEqual(frame.sparks.length, 0)
   })
 
   it('picks out whoever the pointer is over, with their links', () => {
     const frame = frameAt(timeline, timeline.end)
-    const plain = shapesOf(frame, 800, 450)
+    const plain = marksOf(frame, 800, 450)
     const you = frame.dots[0]!
     const [x, y] = projection(800, 450).px([you.x, you.y])
-    const picked = shapesOf(frame, 800, 450, Option.some([x + 3, y]))
+    const picked = marksOf(frame, 800, 450, Option.some([x + 3, y]))
     assert.strictEqual(picked.dots.length, plain.dots.length + 1)
     assert.isTrue(Arr.some(picked.lines, line => line.width > 2))
-    assert.deepStrictEqual(shapesOf(frame, 800, 450, Option.some([-100, -100])), plain)
+    assert.deepStrictEqual(marksOf(frame, 800, 450, Option.some([-100, -100])), plain)
   })
 
-  it('draws every shape on the canvas', () => {
+  it('draws every mark on the canvas', () => {
     for (const time of [1, 8, 14, timeline.end - 0.5, timeline.end]) {
-      const shapes = shapesOf(frameAt(timeline, time), 800, 450)
-      for (const dot of shapes.dots) {
+      const marks = marksOf(frameAt(timeline, time), 800, 450)
+      for (const dot of marks.dots) {
         assert.isTrue(dot.x >= 0 && dot.x <= 800 && dot.y >= 0 && dot.y <= 450)
       }
     }
@@ -219,9 +212,7 @@ describe('network bad interactions', () => {
     const after = frameAt(timeline, tornAt(tear!) + TEAR_SETTLE, [tear!])
     assert.isFalse(yourLinkTo(after, tear!.person))
     assert.strictEqual(after.dots[tear!.person]!.cut, 1)
-    // Only their branch dims.
     for (const dot of after.dots) assert.strictEqual(dot.cut > 0, tear!.branch.includes(dot.id), `person ${dot.id}`)
-    // And it pulls away from you.
     const plain = frameAt(timeline, tornAt(tear!) + TEAR_SETTLE)
     const d = (frame: typeof plain) => Math.hypot(frame.dots[tear!.person]!.x, frame.dots[tear!.person]!.y)
     assert.isAbove(d(after), d(plain))
@@ -235,14 +226,11 @@ describe('network bad interactions', () => {
   it('hits another branch with every press, aimed or not', () => {
     const tears = tearsOf(timeline, Arr.map(Arr.range(1, timeline.helps.length), k => at(10 + k * 0.5)))
     assert.deepStrictEqual(new Set(Arr.map(tears, tear => tear.person)), helped)
-    // With nobody there yet, or nobody left, a press only ripples out from
-    // you.
     assert.strictEqual(tearsOf(timeline, [at(0.5)])[0]!.person, -1)
     const more = tearsOf(timeline, Arr.map(Arr.range(0, timeline.helps.length), k => at(10 + k * 0.5)))
     assert.strictEqual(more[more.length - 1]!.person, -1)
     const ripple = frameAt(timeline, 0.5 + 0.3, tearsOf(timeline, [at(0.5)]))
     assert.isTrue(Arr.some(ripple.rings, ring => ring.alarm === true))
-    // Aimed near someone you helped, it's them.
     const target = timeline.helps[2]!.person
     const spot = positionAt(timeline, target, 14)
     assert.strictEqual(tearsOf(timeline, [{ time: 14, aim: Option.some(spot) }])[0]!.person, target)
@@ -252,8 +240,8 @@ describe('network bad interactions', () => {
     const presses = [at(9), { time: 15, aim: Option.some([0.4, -0.2] as const) }, at(17)]
     for (const t of [9.3, 15.5, 17.5, timeline.end]) {
       assert.deepStrictEqual(
-        shapesOf(frameAt(timeline, t, tearsOf(timeline, presses)), 800, 450),
-        shapesOf(frameAt(timeline, t, tearsOf(buildTimeline(3), presses)), 800, 450),
+        marksOf(frameAt(timeline, t, tearsOf(timeline, presses)), 800, 450),
+        marksOf(frameAt(timeline, t, tearsOf(buildTimeline(3), presses)), 800, 450),
       )
     }
   })
@@ -263,10 +251,10 @@ describe('network bad interactions', () => {
       const run = buildTimeline(seed)
       const tears = tearsOf(run, Arr.map(Arr.range(0, MAX_TEARS - 1), k => at(3 + k * 2.2)))
       for (let t = 0; t <= run.end + 4; t += 0.1) {
-        const shapes = shapesOf(frameAt(run, t, tears), 800, 450, Option.some([400, 225]))
-        assert.isAtMost(shapes.lines.length, MAX_LINES, `seed ${seed} at ${t}`)
-        assert.isAtMost(shapes.dots.length, MAX_DOTS, `seed ${seed} at ${t}`)
-        for (const dot of shapes.dots) {
+        const marks = marksOf(frameAt(run, t, tears), 800, 450, Option.some([400, 225]))
+        assert.isAtMost(marks.lines.length, MAX_LINES, `seed ${seed} at ${t}`)
+        assert.isAtMost(marks.dots.length, MAX_DOTS, `seed ${seed} at ${t}`)
+        for (const dot of marks.dots) {
           assert.isTrue(dot.x >= 0 && dot.x <= 800 && dot.y >= 0 && dot.y <= 450, `seed ${seed} at ${t}`)
         }
       }

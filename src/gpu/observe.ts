@@ -1,22 +1,19 @@
 import { Effect, Queue, Stream } from 'effect'
+import { constVoid } from 'effect/Function'
 
-// What on the page a drawing watches, as streams that let go of their
-// observers when they end.
 
-// Once each time any of `elements` changes size.
 export const resizes = (elements: ReadonlyArray<Element>): Stream.Stream<void> =>
-  Stream.callback<void>(queue =>
+  Stream.callback<ReadonlyArray<ResizeObserverEntry>>(queue =>
     Effect.acquireRelease(
       Effect.sync(() => {
-        const observer = new ResizeObserver(() => Queue.offerUnsafe(queue, undefined))
+        const observer = new ResizeObserver(entries => Queue.offerUnsafe(queue, entries))
         for (const element of elements) observer.observe(element)
         return observer
       }),
       observer => Effect.sync(() => observer.disconnect()),
     ),
-  )
+  ).pipe(Stream.map(constVoid))
 
-// Whether `element` is on screen, each time that changes.
 export const visibility = (element: Element): Stream.Stream<boolean> =>
   Stream.callback<boolean>(queue =>
     Effect.acquireRelease(
@@ -31,10 +28,8 @@ export const visibility = (element: Element): Stream.Stream<boolean> =>
     ),
   )
 
-// Once, when the page's web fonts have landed, since they can reflow it.
-export const fontsReady: Stream.Stream<void> = Stream.fromEffect(Effect.promise(() => document.fonts.ready)).pipe(
-  Stream.as(undefined),
+export const fontsReady: Stream.Stream<void> = Stream.fromEffect(
+  Effect.promise(() => document.fonts.ready).pipe(Effect.asVoid),
 )
 
-// Whether the reader has asked for less motion, read once.
 export const prefersStill = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches

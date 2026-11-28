@@ -1,6 +1,6 @@
 import { HIGHLIGHT, INK, LINE, OUT, OVER, PAINT, QUAD, SEGMENT, TO_CLIP } from '../../gpu/wgsl.ts'
 
-const COMMON = /* wgsl */ `
+const COMMON = `
 struct View {
   size: vec2f,
   dpr: f32,
@@ -43,7 +43,7 @@ fn ripple(behind: f32, strength: f32) -> f32 {
 
 export const BOX_FLOATS = 16
 
-export const BOXES = /* wgsl */ `
+export const BOXES = `
 ${COMMON}
 
 struct Box {
@@ -159,7 +159,7 @@ fn fs(in: Out) -> @location(0) vec4f {
 
 export const GAP_FLOATS = 12
 
-export const GAPS = /* wgsl */ `
+export const GAPS = `
 ${COMMON}
 
 struct Gap {

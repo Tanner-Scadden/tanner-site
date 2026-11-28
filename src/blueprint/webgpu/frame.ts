@@ -1,3 +1,4 @@
+import { Boolean as Bool, Option } from 'effect'
 import { dual } from 'effect/Function'
 
 import { LONGEST_STEP_S } from '../../gpu/loop.ts'
@@ -12,28 +13,20 @@ export interface Point {
   readonly y: number
 }
 
-// Where a mouse is, and whether it's over the page. Touch never warps.
 export interface Pointer extends Point {
   readonly inside: boolean
 }
 
 export interface FrameState {
-  // The previous frame's time in ms, or null at the start of a burst of
-  // frames, so a page that rested for a while doesn't jump.
-  readonly last: number | null
-  // 0 to 1: how much the lens bends the grid.
+  readonly last: Option.Option<number>
   readonly warp: number
-  // 0 to 1: how far the drafting pens have faded in.
   readonly flow: number
-  // The lens centre, which trails the pointer a little.
   readonly eased: Point
   readonly seed: number
-  // With motion reduced the pens step once, then freeze where they are.
   readonly simulated: boolean
   readonly still: boolean
 }
 
-// What one frame draws.
 export interface Frame {
   readonly state: FrameState
   readonly dt: number
@@ -46,16 +39,20 @@ export const MAJOR = 120
 const EASE_PER_S = 3
 const LENS_FOLLOW_PER_S = 14
 const SNAP = 0.002
-// A frozen frame still steps a little, so the pens show as dashes.
 const FROZEN_DT = 0.001
 
 export const OFFSCREEN: Point = { x: -9999, y: -9999 }
 export const NO_POINTER: Pointer = { ...OFFSCREEN, inside: false }
 
+const flag = (on: boolean): number => {
+  if (on) return 1
+  return 0
+}
+
 export const initialFrame = (settings: Settings): FrameState => ({
-  last: null,
+  last: Option.none(),
   warp: 0,
-  flow: settings.flow && settings.still ? 1 : 0,
+  flow: flag(settings.flow && settings.still),
   eased: OFFSCREEN,
   seed: 0,
   simulated: false,
@@ -67,25 +64,21 @@ export interface Approach {
   readonly dt: number
 }
 
-// Eases `from` toward `to` at the same speed at any frame rate, and lands
-// exactly on `to` once it's close, so the page can stop drawing.
 export const approach: {
   (options: Approach): (from: number) => number
   (from: number, options: Approach): number
 } = dual(2, (from: number, { to, dt }: Approach): number => {
   const next = from + (to - from) * (1 - Math.exp(-EASE_PER_S * dt))
-  return Math.abs(next - to) < SNAP ? to : next
+  if (Math.abs(next - to) < SNAP) return to
+  return next
 })
 
-// The wrap extent is a whole number of major cells larger than the screen,
-// so a pen that wraps lands back on a grid line.
 export const extentFor = (size: number): number =>
   (Math.ceil(size / MAJOR) + 1) * MAJOR
 
-const warpTarget = (settings: Settings, pointer: Pointer): number =>
-  pointer.inside && !settings.still ? 1 : 0
+const warpTarget = (settings: Settings, pointer: Pointer): number => flag(pointer.inside && !settings.still)
 
-const flowTarget = (settings: Settings): number => (settings.flow ? 1 : 0)
+const flowTarget = (settings: Settings): number => flag(settings.flow)
 
 const followLens = (
   eased: Point,
@@ -101,7 +94,6 @@ const followLens = (
   }
 }
 
-// What the page looks like at one moment.
 export interface Moment {
   readonly settings: Settings
   readonly pointer: Pointer
@@ -115,20 +107,21 @@ export const step: {
   (tick: Tick): (state: FrameState) => Frame
   (state: FrameState, tick: Tick): Frame
 } = dual(2, (state: FrameState, { settings, pointer, now }: Tick): Frame => {
-  const dt =
-    state.last === null ? 0 : Math.min((now - state.last) / 1000, LONGEST_STEP_S)
+  const dt = Option.match(state.last, {
+    onNone: () => 0,
+    onSome: last => Math.min((now - last) / 1000, LONGEST_STEP_S),
+  })
   const warp = approach(state.warp, { to: warpTarget(settings, pointer), dt })
-  // With motion reduced the pens snap on or off instead of fading.
-  const flow = settings.still
-    ? flowTarget(settings)
-    : approach(state.flow, { to: flowTarget(settings), dt })
-  // Switching reduced motion lets the pens take one more step.
+  const flow = Bool.match(settings.still, {
+    onTrue: () => flowTarget(settings),
+    onFalse: () => approach(state.flow, { to: flowTarget(settings), dt }),
+  })
   const simulated = settings.still === state.still && state.simulated
   const drawPens = flow > 0
   const stepPens = drawPens && (!settings.still || !simulated)
   return {
     state: {
-      last: now,
+      last: Option.some(now),
       warp,
       flow,
       eased: followLens(state.eased, pointer, warp, dt),
@@ -136,13 +129,12 @@ export const step: {
       simulated: simulated || stepPens,
       still: settings.still,
     },
-    dt: settings.still ? FROZEN_DT : dt,
+    dt: Bool.match(settings.still, { onTrue: () => FROZEN_DT, onFalse: () => dt }),
     drawPens,
     stepPens,
   }
 })
 
-// True once nothing would change on the next frame, so the loop can sleep.
 export const settled: {
   (moment: Moment): (state: FrameState) => boolean
   (state: FrameState, moment: Moment): boolean
@@ -160,5 +152,4 @@ export const settled: {
   )
 })
 
-// A burst of frames starts fresh, so its first dt is 0, not the rest time.
-export const wake = (state: FrameState): FrameState => ({ ...state, last: null })
+export const wake = (state: FrameState): FrameState => ({ ...state, last: Option.none() })

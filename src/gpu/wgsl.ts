@@ -1,25 +1,22 @@
 import { GOLD, INK as INK_RGB, wgsl } from './palette.ts'
 
-// WGSL every drawing on the site shares, as source to paste into its
-// shaders. `line` and `toClip` read a `view` uniform with `size` and `dpr`,
-// which each drawing declares itself.
 
-export const INK = /* wgsl */ `
+export const INK = `
 const INK = ${wgsl(INK_RGB)};
 `
 
-export const HIGHLIGHT = /* wgsl */ `
+export const HIGHLIGHT = `
 const HIGHLIGHT = ${wgsl(GOLD)};
 `
 
-export const LINE = /* wgsl */ `
+export const LINE = `
 // Coverage of a line of the given width, d px from its middle, on the screen.
 fn line(d: f32, width: f32) -> f32 {
   return clamp((width * 0.5 - d) * view.dpr + 0.5, 0.0, 1.0);
 }
 `
 
-export const SEGMENT = /* wgsl */ `
+export const SEGMENT = `
 // Distance from p to the segment a-b, and how far along it p falls.
 fn segment(p: vec2f, a: vec2f, b: vec2f) -> vec2f {
   let ab = b - a;
@@ -29,38 +26,35 @@ fn segment(p: vec2f, a: vec2f, b: vec2f) -> vec2f {
 }
 `
 
-export const TO_CLIP = /* wgsl */ `
+export const TO_CLIP = `
 // A point on the screen, in canvas px.
 fn toClip(p: vec2f) -> vec4f {
   return vec4f(p / view.size * vec2f(2.0, -2.0) + vec2f(-1.0, 1.0), 0.0, 1.0);
 }
 `
 
-export const OVER = /* wgsl */ `
+export const OVER = `
 // Premultiplied "over".
 fn over(top: vec4f, under: vec4f) -> vec4f {
   return top + under * (1.0 - top.a);
 }
 `
 
-export const PAINT = /* wgsl */ `
+export const PAINT = `
 fn paint(color: vec3f, alpha: f32) -> vec4f {
   let a = clamp(alpha, 0.0, 1.0);
   return vec4f(color * a, a);
 }
 `
 
-// The corners of a quad as two triangles, for instanced boxes.
-export const QUAD = /* wgsl */ `
+export const QUAD = `
 const QUAD = array<vec2f, 6>(
   vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0),
   vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0),
 );
 `
 
-// What a vertex shader hands on for a flat 2D shape: where it is, in canvas
-// or plan px, and which instance it belongs to.
-export const OUT = /* wgsl */ `
+export const OUT = `
 struct Out {
   @builtin(position) position: vec4f,
   @location(0) p: vec2f,
@@ -68,8 +62,7 @@ struct Out {
 }
 `
 
-// A vertex off the screen, for an instance that draws nothing.
-export const HIDDEN = /* wgsl */ `
+export const HIDDEN = `
 fn hidden(i: u32) -> Out {
   var out: Out;
   out.i = i;

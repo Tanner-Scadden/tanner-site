@@ -1,5 +1,5 @@
 import { assert, describe, it } from '@effect/vitest'
-import { Array as Arr, String as Str } from 'effect'
+import { Array as Arr, Option, String as Str } from 'effect'
 
 import { DRAFT_MS, type Point, type Rect } from './house.ts'
 import {
@@ -91,22 +91,20 @@ describe('unproject', () => {
     for (const view of [flat, risen(), risen({ x: 0.7, y: -0.4 })]) {
       for (const p of [{ x: 60, y: 70 }, { x: 300, y: 200 }, { x: 440, y: 310 }]) {
         const q = project(view, { ...p, z: 0 })
-        const back = unproject(view, q)
-        assert.isNotNull(back)
-        close(back!.x, p.x, 1e-6)
-        close(back!.y, p.y, 1e-6)
+        const back = Option.getOrThrow(unproject(view, q))
+        close(back.x, p.x, 1e-6)
+        close(back.y, p.y, 1e-6)
       }
     }
   })
 })
 
 describe('cssTransform', () => {
-  // Applies a CSS matrix3d to a point in the element's own space.
   const applyCss = (css: string, { x, y }: Point): Point => {
     const inner = Str.slice('matrix3d('.length, -1)(css)
     const m = Arr.map(Str.split(',')(inner), Number)
     const w = m[3]! * x + m[7]! * y + m[15]!
-    return { x: (m[0]! * x + m[4]! * y + m[12]!) / w, y: (m[1]! * x + m[5]! * y + m[13]!) / w }
+    return { x: (m[0] * x + m[4]! * y + m[12]!) / w, y: (m[1]! * x + m[5]! * y + m[13]!) / w }
   }
 
   it('moves the room links exactly where the GPU draws their floor', () => {
@@ -124,11 +122,11 @@ describe('cssTransform', () => {
 
 describe('leaning', () => {
   it('leans toward the pointer, and levels out without one', () => {
-    assert.deepStrictEqual(tiltToward(null, house), LEVEL)
-    const right = tiltToward({ x: house.x + house.w, y: house.y + house.h / 2 }, house)
+    assert.deepStrictEqual(tiltToward(Option.none(), house), LEVEL)
+    const right = tiltToward(Option.some({ x: house.x + house.w, y: house.y + house.h / 2 }), house)
     close(right.x, 1)
     close(right.y, 0)
-    assert.deepStrictEqual(tiltToward({ x: 9999, y: -9999 }, house), { x: 1, y: -1 })
+    assert.deepStrictEqual(tiltToward(Option.some({ x: 9999, y: -9999 }), house), { x: 1, y: -1 })
   })
 
   it('eases over and lands on the lean', () => {

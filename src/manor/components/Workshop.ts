@@ -3,6 +3,7 @@ import { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
 import {
   Array as Arr,
+  Boolean as Bool,
   Context,
   Effect,
   Layer,
@@ -32,6 +33,7 @@ import {
   TURNS,
   type Shot,
   WAVES,
+  type Zombie as ReplayZombie,
   type ZombieKind,
   runOf,
 } from '../replay.ts'
@@ -104,7 +106,6 @@ const styles = stylex.create({
     borderColor: arcade.screen,
     boxShadow: `6px 6px 0 ${manor.purple}`,
     position: 'relative',
-    // Scanlines.
     '::after': {
       content: '""',
       position: 'absolute',
@@ -152,7 +153,6 @@ const styles = stylex.create({
     backgroundColor: arcade.doorway,
     boxShadow: `inset 0 0 0 3px ${manor.plum}`,
   }),
-  // A survivor or a zombie, standing on its tile.
   token: (left: string, top: string, width: string) => ({
     position: 'absolute',
     left,
@@ -174,8 +174,6 @@ const styles = stylex.create({
     animationIterationCount: 'infinite',
   },
   brute: { animationDuration: '1.2s' },
-  // Hit, it flashes white (its tile flashes, so the zombie can keep its
-  // shamble), then shambles on once the flash is done.
   hit: {
     animationName: { default: hit, [media.reducedMotion]: 'none' },
     animationDuration: '.3s',
@@ -184,7 +182,7 @@ const styles = stylex.create({
   },
   hitZombie: { animationDelay: '.45s' },
   dying: {
-    display: { default: null, [media.reducedMotion]: 'none' },
+    display: { [media.reducedMotion]: 'none' },
   },
   dyingZombie: {
     animationName: die,
@@ -211,7 +209,6 @@ const styles = stylex.create({
     transform: 'translate(-50%, -50%) rotate(90deg)',
     transitionProperty: 'none',
   },
-  // Shots: a muzzle flash at the gun, a tracer to the zombie, then it drops.
   flash: (left: string, top: string) => ({
     position: 'absolute',
     left,
@@ -222,7 +219,7 @@ const styles = stylex.create({
     backgroundColor: arcade.muzzle,
     boxShadow: `0 0 0 2px ${arcade.tracer}`,
     zIndex: 2,
-    display: { default: null, [media.reducedMotion]: 'none' },
+    display: { [media.reducedMotion]: 'none' },
     animationName: pop,
     animationDuration: '.12s',
     animationTimingFunction: 'steps(2, end)',
@@ -241,7 +238,7 @@ const styles = stylex.create({
     transform: `translate(-50%, -50%) rotate(${angle})`,
     backgroundImage: `linear-gradient(90deg, transparent, ${arcade.tracer} 45%, ${arcade.muzzle})`,
     zIndex: 2,
-    display: { default: null, [media.reducedMotion]: 'none' },
+    display: { [media.reducedMotion]: 'none' },
     animationName: fly,
     animationDuration: '.16s',
     animationTimingFunction: 'linear',
@@ -292,11 +289,11 @@ const styles = stylex.create({
       default: `4px 4px 0 ${manor.shadow}`,
       ':active': `2px 2px 0 ${manor.shadow}`,
     },
-    transform: { default: null, ':active': 'translate(2px, 2px)' },
-    outlineWidth: { default: null, ':focus-visible': 2 },
-    outlineStyle: { default: null, ':focus-visible': 'solid' },
-    outlineColor: { default: null, ':focus-visible': manor.gold },
-    outlineOffset: { default: null, ':focus-visible': 2 },
+    transform: { ':active': 'translate(2px, 2px)' },
+    outlineWidth: { ':focus-visible': 2 },
+    outlineStyle: { ':focus-visible': 'solid' },
+    outlineColor: { ':focus-visible': manor.gold },
+    outlineOffset: { ':focus-visible': 2 },
   },
 })
 
@@ -311,7 +308,6 @@ const ZOMBIE_ART: Record<ZombieKind, { readonly src: string; readonly w: number 
 }
 const SURVIVOR_W = 8
 
-// Where on the board a point is, in tiles, as CSS percentages.
 const pct = (x: number, y: number) => ({
   x: `${((x + 0.5) / COLS) * 100}%`,
   y: `${((y + 0.5) / ROWS) * 100}%`,
@@ -320,13 +316,29 @@ const pct = (x: number, y: number) => ({
 const GUN = { x: 0.3, y: -0.12 }
 const ZOMBIE_H: Record<ZombieKind, number> = { walker: 17, lid: 19, brute: 26 }
 
-const shotPath = (shot: Shot, kind: ZombieKind | undefined) => {
-  const side = shot.x1 < shot.x0 ? -1 : 1
+const sideOf = (shot: Shot): number => {
+  if (shot.x1 < shot.x0) return -1
+  return 1
+}
+
+const missBy = (shot: Shot): number => {
+  if (shot.hit) return 0
+  return (shot.by - 1.5) * 0.45
+}
+
+const heightOf = (kind: Option.Option<ZombieKind>): number =>
+  Option.match(kind, {
+    onNone: () => 17,
+    onSome: k => ZOMBIE_H[k],
+  })
+
+const shotPath = (shot: Shot, kind: Option.Option<ZombieKind>) => {
+  const side = sideOf(shot)
   const x0 = shot.x0 + GUN.x * side
   const y0 = shot.y0 + GUN.y
-  const wide = shot.hit ? 0 : (shot.by - 1.5) * 0.45
+  const wide = missBy(shot)
   const x1 = shot.x1 + wide * 0.5
-  const y1 = shot.y1 - 0.3 * ((kind === undefined ? 17 : ZOMBIE_H[kind]) / TILE_PX) + wide
+  const y1 = shot.y1 - 0.3 * (heightOf(kind) / TILE_PX) + wide
   return { x0, y0, x1, y1, angle: (Math.atan2(y1 - y0, x1 - x0) * 180) / Math.PI }
 }
 
@@ -337,30 +349,56 @@ const onTile = (x: number, y: number, w: number) =>
     `${(w / (COLS * TILE_PX)) * 100}%`,
   )
 
+const closestZombie = (
+  zombies: ReadonlyArray<ReplayZombie>,
+  x: number,
+  y: number,
+): Option.Option<ReplayZombie> => {
+  let best: Option.Option<ReplayZombie> = Option.none()
+  for (const z of zombies) {
+    const d = Math.abs(z.x - x) + Math.abs(z.y - y)
+    if (Option.isNone(best) || d < Math.abs(best.value.x - x) + Math.abs(best.value.y - y)) {
+      best = Option.some(z)
+    }
+  }
+  return best
+}
+
+const verdictOf = (held: boolean) =>
+  Bool.match(held, {
+    onTrue: () => ({ style: styles.held, text: 'STAGE CLEAR' }),
+    onFalse: () => ({ style: styles.eaten, text: 'GAME OVER' }),
+  })
+
+const hashShown = (done: boolean, hash: string): string =>
+  Bool.match(done, {
+    onTrue: () => hash,
+    onFalse: () => '······',
+  })
+
 const workshopView = WorkshopDef.view((h, state) => {
   const seed = state.seed
   const turn = turnOf(state)
   const run = runOf(seed)
-  const frame = run.frames[Math.min(turn, TURNS)] ?? run.frames[0]!
+  const frame = Option.getOrElse(Arr.get(run.frames, Math.min(turn, TURNS)), () =>
+    Arr.headNonEmpty(run.frames),
+  )
   const done = state._tag === 'Over'
   const standing = Arr.filter(frame.survivors, s => s.up).length
-  const before = run.frames[Math.max(0, Math.min(turn, TURNS) - 1)] ?? frame
+  const before = Option.getOrElse(
+    Arr.get(run.frames, Math.max(0, Math.min(turn, TURNS) - 1)),
+    () => frame,
+  )
+  const verdict = verdictOf(run.held)
   const targetOf = (shot: Shot) =>
     Arr.findFirst(before.zombies, z => z.x === shot.x1 && z.y === shot.y1).pipe(
       Option.map(z => z.kind),
-      Option.getOrUndefined,
     )
   const shotBy = (id: number) => Arr.findFirst(frame.shots, shot => shot.by === id)
-  // Survivors face whoever they just shot at, or whoever is closest.
   const facesLeft = (id: number, x: number, y: number) => {
     const shot = shotBy(id)
     if (Option.isSome(shot)) return shot.value.x1 < shot.value.x0
-    let best: { readonly x: number; readonly y: number } | undefined
-    for (const z of frame.zombies) {
-      const d = Math.abs(z.x - x) + Math.abs(z.y - y)
-      if (best === undefined || d < Math.abs(best.x - x) + Math.abs(best.y - y)) best = z
-    }
-    return best !== undefined && best.x < x
+    return Option.exists(closestZombie(frame.zombies, x, y), z => z.x < x)
   }
   return sx(h.section, panel.panel).children(
     sx(h.h2, panel.heading).children("HOW IT'S BUILT"),
@@ -432,14 +470,12 @@ const workshopView = WorkshopDef.view((h, state) => {
             ]
           }),
           done &&
-            sx(h.div, styles.verdict, run.held ? styles.held : styles.eaten).children(
-              run.held ? 'STAGE CLEAR' : 'GAME OVER',
-            ),
+            sx(h.div, styles.verdict, verdict.style).children(verdict.text),
         ),
     ),
     sx(h.div, styles.stats).children(
       h.span('SEED ', sx(h.b, styles.stat).children(pad(seed, 5))),
-      h.span('RUN HASH ', sx(h.b, styles.stat).children(done ? run.hash : '······')),
+      h.span('RUN HASH ', sx(h.b, styles.stat).children(hashShown(done, run.hash))),
     ),
     sx(h.div, styles.controls).children(
       sx(h.button, base.button, styles.button)

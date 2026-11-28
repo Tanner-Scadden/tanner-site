@@ -18,8 +18,12 @@ export interface Row {
   readonly snippet: Option.Option<Snippet>
 }
 
-const Marked = <M>(h: Html.H<M>, parts: ReadonlyArray<Part>) =>
-  Arr.map(parts, part => (part.marked ? sx(h.mark, styles.mark).children(part.text) : part.text))
+const MarkedPart = <M>(h: Html.H<M>, part: Part) => {
+  if (part.marked) return sx(h.mark, styles.mark).children(part.text)
+  return part.text
+}
+
+const Marked = <M>(h: Html.H<M>, parts: ReadonlyArray<Part>) => Arr.map(parts, part => MarkedPart(h, part))
 
 export const Register = <M>(h: Html.H<M>, rows: ReadonlyArray<Row>) =>
   sx(h.ol, styles.register).children(
@@ -43,9 +47,9 @@ export const Register = <M>(h: Html.H<M>, rows: ReadonlyArray<Row>) =>
               sx(h.span, styles.summary).children(
                 ...Option.match(summary, { onNone: () => [post.summary], onSome: s => Marked(h, s.parts) }),
               ),
-              Option.match(body, {
-                onNone: () => null,
-                onSome: s => sx(h.span, styles.snippet).children(...Marked(h, s.parts)),
+              ...Option.match(body, {
+                onNone: () => [],
+                onSome: s => [sx(h.span, styles.snippet).children(...Marked(h, s.parts))],
               }),
             ),
             sx(h.span, styles.go).attr('aria-hidden', 'true').children('→'),
@@ -60,8 +64,6 @@ export const PostList = <M>(h: Html.H<M>, posts: ReadonlyArray<Post>) =>
     Arr.map(posts, post => ({ post, snippet: Option.none() })),
   )
 
-// The search box over the register. The blog index passes its live input;
-// the placeholder drawn while the index loads passes a quiet one.
 export const SearchBar = <M>(h: Html.H<M>, input: (field: Html.H<M>['input']) => Html.H<M>['input']) =>
   sx(h.label, styles.search).children(
     sx(h.span, styles.searchLabel).children('SEARCH'),
@@ -76,17 +78,22 @@ export const SearchBar = <M>(h: Html.H<M>, input: (field: Html.H<M>['input']) =>
     sx(h.kbd, styles.key).attr('aria-hidden', 'true').children('/'),
   )
 
-// "2 RESULTS", or nothing.
+const resultsWord = (count: number): string => {
+  if (count === 1) return 'RESULT'
+  return 'RESULTS'
+}
+
 export const ResultCount = <M>(h: Html.H<M>, count: Option.Option<number>) =>
   sx(h.p, styles.count)
     .attrs({ role: 'status', 'aria-live': 'polite' })
-    .children(Option.match(count, { onNone: () => '', onSome: n => `${n} ${n === 1 ? 'RESULT' : 'RESULTS'}` }))
+    .children(Option.match(count, { onNone: () => '', onSome: n => `${n} ${resultsWord(n)}` }))
 
 export const NoMatch = <M>(h: Html.H<M>) => sx(h.p, styles.none).children(BLOG.noMatch)
 
-// Every post, newest first, or a note that there's nothing yet.
-export const AllPosts = <M>(h: Html.H<M>) =>
-  POSTS.length === 0 ? sx(h.p, sheet.prose).children(BLOG.empty) : PostList(h, POSTS)
+export const AllPosts = <M>(h: Html.H<M>) => {
+  if (POSTS.length === 0) return sx(h.p, sheet.prose).children(BLOG.empty)
+  return PostList(h, POSTS)
+}
 
 const styles = stylex.create({
   search: {
@@ -101,7 +108,7 @@ const styles = stylex.create({
   },
   searchLabel: { fontSize: 11, letterSpacing: '.18em', color: blueprint.dim },
   key: {
-    display: { default: null, [media.narrow]: 'none' },
+    display: { [media.narrow]: 'none' },
     fontFamily: fonts.mono,
     fontSize: 11,
     lineHeight: 'normal',
@@ -137,9 +144,9 @@ const styles = stylex.create({
     borderTopWidth: 1,
     borderTopStyle: 'dashed',
     borderTopColor: blueprint.faint,
-    borderBottomWidth: { default: null, ':last-child': 1 },
-    borderBottomStyle: { default: null, ':last-child': 'dashed' },
-    borderBottomColor: { default: null, ':last-child': blueprint.faint },
+    borderBottomWidth: { ':last-child': 1 },
+    borderBottomStyle: { ':last-child': 'dashed' },
+    borderBottomColor: { ':last-child': blueprint.faint },
   },
   entry: {
     display: 'grid',
@@ -171,7 +178,6 @@ const styles = stylex.create({
     lineHeight: 1.15,
     fontStretch: widths.semi,
     color: {
-      default: null,
       [stylex.when.ancestor(':hover')]: blueprint.hi,
       [stylex.when.ancestor(':focus-visible')]: blueprint.hi,
     },
@@ -197,10 +203,9 @@ const styles = stylex.create({
     color: blueprint.dim,
     maxWidth: 620,
   },
-  // A matched word: gold text, no wash behind it.
   mark: { color: blueprint.hi, backgroundColor: 'transparent', fontWeight: 700 },
   go: {
-    display: { default: null, [media.narrow]: 'none' },
+    display: { [media.narrow]: 'none' },
     alignSelf: 'center',
     color: {
       default: blueprint.dim,
@@ -208,7 +213,6 @@ const styles = stylex.create({
       [stylex.when.ancestor(':focus-visible')]: blueprint.hi,
     },
     transform: {
-      default: null,
       [stylex.when.ancestor(':hover')]: 'translateX(3px)',
       [stylex.when.ancestor(':focus-visible')]: 'translateX(3px)',
     },

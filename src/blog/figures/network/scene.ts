@@ -4,7 +4,7 @@ import { makeAnimation } from '../../animation/Animation.ts'
 import { worldOfAim } from '../../animation/kit.ts'
 import { type Interaction, type Scene, rememberLast } from '../../animation/scene.ts'
 import { MAX_TEARS, TEAR_SETTLE, buildTimeline, frameAt, tearsOf } from './graph.ts'
-import { MAX_DOTS, MAX_LINES, projection, shapesOf } from './shapes.ts'
+import { MAX_DOTS, MAX_LINES, projection, marksOf } from './marks.ts'
 
 const worldOf = worldOfAim(projection)
 
@@ -28,13 +28,12 @@ export const networkScene: Scene = {
     )
     return {
       end: timeline.end,
-      shapesAt: (time, width, height, pointer, interactions) =>
-        shapesOf(frameAt(timeline, time, tears(interactions)), width, height, pointer),
+      marksAt: (time, width, height, pointer, interactions) =>
+        marksOf(frameAt(timeline, time, tears(interactions)), width, height, pointer),
     }
   },
   maxLines: MAX_LINES,
   maxDots: MAX_DOTS,
-  // A bad interaction: you let someone you helped down.
   interact: { hint: 'Have a bad interaction with someone you helped', settle: TEAR_SETTLE, max: MAX_TEARS },
 }
 

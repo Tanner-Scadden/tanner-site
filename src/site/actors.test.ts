@@ -25,8 +25,6 @@ import { siteActors } from './actors.ts'
 import { Keys, KeysEvent } from './machines/Keys.ts'
 import { Page, PageEvent } from './machines/Page.ts'
 
-// The site's actors as the app runs them, on an in-memory Router and a
-// 1000px window with no frames: a test sends the frames it wants.
 const site = (found: ReadonlyArray<EggId> = [], url = '/') =>
   siteActors({ found, reducedMotion: false, route: homeRoute }).pipe(
     Layer.provideMerge([
@@ -64,7 +62,6 @@ it.layer(site(), { buildPerTest: true })('Eggs', it => {
       yield* TestClock.adjust('3 seconds')
       const toasts = yield* Toasts
       const hidden = yield* toasts.waitFor(state => state._tag === 'Hidden')
-      // The dock on a hidden page keeps the last text to shrink it away.
       assert.deepStrictEqual(
         hidden,
         ToastState.Hidden({ last: 'EGG FOUND: PAPER COPY · 1/8' }),
@@ -128,7 +125,6 @@ it.layer(site(), { buildPerTest: true })('Gpu', it => {
       const counted = yield* gpu.snapshot
       assert.deepStrictEqual(counted, GpuState.Drafting({ infected: 42 }))
       yield* gpu.call(GpuEvent.Clicked)
-      // A count that lands after the pens go down changes nothing.
       const late = yield* gpu.call(GpuEvent.Counted({ infected: 7 }))
       assert.isFalse(late.transitioned)
       const again = yield* gpu.call(GpuEvent.Clicked)
@@ -196,7 +192,6 @@ it.layer(site(), { buildPerTest: true })('Keys', it => {
       yield* horde.send(HordeEvent.Summoned)
       yield* horde.waitFor(state => state._tag === 'Marching')
       const gone = yield* horde.call(HordeEvent.Ticked({ delta: 1e9 }))
-      // One long frame is capped, so it takes many to cross 1500px.
       assert.strictEqual(gone.newState._tag, 'Marching')
       for (let i = 0; i < 400; i++)
         yield* horde.send(HordeEvent.Ticked({ delta: 100 }))
@@ -239,7 +234,6 @@ const enter = (room: 'parlour' | 'trophy' | 'workshop') =>
   Effect.gen(function* () {
     const router = yield* Router.Router
     yield* router.push(roomRoute(room))
-    // The Site root hands the Page each route the Router reports.
     const page = yield* Page
     yield* page.send(PageEvent.Navigated({ route: roomRoute(room) }))
     const rattles = yield* Rattles

@@ -9,16 +9,13 @@ import {
   SWITCHBOARD_DOTS,
   SWITCHBOARD_LINES,
   buildSwitchboard,
-  switchboardShapes,
+  switchboardMarks,
   withReader,
 } from './switchboard.ts'
 import { projection } from './world.ts'
 
 const worldOf = worldOfAim(projection)
 
-// Be Someone Worth Calling's hero: the call coming in on a switchboard. It
-// plays once and rests on the lit board, with a caption that says what the
-// cords are.
 export const callingScene: Scene = {
   variants: [
     {
@@ -34,8 +31,8 @@ export const callingScene: Scene = {
     const cords = rememberLast((interactions: ReadonlyArray<Interaction>) => withReader(board, interactions, worldOf))
     return {
       end: board.end,
-      shapesAt: (time, width, height, pointer, interactions, held = Option.none()) =>
-        switchboardShapes(board, cords(interactions), time, width, height, pointer, held),
+      marksAt: (time, width, height, pointer, interactions, held = Option.none()) =>
+        switchboardMarks(board, cords(interactions), time, width, height, pointer, held),
     }
   },
   maxLines: SWITCHBOARD_LINES,

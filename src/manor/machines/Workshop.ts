@@ -19,25 +19,26 @@ export const WorkshopEvent = Event({
 export type WorkshopEvent = typeof WorkshopEvent.Type
 
 export const turnOf = (state: WorkshopState): number =>
-  state._tag === 'Playing' ? state.turn : TURNS
+  WorkshopState.$match(state, {
+    Playing: ({ turn }) => turn,
+    Over: () => TURNS,
+  })
 
 export const workshopMachine = (reducedMotion: boolean) => {
-  const runOf = (seed: number): WorkshopState =>
-    reducedMotion
-      ? WorkshopState.Over({ seed })
-      : WorkshopState.Playing({ seed, turn: 0 })
+  const runOf = (seed: number): WorkshopState => {
+    if (reducedMotion) return WorkshopState.Over({ seed })
+    return WorkshopState.Playing({ seed, turn: 0 })
+  }
   return (
     Machine.make({
       state: WorkshopState,
       event: WorkshopEvent,
       initial: runOf(FIRST_SEED),
     })
-      .on(WorkshopState.Playing, WorkshopEvent.Ticked, ({ state }) =>
-        state.turn + 1 >= TURNS
-          ? WorkshopState.Over.with(state)
-          : WorkshopState.Playing.with(state, { turn: state.turn + 1 }),
-      )
-      // Both start a run over, so the tick restarts with it.
+      .on(WorkshopState.Playing, WorkshopEvent.Ticked, ({ state }) => {
+        if (state.turn + 1 >= TURNS) return WorkshopState.Over.with(state)
+        return WorkshopState.Playing.with(state, { turn: state.turn + 1 })
+      })
       .reenter(
         [WorkshopState.Playing, WorkshopState.Over],
         WorkshopEvent.Replayed,
