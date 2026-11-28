@@ -88,7 +88,7 @@ export const beSomeoneWorthCalling: Post = {
       'My first real job was in customer success at a solar company, getting customers from a signed contract to panels on their roof. My accounts got there faster than anyone else’s. I wasn’t in tech yet, and I wasn’t thinking long term. I was just excited to not work in fast food.',
     ),
     h.p(
-      'Years later, after a dev bootcamp, I posted that I was looking for work. One of that company’s founders had started something new, remembered my work, and reached out. That became my first engineering job, Solo.',
+      'Years later, after a dev bootcamp, I posted that I was looking for work. One of that company’s founders had started something new, remembered my work, and reached out. That became my first engineering job: Solo.',
     ),
     h.p(
       'A few years in, I took a leap of faith and started my own thing with no clients lined up. I was betting that the people I’d worked with would remember how I showed up.',
