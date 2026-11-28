@@ -6,12 +6,10 @@ import { RoomId } from '#domain/Room'
 
 import { type Actor, started } from '../../lib/actor.ts'
 import type { SiteRoute } from '../../routes.ts'
-import { Page, pageOf } from '../../site/machines/Page.ts'
+import { Page, type PageState, pageOf } from '../../site/machines/Page.ts'
 
 const TYPE_MS = 18
 const CHARS_PER_TICK = 2
-// Switching rooms this many times in a row while he's still talking breaks
-// the Manor for a moment.
 export const CUT_OFF_LIMIT = 3
 export const UPSET_MS = 3200
 
@@ -31,12 +29,37 @@ export const RattlesEvent = Event({
 })
 export type RattlesEvent = typeof RattlesEvent.Type
 
-const startLine = (room: RoomId, cutOffs: number, reducedMotion: boolean) =>
-  reducedMotion
-    ? RattlesState.Said({ room })
-    : RattlesState.Typing({ room, shown: 0, cutOffs })
+const startLine = (room: RoomId, cutOffs: number, reducedMotion: boolean): RattlesState => {
+  if (reducedMotion) return RattlesState.Said({ room })
+  return RattlesState.Typing({ room, shown: 0, cutOffs })
+}
 
-// The state for the first page, so the first render matches the actor.
+interface Line {
+  readonly room: RoomId
+  readonly shown: number
+  readonly cutOffs: number
+}
+
+const cutOff = <T extends Line>(
+  typing: T,
+  room: RoomId,
+  reducedMotion: boolean,
+): T | RattlesState => {
+  if (typing.room === room) return typing
+  if (typing.cutOffs + 1 >= CUT_OFF_LIMIT) return RattlesState.Upset({ room })
+  return startLine(room, typing.cutOffs + 1, reducedMotion)
+}
+
+const typed = ({ room, shown, cutOffs }: Line): RattlesState => {
+  if (shown + CHARS_PER_TICK >= RATTLES_SAYS[room].length) return RattlesState.Said({ room })
+  return RattlesState.Typing({ room, shown: shown + CHARS_PER_TICK, cutOffs })
+}
+
+const rattlesEventOf = (page: PageState): RattlesEvent => {
+  if (page._tag === 'Manor') return RattlesEvent.Entered({ room: page.room })
+  return RattlesEvent.Left
+}
+
 export const rattlesOf = ({
   reducedMotion,
   route,
@@ -45,9 +68,8 @@ export const rattlesOf = ({
   readonly route: SiteRoute
 }): RattlesState => {
   const page = pageOf(route)
-  return page._tag === 'Manor'
-    ? startLine(page.room, 0, reducedMotion)
-    : RattlesState.Away
+  if (page._tag === 'Manor') return startLine(page.room, 0, reducedMotion)
+  return RattlesState.Away
 }
 
 export const rattlesMachine = (reducedMotion: boolean) =>
@@ -60,25 +82,16 @@ export const rattlesMachine = (reducedMotion: boolean) =>
     .onAny(RattlesEvent.Entered, ({ state, event }) =>
       Match.valueTags(state, {
         Away: () => startLine(event.room, 0, reducedMotion),
-        Said: said =>
-          said.room === event.room ? said : startLine(event.room, 0, reducedMotion),
-        Typing: typing =>
-          typing.room === event.room
-            ? typing
-            : typing.cutOffs + 1 >= CUT_OFF_LIMIT
-              ? RattlesState.Upset({ room: event.room })
-              : startLine(event.room, typing.cutOffs + 1, reducedMotion),
-        // He's still fuming: the room changes under him, but his timer
-        // doesn't start over.
+        Said: said => {
+          if (said.room === event.room) return said
+          return startLine(event.room, 0, reducedMotion)
+        },
+        Typing: typing => cutOff(typing, event.room, reducedMotion),
         Upset: () => RattlesState.Upset({ room: event.room }),
       }),
     )
     .onAny(RattlesEvent.Left, () => RattlesState.Away)
-    .on(RattlesState.Typing, RattlesEvent.Ticked, ({ state }) =>
-      state.shown + CHARS_PER_TICK >= RATTLES_SAYS[state.room].length
-        ? RattlesState.Said({ room: state.room })
-        : RattlesState.Typing({ ...state, shown: state.shown + CHARS_PER_TICK }),
-    )
+    .on(RattlesState.Typing, RattlesEvent.Ticked, ({ state }) => typed(state))
     .spawn(
       RattlesState.Typing,
       ({ self }) =>
@@ -97,13 +110,7 @@ export const rattlesMachine = (reducedMotion: boolean) =>
     .background(function followPage({ self }) {
       return Effect.gen(function* () {
         const page = yield* Page
-        yield* Stream.runForEach(page.changes, state =>
-          self.send(
-            state._tag === 'Manor'
-              ? RattlesEvent.Entered({ room: state.room })
-              : RattlesEvent.Left,
-          ),
-        )
+        yield* Stream.runForEach(page.changes, state => self.send(rattlesEventOf(state)))
       })
     })
 

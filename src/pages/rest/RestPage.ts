@@ -1,6 +1,6 @@
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr } from 'effect'
+import { Array as Arr, Option } from 'effect'
 
 import { REST_FACTS, SHOTS } from '#content/rest'
 
@@ -8,6 +8,11 @@ import { homeRoute, href } from '../../routes.ts'
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { fonts, media, rest, widths } from '../../styles/tokens.stylex.ts'
+
+const factText = (fact: string, i: number): string => {
+  if (i < REST_FACTS.length - 1) return `${fact} ·`
+  return fact
+}
 
 const styles = stylex.create({
   page: {
@@ -45,7 +50,7 @@ const styles = stylex.create({
     backgroundColor: rest.red,
     paddingBlock: 8,
     paddingInline: 14,
-    outlineColor: { default: null, ':focus-visible': rest.white },
+    outlineColor: { ':focus-visible': rest.white },
   },
   title: {
     fontFamily: fonts.display,
@@ -109,7 +114,6 @@ const styles = stylex.create({
   when: { display: 'block', color: rest.gold, fontSize: 10 },
 })
 
-// How much of the gallery each shot takes.
 const sizes = stylex.create({
   big: {
     gridColumn: { default: 'span 4', [media.narrow]: 'span 2' },
@@ -133,26 +137,27 @@ export const RestPage = <M>(h: Html.H<M>) =>
         sx(h.div, styles.sub).children(
           ...Arr.flatMap(REST_FACTS, (fact, i) => [
             i > 0 && ' ',
-            sx(h.span, styles.fact).children(i < REST_FACTS.length - 1 ? `${fact} ·` : fact),
+            sx(h.span, styles.fact).children(factText(fact, i)),
           ]),
         ),
         sx(h.div, styles.shots).children(
           ...Arr.flatMap(SHOTS, shot =>
-            shot.photo === undefined
-              ? []
-              : [
-                  sx(h.figure, styles.shot, sizes[shot.size]).children(
-                    sx(h.img, styles.photo).attrs({
-                      src: `/${shot.photo}`,
-                      alt: `${shot.title}, ${shot.when}`,
-                      loading: 'lazy',
-                    }),
-                    sx(h.figcaption, styles.caption).children(
-                      sx(h.span, styles.when).children(shot.when),
-                      shot.title,
-                    ),
+            Option.match(Option.fromNullishOr(shot.photo), {
+              onNone: () => [],
+              onSome: photo => [
+                sx(h.figure, styles.shot, sizes[shot.size]).children(
+                  sx(h.img, styles.photo).attrs({
+                    src: `/${photo}`,
+                    alt: `${shot.title}, ${shot.when}`,
+                    loading: 'lazy',
+                  }),
+                  sx(h.figcaption, styles.caption).children(
+                    sx(h.span, styles.when).children(shot.when),
+                    shot.title,
                   ),
-                ],
+                ),
+              ],
+            }),
           ),
         ),
       ),

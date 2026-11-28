@@ -1,6 +1,7 @@
 import { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
+import { Option } from 'effect'
 
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
@@ -9,13 +10,16 @@ import { type CodeLang, LANG_NAMES } from '../highlight.ts'
 import { CopyCode, HighlightCode } from '../mounts/CodeMounts.ts'
 import { flow } from './prose.stylex.ts'
 
-const plainOf = new WeakMap<object, unknown>()
+const PLAIN = Symbol('plain')
+
+type WithPlain<M> = Html.H<M> & { readonly [PLAIN]?: Html.H<M> }
+
+const inheriting: <T extends object>(proto: T) => T = Object.create
 
 export const proseTags = <M>(h: Html.H<M>): Html.H<M> => {
-  // Everything it doesn't restyle, `el`, `id` and the other tags, comes
-  // from `h`.
-  const tags: Html.H<M> = Object.create(h)
+  const tags = inheriting(h)
   Object.defineProperties(tags, {
+    [PLAIN]: { value: h },
     p: { value: View.shorthand(sx(h.p, prose.block)) },
     h2: { value: View.shorthand(sx(h.h2, prose.h2)) },
     h3: { value: View.shorthand(sx(h.h3, prose.h3)) },
@@ -23,9 +27,6 @@ export const proseTags = <M>(h: Html.H<M>): Html.H<M> => {
     ol: { value: View.shorthand(sx(h.ol, prose.block, prose.list)) },
     li: { value: View.shorthand(sx(h.li, prose.item)) },
     blockquote: { value: View.shorthand(sx(h.blockquote, prose.block, prose.quote)) },
-    // Links in a post lead off the site, to what it quotes or cites, so
-    // they open in a new tab and leave the post where the reader was. A
-    // link back into the site drops it with `.attr('target', undefined)`.
     a: {
       value: View.shorthand(
         sx(h.a, base.link, prose.link).attrs({ target: '_blank', rel: 'noopener noreferrer' }),
@@ -35,36 +36,30 @@ export const proseTags = <M>(h: Html.H<M>): Html.H<M> => {
     code: { value: View.shorthand(sx(h.code, prose.code)) },
     hr: { value: sx(h.hr, prose.rule) },
   })
-  plainOf.set(tags, h)
   return tags
 }
 
-// The `h` that `proseTags` restyled, for a block that draws its own tags.
-const plain = <M>(h: Html.H<M>): Html.H<M> => (plainOf.get(h) as Html.H<M> | undefined) ?? h
+const plain = <M>(h: WithPlain<M>): Html.H<M> => Option.getOrElse(Option.fromNullishOr(h[PLAIN]), () => h)
 
-// A margin note, drawn like a callout on a drawing: a label and a box.
 export const Note = <M>(h: Html.H<M>, label: string, ...children: View.Children<M, never>) =>
   sx(h.aside, prose.block, styles.note).children(
     sx(h.small, styles.noteLabel).children(label),
     sx(h.div, styles.noteBody).children(...children),
   )
 
-// A code listing, highlighted, with a copy button. The tab shows `file` if
-// given, else the language. A screen reader still reads the tab, but the
-// search leaves it out (see search/text.ts), along with the button.
 export const Code = <M>(
-  h: Html.H<M>,
+  h: WithPlain<M>,
   { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file?: string },
 ) =>
-  Listing(plain(h), { code, lang, file })
+  Listing(plain(h), { code, lang, file: Option.fromNullishOr(file) })
 
 const Listing = <M>(
   h: Html.H<M>,
-  { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file?: string | undefined },
+  { code, lang, file }: { readonly code: string; readonly lang: CodeLang; readonly file: Option.Option<string> },
 ) =>
   sx(h.figure, prose.block, styles.code).children(
     sx(h.figcaption, styles.tab).children(
-      h.span(file ?? LANG_NAMES[lang]).attr('data-search', 'skip'),
+      h.span(Option.getOrElse(file, () => LANG_NAMES[lang])).attr('data-search', 'skip'),
       sx(h.button, base.button, styles.copy, stylex.defaultMarker())
         .attrs({ type: 'button', 'aria-label': 'Copy code' })
         .onMount(CopyCode({ code }))
@@ -81,14 +76,16 @@ const Listing = <M>(
     ),
   )
 
-// An image with a caption. Put the file in public/blog/ and pass '/blog/name.png'.
 export const Figure = <M>(
   h: Html.H<M>,
   { src, alt, caption }: { readonly src: string; readonly alt: string; readonly caption?: string },
 ) =>
   sx(h.figure, prose.block).children(
     sx(h.img, styles.image).attrs({ src, alt, loading: 'lazy' }),
-    caption !== undefined && sx(h.figcaption, styles.caption).children(caption),
+    ...Option.match(Option.fromNullishOr(caption), {
+      onNone: () => [],
+      onSome: text => [sx(h.figcaption, styles.caption).children(text)],
+    }),
   )
 
 const prose = stylex.create({
@@ -144,7 +141,6 @@ const prose = stylex.create({
     paddingBlock: 1,
     paddingInline: 5,
   },
-  // A break: a rule with a tick at each end.
   rule: {
     borderStyle: 'none',
     height: 9,
@@ -164,7 +160,6 @@ const styles = stylex.create({
     paddingBlock: 16,
     paddingInline: 20,
   },
-  // A note's paragraphs sit closer.
   noteBody: { [flow.gap]: '.8em' },
   noteLabel: {
     display: 'block',
@@ -177,8 +172,6 @@ const styles = stylex.create({
     marginBottom: 4,
   },
 
-  // The listing bleeds to the panel's edges. Shiki colors its tokens with
-  // these properties.
   code: {
     '--code-foreground': post.ink,
     '--code-token-comment': syntax.comment,
@@ -218,8 +211,6 @@ const styles = stylex.create({
     borderBottomStyle: 'solid',
     borderBottomColor: post.rule,
   },
-  // The button says COPY, then COPIED or FAILED for a moment: CodeMounts
-  // sets `data-state`.
   copy: {
     cursor: 'pointer',
     fontFamily: fonts.mono,
@@ -245,14 +236,14 @@ const styles = stylex.create({
     paddingInline: 9,
     transitionProperty: 'color, border-color',
     transitionDuration: '.15s',
-    outlineWidth: { default: null, ':focus-visible': 2 },
-    outlineStyle: { default: null, ':focus-visible': 'solid' },
-    outlineColor: { default: null, ':focus-visible': blueprint.hi },
-    outlineOffset: { default: null, ':focus-visible': 2 },
-    display: { default: null, [media.print]: 'none' },
+    outlineWidth: { ':focus-visible': 2 },
+    outlineStyle: { ':focus-visible': 'solid' },
+    outlineColor: { ':focus-visible': blueprint.hi },
+    outlineOffset: { ':focus-visible': 2 },
+    display: { [media.print]: 'none' },
   },
   ready: {
-    display: { default: null, [stylex.when.ancestor('[data-state]')]: 'none' },
+    display: { [stylex.when.ancestor('[data-state]')]: 'none' },
   },
   copied: {
     display: { default: 'none', [stylex.when.ancestor('[data-state="copied"]')]: 'inline' },
@@ -260,7 +251,6 @@ const styles = stylex.create({
   failed: {
     display: { default: 'none', [stylex.when.ancestor('[data-state="failed"]')]: 'inline' },
   },
-  // A soft grid behind the code, one row per line, like graph paper.
   pre: {
     overflowX: 'auto',
     paddingBlock: 12,
@@ -274,7 +264,6 @@ const styles = stylex.create({
     backgroundPosition: '-1px 11px',
     backgroundAttachment: 'local',
   },
-  // A <code> takes the browser's monospace unless it's told otherwise.
   listing: { fontFamily: fonts.mono, fontWeight: 400, fontSize: 'inherit', lineHeight: 'normal' },
 
   image: {

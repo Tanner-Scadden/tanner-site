@@ -4,42 +4,29 @@ import { clamp01, random, smooth } from '../../animation/kit.ts'
 
 type Point = readonly [number, number]
 
-// ---------------------------------------------------------------------------
-// A tree's own roots
-// ---------------------------------------------------------------------------
 
-// One straight piece of a root, in world units.
 export interface RootPiece {
   readonly from: Point
   readonly to: Point
-  // How far along the root from the trunk `from` is, so the growth front
-  // reaches it once the pieces before it are done.
   readonly start: number
   readonly length: number
-  // Its width when it's had all its time, already tapered toward the tip.
   readonly width: number
-  // 0 for a root off the trunk, 1 for a fork off that, and so on.
   readonly order: number
 }
 
 export interface RootSystem {
   readonly pieces: ReadonlyArray<RootPiece>
-  // How far the furthest tip is from the trunk, along the roots.
   readonly reach: number
 }
 
-// The most pieces one tree's own roots can have, for the GPU buffers.
 export const ROOT_PIECES = 128
-// The finest a root forks to.
 const ORDERS = 3
 
 export interface RootSpec {
   readonly x: number
   readonly ground: number
   readonly scale: number
-  // The trunk's width, so the roots stay finer than it.
   readonly trunk: number
-  // How deep and how far out they're allowed to go.
   readonly floor: number
   readonly side: number
 }
@@ -51,124 +38,163 @@ interface Sprout {
   readonly width: number
   readonly start: number
   readonly order: number
-  // How hard it turns toward straight down as it goes.
   readonly pull: number
 }
 
 const DOWN = Math.PI / 2
 
-// A tree's roots, grown from `next`. The primaries take slots across the
-// whole downward fan, so no two trees' roots point the same few ways, and
-// the near-level ones run longest, the way laterals do.
-export const rootSystemOf = (next: () => number, spec: RootSpec): RootSystem => {
-  // Small trees put proportionally more into their roots than big ones.
+type PrimaryKind = 'tap' | 'lateral' | 'oblique'
+
+interface PrimaryLook {
+  readonly length: (next: () => number) => number
+  readonly width: number
+  readonly pull: (next: () => number) => number
+}
+
+const PRIMARY = {
+  tap: { length: next => 0.5 + next() * 0.08, width: 0.5, pull: () => 0.22 },
+  lateral: { length: next => 0.46 + next() * 0.22, width: 0.4, pull: next => 0.025 + next() * 0.03 },
+  oblique: { length: next => 0.3 + next() * 0.16, width: 0.36, pull: next => 0.08 + next() * 0.06 },
+} satisfies { readonly [K in PrimaryKind]: PrimaryLook }
+
+const primaryKindOf = (deep: boolean, lateral: boolean): PrimaryKind => {
+  if (deep) return 'tap'
+  if (lateral) return 'lateral'
+  return 'oblique'
+}
+
+const signOf = (next: () => number): number => {
+  if (next() < 0.5) return -1
+  return 1
+}
+
+const primariesOf = (next: () => number, spec: RootSpec): ReadonlyArray<Sprout> => {
   const scale = spec.scale ** 0.75
   const count = 5 + Math.floor(next() * 3)
-  // Most trees drop one taproot, some a couple of sinkers instead.
   const tap = next() < 0.65
   const fan = { from: 0.1, to: Math.PI - 0.1 }
   const slot = (fan.to - fan.from) / count
-  const primaries = Arr.makeBy(count, (k): Sprout => {
+  return Arr.makeBy(count, (k): Sprout => {
     const angle = fan.from + slot * (k + 0.2 + next() * 0.6)
-    // 0 near level, 1 straight down.
-    const steep = Math.sin(angle)
-    const lateral = steep < 0.55
+    const lateral = Math.sin(angle) < 0.55
     const deep = Math.abs(angle - DOWN) < slot * 0.6
-    const length =
-      scale *
-      (deep && tap ? 0.5 + next() * 0.08 : lateral ? 0.46 + next() * 0.22 : 0.3 + next() * 0.16)
+    const look = PRIMARY[primaryKindOf(deep && tap, lateral)]
+    const length = scale * look.length(next)
     return {
       at: [spec.x, spec.ground],
       heading: angle,
       length,
-      width: spec.trunk * (deep && tap ? 0.5 : lateral ? 0.4 : 0.36) * (0.85 + next() * 0.3),
+      width: spec.trunk * look.width * (0.85 + next() * 0.3),
       start: 0,
       order: 0,
-      pull: deep && tap ? 0.22 : lateral ? 0.025 + next() * 0.03 : 0.08 + next() * 0.06,
+      pull: look.pull(next),
     }
   })
+}
 
+interface Fork {
+  readonly at: number
+  readonly side: number
+}
+
+const forkCountOf = (order: number, next: () => number): number => {
+  if (order === 0) return 2 + Math.floor(next() * 2)
+  if (order === 1) return 1 + Math.floor(next() * 2)
+  if (next() < 0.5) return 1
+  return 0
+}
+
+const forksOf = (root: Sprout, next: () => number): ReadonlyArray<Fork> => {
+  const forks: Array<Fork> = []
+  if (root.order >= ORDERS) return forks
+  const n = forkCountOf(root.order, next)
+  let side = signOf(next)
+  for (let k = 0; k < n; k++) {
+    forks.push({ at: 0.18 + (0.7 * (k + next())) / n, side })
+    side = -side
+  }
+  return forks
+}
+
+const liftedOff = (heading: number): number => {
+  if (Math.cos(heading) > 0) return heading + 0.25
+  return heading - 0.25
+}
+
+const alongFloor = (heading: number): number => {
+  if (Math.cos(heading) >= 0) return 0.1
+  return Math.PI - 0.1
+}
+
+const steer = (heading: number, y: number, spec: RootSpec): number => {
+  if (y < spec.ground + 0.02 && Math.sin(heading) < 0.25) return liftedOff(heading)
+  return heading
+}
+
+const growRoot = (
+  next: () => number,
+  spec: RootSpec,
+  root: Sprout,
+  pieces: Array<RootPiece>,
+  queue: Array<Sprout>,
+): void => {
+  const steps = Math.max(2, Math.round([6, 3, 2, 2][root.order]! * (0.8 + next() * 0.4)))
+  const step = root.length / steps
+  let [x, y] = root.at
+  let heading = root.heading
+  let turn = (next() - 0.5) * 0.3
+  const forks = forksOf(root, next)
+  for (let k = 0; k < steps; k++) {
+    if (pieces.length >= ROOT_PIECES) break
+    turn = turn * 0.55 + (next() - 0.5) * 0.55
+    heading += turn + (DOWN - heading) * root.pull
+    heading = steer(heading, y, spec)
+    const nx = x + Math.cos(heading) * step
+    let ny = y + Math.sin(heading) * step
+    if (ny > spec.floor) {
+      ny = spec.floor
+      heading = alongFloor(heading)
+    }
+    if (Math.abs(nx) > spec.side) break
+    ny = Math.max(ny, spec.ground + 0.004)
+    const length = Math.hypot(nx - x, ny - y)
+    const start = root.start + step * k
+    const width = root.width * (1 - 0.72 * (k / steps))
+    pieces.push({ from: [x, y], to: [nx, ny], start, length, width, order: root.order })
+    for (const fork of forks) {
+      if (fork.at < k / steps || fork.at >= (k + 1) / steps) continue
+      queue.push({
+        at: [nx, ny],
+        heading: heading + fork.side * (0.45 + next() * 0.65),
+        length: root.length * (1 - fork.at) * (0.55 + next() * 0.35),
+        width: width * 0.62,
+        start: start + length,
+        order: root.order + 1,
+        pull: root.pull * 0.6 + 0.03,
+      })
+    }
+    x = nx
+    y = ny
+  }
+}
+
+export const rootSystemOf = (next: () => number, spec: RootSpec): RootSystem => {
   const pieces: Array<RootPiece> = []
-  // Grown breadth first, so if the budget runs out it's the finest forks
-  // that go without.
-  const queue: Array<Sprout> = [...primaries]
+  const queue: Array<Sprout> = [...primariesOf(next, spec)]
   for (let q = 0; q < queue.length && pieces.length < ROOT_PIECES; q++) {
-    const root = queue[q]!
-    const steps = Math.max(2, Math.round([6, 3, 2, 2][root.order]! * (0.8 + next() * 0.4)))
-    const step = root.length / steps
-    let [x, y] = root.at
-    let heading = root.heading
-    // The turn carries over from step to step, so it bends in arcs that
-    // drift and change their mind, not in a zigzag or a regular wave.
-    let turn = (next() - 0.5) * 0.3
-    const forks: Array<{ at: number; side: number }> = []
-    if (root.order < ORDERS) {
-      const n =
-        root.order === 0
-          ? 2 + Math.floor(next() * 2)
-          : root.order === 1
-            ? 1 + Math.floor(next() * 2)
-            : next() < 0.5
-              ? 1
-              : 0
-      let side = next() < 0.5 ? -1 : 1
-      for (let k = 0; k < n; k++) {
-        forks.push({ at: 0.18 + (0.7 * (k + next())) / n, side })
-        side = -side
-      }
-    }
-    for (let k = 0; k < steps; k++) {
-      if (pieces.length >= ROOT_PIECES) break
-      turn = turn * 0.55 + (next() - 0.5) * 0.55
-      heading += turn + (DOWN - heading) * root.pull
-      // Near the surface, roots dive rather than break through.
-      if (y < spec.ground + 0.02 && Math.sin(heading) < 0.25) heading += Math.cos(heading) > 0 ? 0.25 : -0.25
-      let nx = x + Math.cos(heading) * step
-      let ny = y + Math.sin(heading) * step
-      // At the bottom of the sheet they run level.
-      if (ny > spec.floor) {
-        ny = spec.floor
-        heading = Math.cos(heading) >= 0 ? 0.1 : Math.PI - 0.1
-      }
-      if (Math.abs(nx) > spec.side) break
-      ny = Math.max(ny, spec.ground + 0.004)
-      const length = Math.hypot(nx - x, ny - y)
-      const start = root.start + step * k
-      const width = root.width * (1 - 0.72 * (k / steps))
-      pieces.push({ from: [x, y], to: [nx, ny], start, length, width, order: root.order })
-      for (const fork of forks) {
-        const from = k / steps
-        const to = (k + 1) / steps
-        if (fork.at < from || fork.at >= to) continue
-        queue.push({
-          at: [nx, ny],
-          heading: heading + fork.side * (0.45 + next() * 0.65),
-          length: root.length * (1 - fork.at) * (0.55 + next() * 0.35),
-          width: width * 0.62,
-          start: start + length,
-          order: root.order + 1,
-          pull: root.pull * 0.6 + 0.03,
-        })
-      }
-      x = nx
-      y = ny
-    }
+    growRoot(next, spec, queue[q]!, pieces, queue)
   }
   const reach = Arr.reduce(pieces, 0, (m, p) => Math.max(m, p.start + p.length))
   return { pieces, reach }
 }
 
-// How far out along its roots a tree's growth front is, `age` seconds after
-// it sprouts: quick at first, then slowing, until it's all out at
-// ROOT_GROW. A seed's root comes before its shoot, so they start as soon as
-// it sprouts.
 export const ROOT_GROW = 5
 const easeOut = (u: number): number => 1 - (1 - clamp01(u)) ** 3
-export const rootFrontOf = (system: RootSystem, age: number): number =>
-  age <= 0 ? 0 : system.reach * easeOut(age / ROOT_GROW)
+export const rootFrontOf = (system: RootSystem, age: number): number => {
+  if (age <= 0) return 0
+  return system.reach * easeOut(age / ROOT_GROW)
+}
 
-// How thick roots are, `age` seconds in: thin at first, filled out by the
-// time they're all grown.
 const maturityOf = (age: number): number => 0.3 + 0.7 * easeOut(age / ROOT_GROW)
 
 export interface DrawnRoot {
@@ -177,8 +203,6 @@ export interface DrawnRoot {
   readonly width: number
 }
 
-// A tree's own roots `age` seconds after it sprouts: only what the front
-// has reached, the newest part finest, the old wood near the trunk thicker.
 export const drawRoots = (system: RootSystem, age: number, scale: number): ReadonlyArray<DrawnRoot> => {
   const front = rootFrontOf(system, age)
   if (front <= 0) return []
@@ -192,43 +216,27 @@ export const drawRoots = (system: RootSystem, age: number, scale: number): Reado
       piece.from[0] + (piece.to[0] - piece.from[0]) * f,
       piece.from[1] + (piece.to[1] - piece.from[1]) * f,
     ]
-    // The last stretch behind the front is still a fine new tip.
     const tip = 0.35 + 0.65 * smooth(drawn / (0.12 * scale))
     out.push({ from: piece.from, to, width: piece.width * mature * tip })
   }
   return out
 }
 
-// ---------------------------------------------------------------------------
-// Reaching roots
-// ---------------------------------------------------------------------------
 
-// How far down the two roots of a pair meet, how far past the meeting each
-// runs on, twisting around the other, and how they grow.
 const MEET = { min: 0.12, spread: 0.1 } as const
 const OVERLAP = 0.09
 const TWIST = 0.017
 const APPROACH_STEPS = 12
 const TWIST_STEPS = 16
 const ROOTLETS = 2
-// Each rootlet off a reaching root is drawn in this many pieces.
 const ROOTLET_STEPS = 2
 export const REACH_LINES = APPROACH_STEPS + TWIST_STEPS + ROOTLETS * ROOTLET_STEPS
-// How fast a reaching root grows, and the longest it takes to get to the
-// meeting point: one with further to go grows faster.
 const REACH_RATE = 0.11
 export const REACH_MAX = 2.2
 export const reachRateOf = (distance: number): number => Math.max(REACH_RATE, distance / REACH_MAX)
-// How long the run on past the meeting point can take.
 export const OVERLAP_MAX = OVERLAP / REACH_RATE
-// How long a new tie takes to show in full, gold spread back along both
-// roots toward the trunks.
 export const BOND = 2.5
 
-// A pair's roots wander from their own seed, so they wander the same way
-// every frame without being stored.
-// A smooth wander that starts and ends at 0: a random walk of turns, with
-// its drift taken out so it lands where it should (a Brownian bridge).
 const bridgeOf = (next: () => number, n: number): ReadonlyArray<number> => {
   let slope = 0
   let y = 0
@@ -243,63 +251,51 @@ const bridgeOf = (next: () => number, n: number): ReadonlyArray<number> => {
 }
 
 export interface Reach {
-  // The tree the root belongs to, and where its trunk is.
   readonly x: number
   readonly ground: number
-  // The way to the meeting point, ±1, and how far it is.
   readonly dir: number
   readonly distance: number
-  // +1 for the one that reached, -1 for the one reaching back, so the two
-  // twist around each other rather than lie on top of each other.
   readonly twist: number
-  // The pair's seed, the same for both roots, so they agree on where to
-  // meet but wander their own ways there.
   readonly seed: number
-  // How far it's grown, and how long ago the two met (negative if not yet).
   readonly length: number
   readonly held: number
 }
 
 export interface DrawnReach extends DrawnRoot {
-  // 0 to 1, how much of the tie's gold it carries.
   readonly bond: number
 }
 
-// How far a reaching root runs: it dives, wanders to the meeting point,
-// then runs on past it, twisting around its partner.
 export const reachLengthOf = (distance: number): number => distance + OVERLAP
 
-// How strong a tie is that's held this long: it strengthens over BOND
-// seconds, then holds.
-export const bondOf = (held: number): number => (held <= 0 ? 0 : smooth(held / BOND))
+export const bondOf = (held: number): number => {
+  if (held <= 0) return 0
+  return smooth(held / BOND)
+}
+
+const strandOf = (twist: number): number => {
+  if (twist > 0) return 0
+  return 1
+}
 
 export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
   if (reach.length <= 0) return []
   const { x, ground, dir, distance: half } = reach
-  // How deep this pair meets, shared by both. Drawn from the pair's seed,
-  // so its roots wander the same way every frame without being stored.
   const shared = random(reach.seed)
   const meet = MEET.min + shared() * MEET.spread
-  // How many times they wrap around each other, and where they start.
   const wraps = 1.2 + shared() * 0.8
   const offset = shared() * Math.PI * 2
-  // The knot isn't level: it slopes and bows a little, the same for both.
   const tilt = (shared() - 0.5) * 0.5
   const bow = (shared() - 0.5) * 0.04
   const axisAt = (along: number) => {
     const w = (along - half) * dir
     return tilt * w + bow * (1 - (w / OVERLAP) ** 2)
   }
-  const next = random(reach.seed * 2 + (reach.twist > 0 ? 0 : 1))
+  const next = random(reach.seed * 2 + strandOf(reach.twist))
   const approach = Math.max(half - OVERLAP, half * 0.4)
   const wander = bridgeOf(next, APPROACH_STEPS)
-  // Short gaps wander less, so close neighbours don't loop wildly.
   const amp = 0.022 * Math.min(1.5, half / 0.18) * (0.7 + next() * 0.6)
   const dive = 0.025 + next() * 0.04
-  // Each dips below the meeting depth on the way, then comes back up to it.
   const sag = (0.2 + next() * 0.5) * meet
-  // Where along the axis toward the neighbour, from the trunk, and how far
-  // below the ground.
   const approachAt = (k: number): Point => {
     const u = k / APPROACH_STEPS
     const along = approach * u
@@ -310,17 +306,12 @@ export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
       axisAt(approach) * u ** 2
     return [along, depth]
   }
-  // Past the end of the approach, the two roots share a line and twist
-  // around it. Their offsets are opposite at every point, so they cross.
   const twistAt = (k: number): Point => {
     const e = (k / TWIST_STEPS) * (half + OVERLAP - approach)
     const along = approach + e
     const fromMeet = along - half
     const span = half + OVERLAP - approach
-    // They only start to wrap around each other once they've met.
     const envelope = Math.max(0, Math.sin((Math.PI * e) / span)) ** 0.7 * smooth(reach.held / 1.5)
-    // Measured from the meeting point along the ground, the same for both
-    // roots of the pair, so with opposite `twist` they cross each other.
     const phase = offset + (fromMeet * dir * Math.PI * wraps) / OVERLAP
     return [along, meet + axisAt(along) + reach.twist * TWIST * envelope * Math.sin(phase)]
   }
@@ -329,8 +320,6 @@ export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
 
   const goldAt = (along: number) => {
     if (reach.held <= 0) return 0
-    // Gold starts at the knot and spreads back toward the trunk, but never
-    // all the way: it's the tie that's gold, not the trees.
     const away = Math.abs(half - along)
     const reachBack = 0.05 + (Math.max(half * 0.75, OVERLAP) - 0.05) * smooth(reach.held / BOND)
     return (
@@ -346,8 +335,6 @@ export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
   for (let k = 0; k + 1 < path.length; k++) {
     const a = path[k]!
     const b = path[k + 1]!
-    // Grown by distance along the axis, so both roots of a pair get to the
-    // meeting point together.
     if (reach.length <= a[0]) break
     const f = Math.min(1, (reach.length - a[0]) / (b[0] - a[0]))
     const end: Point = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]
@@ -355,10 +342,9 @@ export const drawReach = (reach: Reach): ReadonlyArray<DrawnReach> => {
     out.push({ from: world(a), to: world(end), width: taper(a[0]) * (1 + 0.9 * gold), bond: gold })
   }
 
-  // A couple of fine rootlets off the approach, once it's grown past them.
   for (let r = 0; r < ROOTLETS; r++) {
     const k = 2 + Math.floor(next() * (APPROACH_STEPS - 5))
-    const side = next() < 0.5 ? -1 : 1
+    const side = signOf(next)
     const angle = DOWN + side * (0.5 + next() * 0.6) * dir
     const length = 0.03 + next() * 0.03
     const bend = (next() - 0.5) * 0.8

@@ -1,11 +1,8 @@
 import { clamp01 } from '../../gpu/math.ts'
 import type { Point, Rgba } from './scene.ts'
 
-// The figures take these from here, but every drawing on the site shares
-// them.
 export { clamp01, random } from '../../gpu/math.ts'
 
-// Smoothstep, so ramps start and end gently.
 export const smooth = (t: number): number => {
   const c = clamp01(t)
   return c * c * (3 - 2 * c)
@@ -13,8 +10,6 @@ export const smooth = (t: number): number => {
 
 export type Rgb = readonly [number, number, number]
 
-// The sheet's line colour, its gold, a warm white, and the post's red,
-// #ff6b61.
 export const LINE: Rgb = [0.86, 0.92, 1]
 export const GOLD: Rgb = [1, 0.82, 0.4]
 export const WARM: Rgb = [1, 0.94, 0.8]
@@ -27,15 +22,11 @@ export const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
   a[2] + (b[2] - a[2]) * t,
 ]
 
-// How a figure puts its world on a canvas this big: px per world unit, and
-// where a world point lands, in CSS px.
 export type Projection = (
   width: number,
   height: number,
 ) => { readonly scale: number; readonly px: (point: Point) => Point }
 
-// Where an aim lands in the world. An aim is a fraction of the canvas,
-// which is always 16:9, so any 16:9 size of it will do.
 const AIM_SIZE = { width: 1600, height: 900 } as const
 export const worldOfAim =
   (projection: Projection) =>

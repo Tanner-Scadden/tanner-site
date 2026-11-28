@@ -1,13 +1,13 @@
-import { Array as Arr, Option, String as Str } from 'effect'
+import { Array as Arr, Option, Record as Rec, String as Str } from 'effect'
 
-const isVowel = (c: string | undefined): boolean =>
-  c === 'a' || c === 'e' || c === 'i' || c === 'o' || c === 'u' || c === 'y'
+const VOWELS = new Set(['a', 'e', 'i', 'o', 'u', 'y'])
+
+const vowelAt = (w: string, i: number): boolean => Option.exists(Str.charAt(w, i), c => VOWELS.has(c))
 
 const DOUBLES = new Set(['bb', 'dd', 'ff', 'gg', 'mm', 'nn', 'pp', 'rr', 'tt'])
 const LI_ENDINGS = new Set(['c', 'd', 'e', 'g', 'h', 'k', 'm', 'n', 'r', 't'])
 
-// Whole words with a stem of their own.
-const EXCEPTIONS: Readonly<Record<string, string>> = {
+const EXCEPTIONS: ReadonlyMap<string, string> = new Map(Rec.toEntries({
   skis: 'ski',
   skies: 'sky',
   idly: 'idl',
@@ -26,29 +26,26 @@ const EXCEPTIONS: Readonly<Record<string, string>> = {
   dying: 'die',
   lying: 'lie',
   tying: 'tie',
-}
+}))
 
-// Words step 1a leaves alone.
 const AFTER_1A = new Set(['inning', 'outing', 'canning', 'herring', 'earring', 'proceed', 'exceed', 'succeed'])
 
-// Prefixes whose R1 starts right after them.
 const R1_PREFIXES = ['gener', 'commun', 'arsen', 'past', 'univers', 'later', 'emerg', 'organ'] as const
 
-// The region after the first non-vowel that follows a vowel, from `from`.
 const regionAfter = (w: string, from: number): number => {
   for (let i = from + 1; i < w.length; i++) {
-    if (!isVowel(w[i]) && isVowel(w[i - 1])) return i + 1
+    if (!vowelAt(w, i) && vowelAt(w, i - 1)) return i + 1
   }
   return w.length
 }
 
-// A short syllable ending at `i`: a vowel then a non-vowel other than w, x or
-// Y, after a non-vowel; or a vowel then a non-vowel at the start.
 const shortSyllableAt = (w: string, i: number): boolean => {
-  if (i === 1) return isVowel(w[0]) && !isVowel(w[1])
-  const c = w[i]
+  if (i === 1) return vowelAt(w, 0) && !vowelAt(w, 1)
   return (
-    i >= 2 && !isVowel(w[i - 2]) && isVowel(w[i - 1]) && !isVowel(c) && c !== 'w' && c !== 'x' && c !== 'Y'
+    i >= 2 &&
+    !vowelAt(w, i - 2) &&
+    vowelAt(w, i - 1) &&
+    Option.exists(Str.charAt(w, i), c => !VOWELS.has(c) && c !== 'w' && c !== 'x' && c !== 'Y')
   )
 }
 
@@ -58,11 +55,10 @@ const longestSuffix = (w: string, suffixes: ReadonlyArray<string>): Option.Optio
   Arr.findFirst(suffixes, suffix => Str.endsWith(suffix)(w))
 
 const hasVowel = (w: string): boolean => {
-  for (let i = 0; i < w.length; i++) if (isVowel(w[i])) return true
+  for (let i = 0; i < w.length; i++) if (vowelAt(w, i)) return true
   return false
 }
 
-// Step 2's suffixes, longest first, with what each becomes.
 const STEP2: ReadonlyArray<readonly [string, string]> = [
   ['ization', 'ize'],
   ['ational', 'ate'],
@@ -126,18 +122,29 @@ const STEP4 = [
 const findPair = (w: string, table: ReadonlyArray<readonly [string, string]>) =>
   Arr.findFirst(table, ([suffix]) => Str.endsWith(suffix)(w))
 
+const withoutLeadingApostrophe = (word: string): string => {
+  if (Str.startsWith("'")(word)) return Str.slice(1)(word)
+  return word
+}
+
+const markedAt = (w: string, c: string, i: number): string => {
+  if (c === 'y' && (i === 0 || vowelAt(w, i - 1))) return 'Y'
+  return c
+}
+
+const markConsonantY = (w: string): string => Arr.join(Arr.map(Str.split(w, ''), (c, i) => markedAt(w, c, i)), '')
+
+const iesEnding = (w: string): string => {
+  if (w.length > 1) return 'i'
+  return 'ie'
+}
+
 export const stem = (word: string): string => {
   if (word.length <= 2) return word
-  const exception = EXCEPTIONS[word]
-  if (exception !== undefined) return exception
+  const exception = Option.fromNullishOr(EXCEPTIONS.get(word))
+  if (Option.isSome(exception)) return exception.value
 
-  let w = Str.startsWith("'")(word) ? Str.slice(1)(word) : word
-  // A y at the start or after a vowel is a consonant: mark it Y.
-  let marked = ''
-  for (let i = 0; i < w.length; i++) {
-    marked += w[i] === 'y' && (i === 0 || isVowel(w[i - 1])) ? 'Y' : (w[i] as string)
-  }
-  w = marked
+  let w = markConsonantY(withoutLeadingApostrophe(word))
 
   const prefix = Arr.findFirst(R1_PREFIXES, p => Str.startsWith(p)(w))
   const r1 = Option.match(prefix, { onNone: () => regionAfter(w, 0), onSome: p => p.length })
@@ -148,20 +155,17 @@ export const stem = (word: string): string => {
     w = Str.slice(0, w.length - n)(w)
   }
 
-  // Step 0: possessives.
   Option.map(longestSuffix(w, ["'s'", "'s", "'"]), suffix => cut(suffix.length))
 
-  // Step 1a: plurals.
   Option.map(longestSuffix(w, ['sses', 'ied', 'ies', 'us', 'ss', 's']), suffix => {
     if (suffix === 'sses') cut(2)
     else if (suffix === 'ied' || suffix === 'ies') {
       cut(3)
-      w += w.length > 1 ? 'i' : 'ie'
+      w += iesEnding(w)
     } else if (suffix === 's' && w.length >= 2 && hasVowel(Str.slice(0, -2)(w))) cut(1)
   })
   if (AFTER_1A.has(w)) return w
 
-  // Step 1b: -ed and -ing.
   Option.map(longestSuffix(w, ['eedly', 'ingly', 'edly', 'eed', 'ing', 'ed']), suffix => {
     if (suffix === 'eed' || suffix === 'eedly') {
       if (inR1(suffix)) w = Str.slice(0, w.length - suffix.length)(w) + 'ee'
@@ -175,12 +179,10 @@ export const stem = (word: string): string => {
     else if (r1 >= w.length && endsShortSyllable(w)) w += 'e'
   })
 
-  // Step 1c: a final y after a consonant, not the first letter, becomes i.
-  if (w.length > 2 && (Str.endsWith('y')(w) || Str.endsWith('Y')(w)) && !isVowel(w[w.length - 2])) {
+  if (w.length > 2 && (Str.endsWith('y')(w) || Str.endsWith('Y')(w)) && !vowelAt(w, w.length - 2)) {
     w = Str.slice(0, -1)(w) + 'i'
   }
 
-  // Step 2.
   Option.map(findPair(w, STEP2), ([suffix, to]) => {
     if (!inR1(suffix)) return
     if (suffix === 'ogi' && w[w.length - 4] !== 'l') return
@@ -188,14 +190,12 @@ export const stem = (word: string): string => {
     w = Str.slice(0, w.length - suffix.length)(w) + to
   })
 
-  // Step 3.
   Option.map(findPair(w, STEP3), ([suffix, to]) => {
     if (!inR1(suffix)) return
     if (suffix === 'ative' && !inR2(suffix)) return
     w = Str.slice(0, w.length - suffix.length)(w) + to
   })
 
-  // Step 4.
   Option.map(
     Arr.findFirst(STEP4, suffix => Str.endsWith(suffix)(w)),
     suffix => {
@@ -208,7 +208,6 @@ export const stem = (word: string): string => {
     },
   )
 
-  // Step 5: a final e or l.
   if (Str.endsWith('e')(w)) {
     if (inR2('e') || (inR1('e') && !endsShortSyllable(Str.slice(0, -1)(w)))) cut(1)
   } else if (Str.endsWith('ll')(w) && inR2('l')) cut(1)

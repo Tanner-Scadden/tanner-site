@@ -1,5 +1,5 @@
 import { BrowserWorker } from '@effect/platform-browser'
-import { Duration, Effect, Layer, Ref } from 'effect'
+import { Boolean as Bool, Duration, Effect, Layer, Ref } from 'effect'
 import { RpcClient, RpcWorker } from 'effect/rpc'
 
 import { POSTS } from '../posts.ts'
@@ -9,10 +9,13 @@ import { SearchPosts } from './SearchPosts.ts'
 
 const TIMEOUT = Duration.seconds(3)
 
-// The in-page search, loaded only if the worker fails.
 const onPage = Effect.cached(
   Effect.promise(() => import('./SearchLocal.ts')).pipe(Effect.flatMap(module => module.makeLocal)),
 )
+
+const spawnSearchWorker = () =>
+  // oxlint-disable-next-line effect/noGlobals -- BrowserWorker.layer takes a spawn function, and constructing the platform Worker is that adapter's job
+  new Worker(new URL('./search.worker.ts', import.meta.url), { type: 'module' })
 
 const viaWorker = SearchPosts.toLayer(
   Effect.gen(function* () {
@@ -22,9 +25,10 @@ const viaWorker = SearchPosts.toLayer(
     const fallback = (query: string) => Effect.flatMap(local, search => search(query))
     return ({ query }) =>
       Effect.flatMap(Ref.get(failed), broken =>
-        broken
-          ? fallback(query)
-          : client.Search({ query }).pipe(
+        Bool.match(broken, {
+          onTrue: () => fallback(query),
+          onFalse: () =>
+            client.Search({ query }).pipe(
               Effect.timeout(TIMEOUT),
               Effect.catchCause(cause =>
                 Effect.logWarning('Search worker failed; searching on the page', cause).pipe(
@@ -33,13 +37,12 @@ const viaWorker = SearchPosts.toLayer(
                 ),
               ),
             ),
+        }),
       )
   }),
 ).pipe(
   Layer.provide(RpcClient.layerProtocolWorker({ size: 1 })),
-  Layer.provide(
-    BrowserWorker.layer(() => new Worker(new URL('./search.worker.ts', import.meta.url), { type: 'module' })),
-  ),
+  Layer.provide(BrowserWorker.layer(spawnSearchWorker)),
   Layer.provide(RpcWorker.layerInitialMessage(Docs, Effect.sync(() => postDocs(POSTS)))),
 )
 

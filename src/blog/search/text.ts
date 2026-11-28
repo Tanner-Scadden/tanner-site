@@ -34,27 +34,32 @@ const textOf = (node: View.Node<unknown, unknown>): string =>
     Element: element => {
       if (skipped(element)) return ''
       const inner = Arr.join(Arr.map(element.children, textOf), '')
-      return INLINE.has(element.tag) ? inner : `\n${inner}\n`
+      if (INLINE.has(element.tag)) return inner
+      return `\n${inner}\n`
     },
     Child: () => '',
     Outlet: () => '',
   })
 
-// The plain text of a body, one line per block.
 export const plainText = (body: ReadonlyArray<View.Input<unknown, unknown>>): string =>
   Str.trim(Str.replace(/[ \t]*\n\s*/g, '\n')(Arr.join(Arr.map(View.children(body), textOf), '')))
 
-// Only Html's tag builders: enough to read a body without mounting it.
-const tags = Html.tags as unknown as Html.H<never>
+// oxlint-disable-next-line effect/noAs, effect/noChainedTypeAssertions -- @effect/ui builds an Html.H only inside a component render; Html.tags is its runtime tag set, typed as a loose record
+export const tags = Html.tags as unknown as Html.H<never>
 
-// The plain text of a post's body.
 export const postText = (post: Post): string => plainText(post.body(tags))
 
-// A figure that says how long it plays, in seconds.
-const playsFor = (node: View.Child<unknown, unknown>): number =>
-  Predicate.hasProperty(node.component, 'seconds') && Predicate.isFunction(node.component.seconds)
-    ? Number(node.component.seconds())
-    : 0
+interface Timed {
+  readonly seconds: () => number
+}
+
+const isTimed = (component: unknown): component is Timed =>
+  Predicate.hasProperty(component, 'seconds') && Predicate.isFunction(component.seconds)
+
+const playsFor = (node: View.Child<unknown, unknown>): number => {
+  if (isTimed(node.component)) return Number(node.component.seconds())
+  return 0
+}
 
 const secondsOf = (node: View.Node<unknown, unknown>): number =>
   Match.valueTags(node, {
@@ -64,6 +69,5 @@ const secondsOf = (node: View.Node<unknown, unknown>): number =>
     Outlet: () => 0,
   })
 
-// How long a post's drawings play, its hero's too, in seconds.
 export const postSeconds = (post: Post): number =>
   Num.sumAll(Arr.map(View.children([...post.body(tags), ...(post.hero?.(tags) ?? [])]), secondsOf))

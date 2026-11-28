@@ -1,14 +1,20 @@
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr } from 'effect'
+import { Array as Arr, Option } from 'effect'
 
-import { WORK } from '#content/home'
+import { type Job, WORK } from '#content/home'
 
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { WorkDrawing } from '../mounts/WorkDrawing.ts'
 import { workMarker } from './work.stylex.ts'
+
+const jobAttrs = ({ wave }: Job): Readonly<Record<string, string>> =>
+  Option.match(Option.fromUndefinedOr(wave), {
+    onNone: () => ({ 'data-job': '' }),
+    onSome: color => ({ 'data-job': '', 'data-wave': color }),
+  })
 
 export const Work = <M>(h: Html.H<M>, still: boolean) =>
   sx(h.div, styles.work, workMarker).children(
@@ -17,7 +23,7 @@ export const Work = <M>(h: Html.H<M>, still: boolean) =>
       .onMount(WorkDrawing({ still })),
     ...Arr.map(WORK, (job, i) =>
       sx(h.div, styles.job, i === WORK.length - 1 && styles.lastJob)
-        .attrs({ 'data-job': '', ...(job.wave === undefined ? {} : { 'data-wave': job.wave }) })
+        .attrs(jobAttrs(job))
         .children(
           h.div(
             sx(h.small, styles.note).children(job.when),
@@ -105,7 +111,6 @@ const styles = stylex.create({
   step: {
     borderWidth: 1,
     borderStyle: 'solid',
-    // On paper there's no GPU drawing, so the CSS borders come back.
     borderColor: {
       default: blueprint.rule,
       [stylex.when.ancestor('[data-gpu="on"]', workMarker)]: 'transparent',
@@ -134,7 +139,7 @@ const styles = stylex.create({
     display: 'grid',
     placeItems: 'center',
     color: blueprint.dim,
-    transform: { default: null, [media.narrow]: 'rotate(90deg)' },
-    height: { default: null, [media.narrow]: 22 },
+    transform: { [media.narrow]: 'rotate(90deg)' },
+    height: { [media.narrow]: 22 },
   },
 })

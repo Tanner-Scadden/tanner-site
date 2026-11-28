@@ -25,11 +25,10 @@ export const thesisMachine = Machine.make({
   event: ThesisEvent,
   initial: ThesisState.Wordy({ line: 0 }),
 })
-  .on(ThesisState.Wordy, ThesisEvent.Clicked, ({ state }) =>
-    state.line + 1 >= LAST
-      ? ThesisState.Solved
-      : ThesisState.Wordy({ line: state.line + 1 }),
-  )
+  .on(ThesisState.Wordy, ThesisEvent.Clicked, ({ state }) => {
+    if (state.line + 1 >= LAST) return ThesisState.Solved
+    return ThesisState.Wordy({ line: state.line + 1 })
+  })
   .on(ThesisState.Solved, ThesisEvent.Clicked, () => ThesisState.Wordy({ line: 0 }))
   .spawn(ThesisState.Solved, () => findEgg('thesis'), { name: 'findThesisEgg' })
 

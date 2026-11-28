@@ -1,10 +1,9 @@
-import { Array as Arr, Effect, Schema } from 'effect'
+import { Array as Arr, Effect, Option, Schema } from 'effect'
 import type { HighlighterCore, ThemedToken } from 'shiki/core'
 
 export const CodeLang = Schema.Literals(['ts', 'tsx', 'js', 'json', 'bash', 'css', 'html'])
 export type CodeLang = typeof CodeLang.Type
 
-// What each language is called on the code block's tab.
 export const LANG_NAMES: Record<CodeLang, string> = {
   ts: 'TYPESCRIPT',
   tsx: 'TSX',
@@ -35,9 +34,19 @@ export class HighlightUnavailable extends Schema.TaggedError<
 const attempt = <A>(load: () => Promise<A>) =>
   Effect.tryPromise({ try: load, catch: cause => HighlightUnavailable.make({ cause }) })
 
+const loadShikiCore = () => import('shiki/core')
+const loadRegexEngine = () => import('shiki/engine/javascript')
+const loadTypescript = () => import('shiki/langs/typescript.mjs')
+const loadTsx = () => import('shiki/langs/tsx.mjs')
+const loadJavascript = () => import('shiki/langs/javascript.mjs')
+const loadJson = () => import('shiki/langs/json.mjs')
+const loadShell = () => import('shiki/langs/shellscript.mjs')
+const loadCss = () => import('shiki/langs/css.mjs')
+const loadHtml = () => import('shiki/langs/html.mjs')
+
 const loadHighlighter = Effect.gen(function* () {
   const [{ createHighlighterCore, createCssVariablesTheme }, { createJavaScriptRegexEngine }] =
-    yield* Effect.all([attempt(() => import('shiki/core')), attempt(() => import('shiki/engine/javascript'))], {
+    yield* Effect.all([attempt(loadShikiCore), attempt(loadRegexEngine)], {
       concurrency: 'unbounded',
     })
   return yield* attempt(
@@ -45,20 +54,19 @@ const loadHighlighter = Effect.gen(function* () {
       createHighlighterCore({
         themes: [createCssVariablesTheme({ name: THEME, variablePrefix: '--code-', fontStyle: true })],
         langs: [
-          import('shiki/langs/typescript.mjs'),
-          import('shiki/langs/tsx.mjs'),
-          import('shiki/langs/javascript.mjs'),
-          import('shiki/langs/json.mjs'),
-          import('shiki/langs/shellscript.mjs'),
-          import('shiki/langs/css.mjs'),
-          import('shiki/langs/html.mjs'),
+          loadTypescript(),
+          loadTsx(),
+          loadJavascript(),
+          loadJson(),
+          loadShell(),
+          loadCss(),
+          loadHtml(),
         ],
         engine: createJavaScriptRegexEngine(),
       }),
   )
 })
 
-// Loaded once and shared by every code block.
 const highlighter = Effect.runSync(Effect.cached(loadHighlighter))
 
 export const tokenize = ({
@@ -70,11 +78,14 @@ export const tokenize = ({
 }): Effect.Effect<ReadonlyArray<ReadonlyArray<ThemedToken>>, HighlightUnavailable> =>
   Effect.map(highlighter, h => h.codeToTokensBase(code, { lang: SHIKI_LANG[lang], theme: THEME }))
 
-// Shiki's font style is a bit set: 1 italic, 2 bold, 4 underline.
 const ITALIC = 1
 const BOLD = 2
 
-// One span per token, and a newline between lines.
+const lineBreak = (document: Document, index: number): ReadonlyArray<Node> => {
+  if (index === 0) return []
+  return [document.createTextNode('\n')]
+}
+
 export const tokenNodes = ({
   document,
   lines,
@@ -83,11 +94,12 @@ export const tokenNodes = ({
   readonly lines: ReadonlyArray<ReadonlyArray<ThemedToken>>
 }): ReadonlyArray<Node> =>
   Arr.flatMap(lines, (line, i) => [
-    ...(i > 0 ? [document.createTextNode('\n')] : []),
+    ...lineBreak(document, i),
     ...Arr.map(line, token => {
       const span = document.createElement('span')
       span.textContent = token.content
-      if (token.color !== undefined) span.style.color = token.color
+      const color = Option.fromNullishOr(token.color)
+      if (Option.isSome(color)) span.style.color = color.value
       const style = token.fontStyle ?? 0
       if ((style & ITALIC) !== 0) span.style.fontStyle = 'italic'
       if ((style & BOLD) !== 0) span.style.fontWeight = '700'

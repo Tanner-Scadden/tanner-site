@@ -1,29 +1,25 @@
+import { Boolean as Bool } from 'effect'
+
 import type { Post } from '#domain/Post'
 
 import { beSomeoneWorthCalling } from './posts/be-someone-worth-calling.ts'
 
 export const PUBLISHED: ReadonlyArray<Post> = [beSomeoneWorthCalling]
 
-// Posts being written. Put them in WRITING: they show under `bun run dev`
-// only, and a build swaps the list for an empty one, so a draft's words
-// never ship.
 const WRITING: ReadonlyArray<Post> = []
 
-export const DRAFTS: ReadonlyArray<Post> = import.meta.env.DEV ? WRITING : []
+export const DRAFTS: ReadonlyArray<Post> = Bool.match(import.meta.env.DEV, { onTrue: () => WRITING, onFalse: () => [] })
 
 export const BLOG = {
   title: 'Blog',
   intro: 'A collection of random thoughts I think might be good.',
   noMatch: 'No posts match that yet.',
-  // The section on the home page.
   section: 'BLOG',
   newest: 3,
   all: 'ALL POSTS →',
   empty: 'Nothing posted yet. The first one is still on the drafting table.',
   back: '← ALL POSTS',
-  // Under each post, linking to its file on GitHub.
   source: 'See how this post is built ↗',
-  // Beside each post's date.
   read: (minutes: number) => `${minutes} MIN READ`,
   newer: 'NEWER',
   older: 'OLDER',

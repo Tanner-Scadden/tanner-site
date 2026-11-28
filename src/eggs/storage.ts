@@ -11,8 +11,12 @@ class EggStorageError extends Schema.TaggedError<
   reason: Schema.String,
 }) {}
 
-const toStorageError = (error: unknown): EggStorageError =>
-  EggStorageError.make({ reason: String(error) })
+const toStorageError = (cause: unknown): EggStorageError =>
+  EggStorageError.make({ reason: String(cause) })
+
+const browserStorage = (): Storage =>
+  // oxlint-disable-next-line effect/noGlobals -- this is the one adapter to the browser's localStorage; reads and writes go through Effect.try around it
+  localStorage
 
 const StoredEggs = Schema.fromJsonString(Schema.Array(Schema.Unknown))
 const decodeStoredEggs = Schema.decodeUnknownOption(StoredEggs)
@@ -24,7 +28,7 @@ const isEggId = Schema.is(EggId)
 
 export const readFoundEggs: Effect.Effect<ReadonlyArray<EggId>> = pipe(
   Effect.try({
-    try: () => Option.fromNullishOr(localStorage.getItem(STORAGE_KEY)),
+    try: () => Option.fromNullishOr(browserStorage().getItem(STORAGE_KEY)),
     catch: toStorageError,
   }),
   Effect.map(
@@ -47,7 +51,7 @@ export const saveFoundEggs = (
     encodeFoundEggs(found),
     Effect.flatMap(json =>
       Effect.try({
-        try: () => localStorage.setItem(STORAGE_KEY, json),
+        try: () => browserStorage().setItem(STORAGE_KEY, json),
         catch: toStorageError,
       }),
     ),

@@ -1,5 +1,5 @@
 import { Subscription } from '@effect/ui'
-import { Array as Arr, Effect, Queue, Stream, String as Str } from 'effect'
+import { Array as Arr, Console, Effect, Queue, Stream, String as Str } from 'effect'
 
 import { HELLO, HELLO_ART, HELLO_LINKS, HELLO_NOTE } from '#content/hello'
 import { EGG_COUNT } from '#domain/Egg'
@@ -19,11 +19,14 @@ const blank = line(['', TEXT])
 
 const withoutScheme = Str.replace(/^https?:\/\//, '')
 
-const printHello = (): void => {
+const lengthOf = ({ parts }: Line) =>
+  Arr.reduce(parts, 0, (n, [text]) => n + text.length)
+
+const helloLines = (): ReadonlyArray<Line> => {
   const width = Math.max(
     ...Arr.map(HELLO_LINKS, link => link.label.length),
   )
-  const lines: ReadonlyArray<Line> = [
+  return [
     blank,
     ...Arr.map(HELLO_ART, art => line([art, ART])),
     blank,
@@ -42,41 +45,62 @@ const printHello = (): void => {
     ]),
     blank,
   ]
-  // Every line is padded to the same width, so the card is a clean block.
-  const lengthOf = ({ parts }: Line) =>
-    Arr.reduce(parts, 0, (n, [text]) => n + text.length)
+}
+
+interface Segment {
+  readonly text: string
+  readonly style: string
+}
+
+const lineBreak = (i: number, j: number): string => {
+  if (i > 0 && j === 0) return '\n'
+  return ''
+}
+
+const paddedText = (text: string, current: Line, j: number, cardWidth: number): string => {
+  if (j === current.parts.length - 1) {
+    return Str.padEnd(text.length + cardWidth - lengthOf(current), ' ')(text)
+  }
+  return text
+}
+
+const edgePadding = (isEdge: boolean): number => {
+  if (isEdge) return 12
+  return 0
+}
+
+const segmentsOf = (lines: ReadonlyArray<Line>): ReadonlyArray<Segment> => {
   const cardWidth = Math.max(...Arr.map(lines, lengthOf))
-  const segments = Arr.flatMap(lines, (current, i) =>
+  return Arr.flatMap(lines, (current, i) =>
     Arr.map(current.parts, ([text, style], j) => ({
-      text: `${i > 0 && j === 0 ? '\n' : ''}%c${
-        j === current.parts.length - 1
-          ? Str.padEnd(text.length + cardWidth - lengthOf(current), ' ')(text)
-          : text
-      }`,
-      // Only the outer edges of a line get padding, so links line up too.
-      style: `${style};padding:0 ${j === current.parts.length - 1 ? 12 : 0}px 0 ${j === 0 ? 12 : 0}px`,
+      text: `${lineBreak(i, j)}%c${paddedText(text, current, j, cardWidth)}`,
+      style: `${style};padding:0 ${edgePadding(j === current.parts.length - 1)}px 0 ${edgePadding(j === 0)}px`,
     })),
   )
-  // @effect-diagnostics-next-line globalConsole:off
-  console.log(
+}
+
+const printHello = Effect.suspend(() => {
+  const segments = segmentsOf(helloLines())
+  return Console.log(
     Arr.join(
       Arr.map(segments, s => s.text),
       '',
     ),
     ...Arr.map(segments, s => s.style),
   )
-}
+})
 
 export const devtools = <Msg>(message: Msg) =>
   Subscription.make(
     'devtools',
     Stream.callback<Msg>(queue =>
       Effect.acquireRelease(
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          const context = yield* Effect.context<never>()
           Object.assign(window, {
             tanner: {
               hello: () => {
-                printHello()
+                Effect.runSyncWith(context)(printHello)
                 Queue.offerUnsafe(queue, message)
                 return HELLO
               },

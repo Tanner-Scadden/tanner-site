@@ -1,6 +1,6 @@
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
-import { Array as Arr } from 'effect'
+import { Array as Arr, Option } from 'effect'
 
 import { Callout, Section, sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
@@ -27,8 +27,6 @@ import { blueprint, fonts, media, widths } from '../styles/tokens.stylex.ts'
 import { Work } from '../work/components/Work.ts'
 
 const styles = stylex.create({
-  // The hero: a hello on one side, the house on the other. The hello keeps
-  // its room on paper too.
   hero: {
     display: 'grid',
     gridTemplateColumns: {
@@ -57,19 +55,16 @@ const styles = stylex.create({
     fontSize: 17,
     maxWidth: 520,
     userSelect: 'none',
-    outlineStyle: { default: null, ':focus-visible': 'dashed' },
-    outlineOffset: { default: null, ':focus-visible': 4 },
+    outlineStyle: { ':focus-visible': 'dashed' },
+    outlineOffset: { ':focus-visible': 4 },
   },
   welcome: { marginTop: 18, maxWidth: 520, color: blueprint.dim },
-  // On a phone the links take a row of their own under the name, so the
-  // eggs stay in the top right.
   topNav: {
-    order: { default: null, [media.phone]: 1 },
-    flexBasis: { default: null, [media.phone]: '100%' },
+    order: { [media.phone]: 1 },
+    flexBasis: { [media.phone]: '100%' },
   },
   allPosts: { display: 'inline-block', marginTop: 18, fontSize: 12, letterSpacing: '.14em' },
 
-  // Open source, and the rest.
   two: {
     display: 'grid',
     gridTemplateColumns: { default: '1fr 1fr', [media.narrow]: '1fr' },
@@ -102,7 +97,6 @@ const styles = stylex.create({
     textAlign: 'right',
   },
 
-  // The footer: the sheet's title block.
   foot: {
     display: 'grid',
     gridTemplateColumns: { default: '1.2fr 1fr 1fr 1fr', [media.narrow]: '1fr 1fr' },
@@ -116,7 +110,7 @@ const styles = stylex.create({
     borderRightWidth: { default: 1, ':last-child': 0 },
     borderBottomWidth: { default: 0, [media.narrow]: 1 },
   },
-  doorCell: { display: { default: null, [media.print]: 'none' } },
+  doorCell: { display: { [media.print]: 'none' } },
   footNote: {
     display: 'block',
     fontSize: 10,
@@ -130,7 +124,7 @@ const styles = stylex.create({
     fontStretch: widths.wide,
     textTransform: 'uppercase',
   },
-  footTitleDoor: { color: { default: null, [stylex.when.ancestor(':hover')]: blueprint.hi } },
+  footTitleDoor: { color: { [stylex.when.ancestor(':hover')]: blueprint.hi } },
   source: { color: blueprint.hi, whiteSpace: 'nowrap' },
   door: {
     cursor: 'pointer',
@@ -138,9 +132,8 @@ const styles = stylex.create({
     textDecoration: 'none',
     display: 'block',
     width: '100%',
-    outlineOffset: { default: null, ':focus-visible': 4 },
+    outlineOffset: { ':focus-visible': 4 },
   },
-  // An egg looks like the words around it.
   egg: {
     cursor: 'pointer',
     color: 'inherit',
@@ -174,9 +167,10 @@ export const HomePage = <M>(
     Footer(h, options.clickedWebGpu),
   )
 
-// Enter and Space press a role=button, as they would a real one.
+const activates = (key: string): boolean => key === 'Enter' || key === ' '
+
 const pressed = <M>(message: M) => ({ key }: { readonly key: string }) =>
-  key === 'Enter' || key === ' ' ? message : undefined
+  Option.getOrUndefined(Option.map(Option.liftPredicate(key, activates), () => message))
 
 const TopBar = <M>(h: Html.H<M>, eggs: EggsState) =>
   sx(h.div, sheet.bar).children(
@@ -217,7 +211,6 @@ const Hero = <M>(
     House(h, still, playedWithTeddy, BLOG_OPEN),
   )
 
-// The newest posts, first on the page.
 const BlogSection = <M>(h: Html.H<M>) =>
   Section(h, 'blog').children(
     Callout(h, 1, BLOG.section),

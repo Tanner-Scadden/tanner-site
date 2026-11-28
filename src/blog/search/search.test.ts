@@ -8,14 +8,13 @@ import { POSTS } from '../posts.ts'
 import { distance } from './fuzzy.ts'
 import { type Doc, build } from './index.ts'
 import { postDocs } from './posts.ts'
-import { parse } from './query.ts'
+import { Atom, parse } from './query.ts'
 import { expand, search } from './search.ts'
 import { type Snippet, snippetOf } from './snippet.ts'
 import { stem } from './stem.ts'
 import { plainText } from './text.ts'
 import { fold, tokenize } from './tokenize.ts'
 
-// Just the terms of some text.
 const terms = (text: string): ReadonlyArray<string> => Arr.map(tokenize(text), token => token.term)
 
 const doc = (id: string, fields: Partial<Doc> = {}): Doc => ({
@@ -55,7 +54,6 @@ describe('tokenize', () => {
   it('treats curly and straight apostrophes the same', () => {
     assert.deepStrictEqual(terms('you’re'), terms("you're"))
     assert.deepStrictEqual(terms('don’t'), terms('dont'))
-    // A possessive meets its word.
     assert.deepStrictEqual(terms('peers’'), terms('peers'))
   })
 
@@ -126,7 +124,6 @@ describe('distance', () => {
     assert.strictEqual(distance('clal', 'call', 2), 1)
     assert.strictEqual(distance('call', 'calls', 2), 1)
     assert.strictEqual(distance('kitten', 'sitting', 3), 3)
-    // Past the budget it stops counting.
     assert.strictEqual(distance('kitten', 'sitting', 1), 2)
   })
 })
@@ -136,34 +133,34 @@ describe('parse', () => {
     const query = parse('arena OR league "safety net" -worlds ')
     assert.deepStrictEqual(query.clauses, [
       [
-        { _tag: 'Word', word: 'arena', prefix: false },
-        { _tag: 'Word', word: 'league', prefix: false },
+        Atom.cases.Word.make({ word: 'arena', prefix: false }),
+        Atom.cases.Word.make({ word: 'league', prefix: false }),
       ],
-      [{ _tag: 'Phrase', words: ['safety', 'net'], prefix: false }],
+      [Atom.cases.Phrase.make({ words: ['safety', 'net'], prefix: false })],
     ])
-    assert.deepStrictEqual(query.excluded, [{ _tag: 'Word', word: 'worlds', prefix: false }])
+    assert.deepStrictEqual(query.excluded, [Atom.cases.Word.make({ word: 'worlds', prefix: false })])
   })
 
   it('makes the word being typed a prefix', () => {
-    assert.deepStrictEqual(parse('be vouc').clauses[1], [{ _tag: 'Word', word: 'vouc', prefix: true }])
-    assert.deepStrictEqual(parse('be vouc ').clauses[1], [{ _tag: 'Word', word: 'vouc', prefix: false }])
+    assert.deepStrictEqual(parse('be vouc').clauses[1], [Atom.cases.Word.make({ word: 'vouc', prefix: true })])
+    assert.deepStrictEqual(parse('be vouc ').clauses[1], [Atom.cases.Word.make({ word: 'vouc', prefix: false })])
   })
 
   it('runs an unclosed quote to the end, its last word a prefix while typed', () => {
-    assert.deepStrictEqual(parse('"safety ne').clauses, [[{ _tag: 'Phrase', words: ['safety', 'ne'], prefix: true }]])
+    assert.deepStrictEqual(parse('"safety ne').clauses, [[Atom.cases.Phrase.make({ words: ['safety', 'ne'], prefix: true })]])
     assert.deepStrictEqual(parse('"safety net"').clauses, [
-      [{ _tag: 'Phrase', words: ['safety', 'net'], prefix: false }],
+      [Atom.cases.Phrase.make({ words: ['safety', 'net'], prefix: false })],
     ])
     assert.deepStrictEqual(parse('"safety ne ').clauses, [
-      [{ _tag: 'Phrase', words: ['safety', 'ne'], prefix: false }],
+      [Atom.cases.Phrase.make({ words: ['safety', 'ne'], prefix: false })],
     ])
   })
 
   it('reads curly double quotes as quotes', () => {
-    const phrase = { _tag: 'Phrase', words: ['safety', 'net'], prefix: false } as const
+    const phrase = Atom.cases.Phrase.make({ words: ['safety', 'net'], prefix: false })
     assert.deepStrictEqual(parse('“safety net”').clauses, [[phrase]])
     assert.deepStrictEqual(parse('arena -“safety net” ').excluded, [phrase])
-    assert.deepStrictEqual(parse('arena -“safety net” ').clauses, [[{ _tag: 'Word', word: 'arena', prefix: false }]])
+    assert.deepStrictEqual(parse('arena -“safety net” ').clauses, [[Atom.cases.Word.make({ word: 'arena', prefix: false })]])
   })
 })
 
@@ -203,7 +200,6 @@ describe('the query language', () => {
   ])
 
   it('ANDs bare words', () => {
-    // Both have both words; the shorter body ranks first.
     assert.deepStrictEqual(ids(index, 'safety net '), ['apart', 'net'])
     assert.deepStrictEqual(ids(index, 'safety arena '), [])
   })
@@ -217,7 +213,6 @@ describe('the query language', () => {
   it('completes the last word of a phrase being typed', () => {
     assert.deepStrictEqual(ids(index, '"safety ne'), ['net'])
     assert.deepStrictEqual(ids(index, '“safety ne'), ['net'])
-    // Closed, or with a space after, it's whole words.
     assert.deepStrictEqual(ids(index, '"safety ne"'), [])
     assert.deepStrictEqual(ids(index, '"safety ne '), [])
   })
@@ -226,7 +221,6 @@ describe('the query language', () => {
     assert.deepStrictEqual(ids(index, 'safety -see '), ['apart'])
     assert.deepStrictEqual(ids(index, 'safety -"safety net" '), ['apart'])
     assert.deepStrictEqual(ids(index, 'safety -“safety net” '), ['apart'])
-    // Only exclusions: everything else.
     assert.deepStrictEqual(ids(index, '-safety '), ['arena'])
   })
 
@@ -236,7 +230,6 @@ describe('the query language', () => {
 
   it('completes the word being typed', () => {
     assert.sameMembers([...ids(index, 'saf')], ['net', 'apart'])
-    // Once a space follows, it's a whole word.
     assert.deepStrictEqual(ids(index, 'saf '), [])
   })
 
@@ -245,19 +238,22 @@ describe('the query language', () => {
     const typo = build([doc('exact', { body: 'calls' }), doc('near', { body: 'balls' })])
     assert.deepStrictEqual(ids(typo, 'calls '), ['exact'])
     assert.deepStrictEqual(ids(typo, 'xalls '), ['exact', 'near'])
-    // A typo match scores under the same word spelt right.
     const both = build([doc('exact', { body: 'sentinels' }), doc('near', { body: 'sentinals' })])
     assert.deepStrictEqual(ids(both, 'sentinels OR sentinalz '), ['exact', 'near'])
     assert.isBelow(expand(index, 'saftey', false)[0]!.weight, 1)
-    // Short words don't get typos: "nat" isn't "net".
     assert.deepStrictEqual(ids(index, 'nat '), [])
   })
 })
 
+const partText = (part: Snippet['parts'][number]): string => {
+  if (part.marked) return `[${part.text}]`
+  return part.text
+}
+
 const text = (snippet: Option.Option<Snippet>) =>
   Option.match(snippet, {
     onNone: () => '',
-    onSome: s => Arr.join(Arr.map(s.parts, p => (p.marked ? `[${p.text}]` : p.text)), ''),
+    onSome: s => Arr.join(Arr.map(s.parts, partText), ''),
   })
 
 describe('highlighting', () => {
@@ -302,42 +298,44 @@ describe('highlighting', () => {
 })
 
 describe('body text', () => {
-  it('reads text from a view, a line per block, without mounting anything', () => {
-    let read = ''
-    const Probe = Html.component({ name: 'Probe', model: Schema.Struct({}), message: Schema.Never }).make({
-      init: () => ({}),
-      update: $ => $.model,
-      view: h => {
-        read = plainText([h.h2('Title'), h.p('One ', h.strong('two'), '.'), h.ul(h.li('a'), h.li('b'))])
-        return h.p('read')
-      },
-    })
-    Effect.runSync(Effect.scoped(HtmlScene.make(Probe, {})))
-    assert.strictEqual(read, 'Title\nOne two.\na\nb')
-  })
+  it.effect('reads text from a view, a line per block, without mounting anything', () =>
+    Effect.gen(function* () {
+      let read = ''
+      const Probe = Html.component({ name: 'Probe', model: Schema.Struct({}), message: Schema.Never }).make({
+        init: () => ({}),
+        update: $ => $.model,
+        view: h => {
+          read = plainText([h.h2('Title'), h.p('One ', h.strong('two'), '.'), h.ul(h.li('a'), h.li('b'))])
+          return h.p('read')
+        },
+      })
+      yield* Effect.scoped(HtmlScene.make(Probe, {}))
+      assert.strictEqual(read, 'Title\nOne two.\na\nb')
+    }),
+  )
 
-  it('keeps a note’s label off its first word, and leaves out a listing’s chrome', () => {
-    let read = ''
-    const Probe = Html.component({ name: 'Probe', model: Schema.Struct({}), message: Schema.Never }).make({
-      init: () => ({}),
-      update: $ => $.model,
-      view: h => {
-        read = plainText([
-          Note(h, 'ASIDE', h.p('First words.')),
-          Code(h, { code: 'const x = 1', lang: 'ts' }),
-          Code(h, { code: 'echo hi', lang: 'bash', file: 'run.sh' }),
-          h.p('After.', h.span('hidden').attr('aria-hidden', 'true')),
-        ])
-        return h.p('read')
-      },
-    })
-    Effect.runSync(Effect.scoped(HtmlScene.make(Probe, {})))
-    assert.strictEqual(read, 'ASIDE\nFirst words.\nAfter.')
-  })
+  it.effect('keeps a note’s label off its first word, and leaves out a listing’s chrome', () =>
+    Effect.gen(function* () {
+      let read = ''
+      const Probe = Html.component({ name: 'Probe', model: Schema.Struct({}), message: Schema.Never }).make({
+        init: () => ({}),
+        update: $ => $.model,
+        view: h => {
+          read = plainText([
+            Note(h, 'ASIDE', h.p('First words.')),
+            Code(h, { code: 'const x = 1', lang: 'ts' }),
+            Code(h, { code: 'echo hi', lang: 'bash', file: 'run.sh' }),
+            h.p('After.', h.span('hidden').attr('aria-hidden', 'true')),
+          ])
+          return h.p('read')
+        },
+      })
+      yield* Effect.scoped(HtmlScene.make(Probe, {}))
+      assert.strictEqual(read, 'ASIDE\nFirst words.\nAfter.')
+    }),
+  )
 })
 
-// The real posts' text, read with a real view's `h`, to check `postDocs`
-// against: it reads bodies with only Html's tag builders.
 const viewTexts = Effect.gen(function* () {
   let texts: ReadonlyArray<string> = []
   const Probe = Html.component({ name: 'Probe', model: Schema.Struct({}), message: Schema.Never }).make({
@@ -368,7 +366,6 @@ describe('the blog’s own posts', () => {
     const index = build(docs)
     const post = 'be-someone-worth-calling'
     const body = Option.getOrThrow(Arr.findFirst(docs, d => d.id === post)).body
-    // The body's prose is in, and the animated figure added nothing.
     assert.include(body, 'they’ll remember it long after.')
     for (const query of ['sentinels', 'vouching', '"safety net"', 'calls', 'call', 'called ', 'sentinals', 'vouch']) {
       assert.include(ids(index, query), post, query)

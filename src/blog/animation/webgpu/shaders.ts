@@ -1,4 +1,4 @@
-const VIEW = /* wgsl */ `
+const VIEW = `
 struct View { size: vec2f, opacity: f32, pad: f32 };
 @group(0) @binding(0) var<uniform> view: View;
 
@@ -7,10 +7,9 @@ fn clip(p: vec2f) -> vec4f {
 }
 `
 
-// One line: start, end, colour, width. 12 floats with padding.
 export const LINE_FLOATS = 12
 
-export const LINES = /* wgsl */ `
+export const LINES = `
 ${VIEW}
 struct Line { start: vec2f, end: vec2f, color: vec4f, width: f32, p0: f32, p1: f32, p2: f32 };
 @group(0) @binding(1) var<storage, read> lines: array<Line>;
@@ -48,10 +47,9 @@ struct Out {
 }
 `
 
-// One dot: centre, radius, glow, colour, ring. 12 floats with padding.
 export const DOT_FLOATS = 12
 
-export const DOTS = /* wgsl */ `
+export const DOTS = `
 ${VIEW}
 struct Dot { center: vec2f, radius: f32, glow: f32, color: vec4f, ring: f32, p0: f32, p1: f32, p2: f32 };
 @group(0) @binding(1) var<storage, read> dots: array<Dot>;

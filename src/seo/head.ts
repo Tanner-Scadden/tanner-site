@@ -1,4 +1,4 @@
-import { Array as Arr, Option, Schema, String as Str } from 'effect'
+import { Array as Arr, Effect, Option, Schema, String as Str } from 'effect'
 import { dual, pipe } from 'effect/Function'
 
 import { BLOG } from '#content/blog'
@@ -6,7 +6,6 @@ import { type Post, sortPosts } from '#domain/Post'
 
 export const SITE = 'https://tannerscadden.com'
 const NAME = 'Tanner Scadden'
-// The site's card, for pages that don't have their own.
 const IMAGE = {
   url: `${SITE}/og/home.png`,
   alt: 'Tanner Scadden, software engineer: I like to build things. Mostly software, sometimes games. Beside it, this site drawn as a blueprint of a house.',
@@ -14,21 +13,21 @@ const IMAGE = {
 const AUTHOR = { '@type': 'Person', name: NAME, url: `${SITE}/` } as const
 
 export interface Page {
-  // Where the build writes it, next to index.html. Cloudflare serves
-  // /blog/<slug> from blog/<slug>.html.
   readonly file: string
   readonly url: string
   readonly title: string
   readonly description: string
-  // The day a post went up, YYYY-MM-DD. None for the blog itself.
   readonly published?: string
   readonly image: { readonly url: string; readonly alt: string }
-  readonly jsonLd: object
+  readonly jsonLd: Schema.Json
 }
 
 const postUrl = (post: Post): string => `${SITE}/blog/${post.slug}`
-const imageOf = (post: Post) =>
-  post.image === undefined ? IMAGE : { url: `${SITE}${post.image.path}`, alt: post.image.alt }
+const imageOf = (post: Post): Page['image'] =>
+  Option.match(Option.fromNullishOr(post.image), {
+    onNone: () => IMAGE,
+    onSome: image => ({ url: `${SITE}${image.path}`, alt: image.alt }),
+  })
 
 const postJsonLd = (post: Post) => ({
   '@type': 'BlogPosting',
@@ -41,7 +40,6 @@ const postJsonLd = (post: Post) => ({
   author: AUTHOR,
 })
 
-// /blog, then each post, newest first. No posts, no blog.
 export const pagesOf = (published: ReadonlyArray<Post>): ReadonlyArray<Page> => {
   const posts = sortPosts(published)
   if (posts.length === 0) return []
@@ -83,22 +81,39 @@ const attr = (value: string): string =>
     Str.replaceAll('>', '&gt;'),
   )
 
-// A replacement that means just what it says: `$` in it is never read as a
-// pattern, so copy like "$56,000" comes through.
 const literally = Str.replaceAll('$', '$$$$')
 
-// The page's structured data, kept from closing its <script> early.
-const encodeJson = Schema.encodeOption(Schema.fromJsonString(Schema.Unknown))
-const jsonLdScript = (value: object): string =>
+const encodeJson = Schema.encodeOption(Schema.fromJsonString(Schema.Json))
+const jsonLdScript = (value: Schema.Json): string =>
   `<script type="application/ld+json">${
     Str.replaceAll('<', '\\u003c')(Option.getOrElse(encodeJson(value), () => '{}'))
   }</script>`
 
-// A `<meta>` or `<link>` whose key attribute is `key`, with its value swapped.
 const tag = (kind: 'meta' | 'link', key: string, valueAttr: string, value: string) => ({
   find: new RegExp(`<${kind} ${key} ${valueAttr}="[^"]*" />`),
   put: `<${kind} ${key} ${valueAttr}="${attr(value)}" />`,
 })
+
+export class HeadTagMissing extends Schema.TaggedError<HeadTagMissing, { readonly brand: unique symbol }>()(
+  'HeadTagMissing',
+  { pattern: Schema.String, file: Schema.String },
+) {
+  override get message(): string {
+    return `index.html should have exactly one ${this.pattern} for ${this.file}`
+  }
+}
+
+interface Swap {
+  readonly find: RegExp
+  readonly put: string
+}
+
+const swapOnce = (file: string) => (out: string, { find, put }: Swap): Effect.Effect<string, HeadTagMissing> => {
+  if (Arr.length(Arr.fromIterable(Str.matchAll(new RegExp(find.source, 'g'))(out))) !== 1) {
+    return Effect.fail(HeadTagMissing.make({ pattern: find.source, file }))
+  }
+  return Effect.succeed(Str.replace(find, literally(put))(out))
+}
 
 const OG_LOCALE = /<meta property="og:locale" content="[^"]*" \/>/
 
@@ -107,15 +122,18 @@ export const withHead: {
   (html: string, page: Page): string
 } = dual(2, (html: string, page: Page): string => {
   const locale = Option.getOrElse(Option.flatMap(Str.match(OG_LOCALE)(html), Arr.head), () => '')
-  const article = page.published === undefined
-    ? ''
-    : `\n    <meta property="article:published_time" content="${attr(page.published)}" />` +
-      `\n    <meta property="article:author" content="${attr(NAME)}" />`
-  const swaps = [
+  const published = Option.fromNullishOr(page.published)
+  const article = Option.match(published, {
+    onNone: () => '',
+    onSome: date =>
+      `\n    <meta property="article:published_time" content="${attr(date)}" />` +
+      `\n    <meta property="article:author" content="${attr(NAME)}" />`,
+  })
+  const swaps: ReadonlyArray<Swap> = [
     { find: /<title>[^<]*<\/title>/, put: `<title>${attr(page.title)}</title>` },
     tag('meta', 'name="description"', 'content', page.description),
     tag('link', 'rel="canonical"', 'href', page.url),
-    tag('meta', 'property="og:type"', 'content', page.published === undefined ? 'website' : 'article'),
+    tag('meta', 'property="og:type"', 'content', Option.match(published, { onNone: () => 'website', onSome: () => 'article' })),
     tag('meta', 'property="og:url"', 'content', page.url),
     tag('meta', 'property="og:title"', 'content', page.title),
     tag('meta', 'property="og:description"', 'content', page.description),
@@ -128,27 +146,23 @@ export const withHead: {
     { find: OG_LOCALE, put: `${locale}${article}` },
     { find: /<script type="application\/ld\+json">[\s\S]*?<\/script>/, put: jsonLdScript(page.jsonLd) },
   ]
-  return Arr.reduce(swaps, html, (out, { find, put }) => {
-    if (Arr.length(Arr.fromIterable(Str.matchAll(new RegExp(find.source, 'g'))(out))) !== 1) {
-      throw new Error(`index.html should have exactly one ${find.source} for ${page.file}`)
-    }
-    return Str.replace(find, literally(put))(out)
-  })
+  return Effect.runSync(Effect.reduce(swaps, () => html, swapOnce(page.file)))
 })
 
-// Every page a crawler should find: the front page, then the blog's.
 export const sitemap = (published: ReadonlyArray<Post>): string => {
   const pages = pagesOf(published)
-  const url = (loc: string, lastmod?: string) =>
-    `  <url>\n    <loc>${attr(loc)}</loc>\n${lastmod === undefined ? '' : `    <lastmod>${lastmod}</lastmod>\n`}  </url>\n`
-  const newest = Arr.head(sortPosts(published))
+  const url = (loc: string, lastmod: Option.Option<string>) =>
+    `  <url>\n    <loc>${attr(loc)}</loc>\n${
+      Option.match(lastmod, { onNone: () => '', onSome: date => `    <lastmod>${date}</lastmod>\n` })
+    }  </url>\n`
+  const newest = Option.map(Arr.head(sortPosts(published)), post => post.date)
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    url(`${SITE}/`) +
+    url(`${SITE}/`, Option.none()) +
     Arr.join(
       Arr.map(pages, page =>
-        url(page.url, page.published ?? (newest._tag === 'Some' ? newest.value.date : undefined))),
+        url(page.url, Option.orElse(Option.fromNullishOr(page.published), () => newest))),
       '',
     ) +
     '</urlset>\n'

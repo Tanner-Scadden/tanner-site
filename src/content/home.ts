@@ -6,7 +6,6 @@ export interface Job {
   readonly problem: string
   readonly approach: string
   readonly result: string
-  // The colour of the wave that runs through this job, if not the usual gold.
   readonly wave?: string
 }
 
@@ -66,7 +65,6 @@ export const WORK: ReadonlyArray<Job> = [
     approach:
       'Built it on Cloudflare Durable Objects, with fun pixel art and a story about collecting items to escape Munch Manor.',
     result: 'Anyone can jump in for free, on a laptop or a phone, and make more memories killing zombies with friends.',
-    // Its own zombie green.
     wave: '#7ce36b',
   },
 ]
@@ -77,14 +75,12 @@ export interface Project {
   readonly href: string
 }
 
-// Each link lists all my PRs in that project, so the claim is one click from proof.
 const GITHUB_USER = 'Tanner-Scadden'
 const repoPulls = (repo: string): string =>
   `https://github.com/${repo}/pulls?q=is%3Apr+author%3A${GITHUB_USER}`
 const orgPulls = (org: string): string =>
   `https://github.com/search?type=pullrequests&q=is%3Apr+author%3A${GITHUB_USER}+org%3A${org}`
 
-// Strongest first.
 export const OPEN_SOURCE: ReadonlyArray<Project> = [
   { name: 'Effect', what: 'Cluster sharding and shutdown', href: repoPulls('Effect-TS/effect') },
   { name: 'Code Climbers', what: 'CLI and browser extension', href: orgPulls('CodeClimbersIO') },
@@ -109,7 +105,6 @@ export const ELSEWHERE: ReadonlyArray<Link> = [
   { label: 'x', href: 'https://x.com/TannerSDev' },
 ]
 
-// The big line up top. Each click drops a few more words, down to one.
 export const THESES = [
   'I like to build things. Mostly software, sometimes games.',
   'I like to build things.',
@@ -121,7 +116,6 @@ export const GREETING = "Hey, I'm Tanner 👋"
 
 export const WELCOME = "Come on in and click around. There's a few Easter eggs."
 
-// The fourth section of the page, about life away from the keyboard.
 export const PERSONAL_LIFE = 'PERSONAL LIFE'
 
 export const HOUSE = {

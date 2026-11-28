@@ -1,6 +1,9 @@
-import stylex from '@stylexjs/unplugin/vite'
+import { fileURLToPath } from 'node:url'
+
 import { Effect } from 'effect'
 import { type Plugin, type ViteDevServer, createServer, defineConfig } from 'vite'
+
+import { stylex } from './vite.plugins.ts'
 
 import type * as Blog from './src/content/blog.ts'
 import type * as Head from './src/seo/head.ts'
@@ -9,7 +12,7 @@ const loader = Effect.acquireRelease(
   Effect.promise(() =>
     createServer({
       configFile: false,
-      root: import.meta.dirname,
+      root: fileURLToPath(new URL('.', import.meta.url)),
       mode: 'production',
       plugins: [stylex()],
       server: { middlewareMode: true, hmr: false, ws: false },
@@ -20,7 +23,8 @@ const loader = Effect.acquireRelease(
   server => Effect.promise(() => server.close()),
 )
 
-const load = <A>(server: ViteDevServer, path: string) =>
+const load = <A>(server: ViteDevServer, path: string): Effect.Effect<A> =>
+  // oxlint-disable-next-line effect/noAs -- ssrLoadModule returns an untyped module; A is the type of the source file it loads
   Effect.promise(() => server.ssrLoadModule(path) as Promise<A>)
 
 const seo = (): Plugin => ({
@@ -29,7 +33,7 @@ const seo = (): Plugin => ({
   enforce: 'post',
   generateBundle(_, bundle) {
     const index = bundle['index.html']
-    if (index?.type !== 'asset') throw new Error('seo: the build has no index.html')
+    if (index?.type !== 'asset') return this.error('seo: the build has no index.html')
     const html = String(index.source)
     return Effect.runPromise(
       Effect.scoped(

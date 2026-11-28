@@ -1,7 +1,5 @@
-import { Effect, Schema } from 'effect'
+import { Effect, Option, Schema } from 'effect'
 
-// Getting a GPU to draw with, for every drawing on the site. Each piece is
-// scoped, so closing a drawing's scope hands everything back.
 
 export class GpuUnavailable extends Schema.TaggedError<GpuUnavailable, { readonly brand: unique symbol }>()(
   'GpuUnavailable',
@@ -29,8 +27,9 @@ export const acquireContext = (
 ) =>
   Effect.acquireRelease(
     Effect.gen(function* () {
-      const context = canvas.getContext('webgpu')
-      if (context === null) return yield* unavailable('no-context')
+      const found = Option.fromNullishOr(canvas.getContext('webgpu'))
+      if (Option.isNone(found)) return yield* unavailable('no-context')
+      const context = found.value
       const format = navigator.gpu.getPreferredCanvasFormat()
       context.configure({ device, format, alphaMode })
       return { context, format }
@@ -44,8 +43,6 @@ export const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor
     buffer => Effect.sync(() => buffer.destroy()),
   )
 
-// An adapter, its device and a context on `canvas`: what every drawing
-// starts with.
 export const acquireGpu = (canvas: HTMLCanvasElement, alphaMode: GPUCanvasAlphaMode = 'opaque') =>
   Effect.gen(function* () {
     const adapter = yield* requestAdapter
@@ -54,15 +51,9 @@ export const acquireGpu = (canvas: HTMLCanvasElement, alphaMode: GPUCanvasAlphaM
     return { adapter, device, context, format }
   })
 
-// Runs `then` if the device is lost while the scope is open, so the page
-// can fall back to what it shows without the GPU.
 export const whenLost = (device: GPUDevice, then: Effect.Effect<void>) =>
   Effect.forkScoped(Effect.andThen(Effect.promise(() => device.lost), then))
 
-// Sets `data-gpu="on"` on `element` while the scope is open, so CSS and
-// tests can tell the GPU is drawing it, and `"lost"` if the device goes.
-// `lost` and `released` put back anything else the drawing changed on the
-// page, when the device goes and when the scope closes.
 export interface Marking {
   readonly element: HTMLElement
   readonly device: GPUDevice

@@ -50,7 +50,6 @@ const styles = stylex.create({
     transitionDuration: '.15s',
     transitionDelay: '0s',
   },
-  // The call and the tally share one cell, one after the other.
   layer: { gridColumn: 1, gridRow: 1 },
   call: {
     fontFamily: fonts.pixel,
@@ -114,13 +113,21 @@ const styles = stylex.create({
   }),
 })
 
-// How bad the outbreak is, the way Munch Manor calls a wave.
-const levelOf = (share: number): string =>
-  share < 0.05 ? 'PATIENT ZERO' : share < 0.2 ? 'OUTBREAK' : share < 0.45 ? 'HORDE' : 'OVERRUN'
+const levelOf = (share: number): string => {
+  if (share < 0.05) return 'PATIENT ZERO'
+  if (share < 0.2) return 'OUTBREAK'
+  if (share < 0.45) return 'HORDE'
+  return 'OVERRUN'
+}
+
+const infectedOf = (gpu: GpuState): number => {
+  if (gpu._tag === 'Drafting') return gpu.infected
+  return 0
+}
 
 export const Outbreak = <M>(h: Html.H<M>, gpu: GpuState) => {
   const on = gpu._tag === 'Drafting'
-  const infected = on ? gpu.infected : 0
+  const infected = infectedOf(gpu)
   const share = infected / PARTICLE_COUNT
   return sx(h.div, styles.outbreak, on && styles.on)
     .attr('aria-hidden', 'true')

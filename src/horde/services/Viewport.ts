@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Queue, Stream } from 'effect'
+import { Context, Effect, Layer, Option, Queue, Stream } from 'effect'
 
 export class Viewport extends Context.Service<
   Viewport,
@@ -12,11 +12,11 @@ export class Viewport extends Context.Service<
     frames: Stream.callback<number>(queue =>
       Effect.acquireRelease(
         Effect.sync(() => {
-          let last: number | undefined
+          let last: Option.Option<number> = Option.none()
           let id = 0
           const frame = (now: number) => {
-            if (last !== undefined) Queue.offerUnsafe(queue, now - last)
-            last = now
+            if (Option.isSome(last)) Queue.offerUnsafe(queue, now - last.value)
+            last = Option.some(now)
             id = requestAnimationFrame(frame)
           }
           id = requestAnimationFrame(frame)
@@ -27,7 +27,6 @@ export class Viewport extends Context.Service<
     ),
   })
 
-  // A fixed width and no frames: a test sends the frames it wants.
   static readonly test = (width: number) =>
     Layer.succeed(this, { width: Effect.succeed(width), frames: Stream.never })
 }

@@ -21,10 +21,10 @@ export const EggsEvent = Event({
 })
 export type EggsEvent = typeof EggsEvent.Type
 
-export const eggsOf = (found: ReadonlyArray<EggId>): EggsState =>
-  found.length >= EGG_COUNT
-    ? EggsState.AllFound({ found })
-    : EggsState.Hunting({ found })
+export const eggsOf = (found: ReadonlyArray<EggId>): EggsState => {
+  if (found.length >= EGG_COUNT) return EggsState.AllFound({ found })
+  return EggsState.Hunting({ found })
+}
 
 export const eggsMachine = Machine.make({
   state: EggsState,

@@ -17,13 +17,12 @@ export const sheet = stylex.create({
     outlineColor: blueprint.line,
     outlineOffset: 6,
   },
-  // The bar along the top of a sheet. Its links don't print.
   bar: {
     display: 'flex',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 12,
-    position: { default: null, [media.phone]: 'relative' },
+    position: { [media.phone]: 'relative' },
     borderBottomWidth: 1,
     borderBottomStyle: 'solid',
     borderBottomColor: blueprint.rule,
@@ -32,7 +31,7 @@ export const sheet = stylex.create({
     fontSize: 11,
     letterSpacing: '.14em',
   },
-  nav: { display: { default: null, [media.print]: 'none' } },
+  nav: { display: { [media.print]: 'none' } },
   navLink: {
     color: { default: blueprint.line, ':hover': blueprint.hi },
     textDecoration: 'none',
@@ -46,7 +45,6 @@ export const sheet = stylex.create({
     borderBottomStyle: 'solid',
     borderBottomColor: blueprint.rule,
   },
-  // The last block on a sheet: the sheet's own border closes it.
   last: { borderBottomStyle: 'none' },
   title: {
     fontFamily: fonts.display,
@@ -66,7 +64,6 @@ export const sheet = stylex.create({
     color: blueprint.dim,
     marginTop: 14,
   },
-  // Body copy in a section.
   prose: { color: blueprint.dim, maxWidth: 640, marginBottom: 14 },
 })
 
@@ -77,7 +74,7 @@ const styles = stylex.create({
     borderBottomWidth: 1,
     borderBottomStyle: 'solid',
     borderBottomColor: blueprint.rule,
-    breakInside: { default: null, [media.print]: 'avoid' },
+    breakInside: { [media.print]: 'avoid' },
   },
   callout: {
     display: 'flex',
@@ -115,7 +112,6 @@ const styles = stylex.create({
     position: 'relative',
     height: 1,
     backgroundColor: blueprint.dim,
-    // The tick at the end of the leader.
     '::after': {
       content: '""',
       position: 'absolute',
@@ -128,7 +124,6 @@ const styles = stylex.create({
   },
 })
 
-// A section of the sheet. Its callout goes first.
 export const Section = <M>(h: Html.H<M>, id: string) =>
   sx(h.section, styles.section).attr('id', id)
 

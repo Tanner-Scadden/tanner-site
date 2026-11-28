@@ -5,7 +5,7 @@ import { homeRoute, href } from '../../routes.ts'
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, manor, media, paper, rest } from '../../styles/tokens.stylex.ts'
-import type { ToastState } from '../machines/Toast.ts'
+import { ToastState } from '../machines/Toast.ts'
 
 const styles = stylex.create({
   toast: {
@@ -28,10 +28,9 @@ const styles = stylex.create({
     transitionDuration: '.25s',
     pointerEvents: 'none',
     maxWidth: 'calc(100vw - 32px)',
-    display: { default: null, [media.print]: 'none' },
+    display: { [media.print]: 'none' },
   },
   on: { opacity: 1, transform: 'translateX(-50%)' },
-  // The dock: the toast on a hidden page, which turns into the way home.
   dock: {
     pointerEvents: 'auto',
     cursor: 'pointer',
@@ -46,8 +45,8 @@ const styles = stylex.create({
       ':hover': 'translateX(-50%) translateY(-2px)',
       ':focus-visible': 'translateX(-50%) translateY(-2px)',
     },
-    outlineColor: { default: null, ':focus-visible': blueprint.focus },
-    outlineOffset: { default: null, ':focus-visible': 3 },
+    outlineColor: { ':focus-visible': blueprint.focus },
+    outlineOffset: { ':focus-visible': 3 },
     transitionProperty: 'background-color, color, box-shadow, opacity, transform',
     transitionDuration: { default: '.3s, .3s, .3s, .25s, .25s', [media.reducedMotion]: '0s' },
     transitionDelay: '.2s, .2s, .2s, 0s, 0s',
@@ -69,7 +68,6 @@ const styles = stylex.create({
     boxShadow: `0 8px 24px ${rest.shadow}`,
   },
   text: {
-    // BACK and the news share one cell, so the pill fits whichever shows.
     gridColumn: 1,
     gridRow: 1,
     whiteSpace: 'nowrap',
@@ -86,7 +84,6 @@ const styles = stylex.create({
     transitionTimingFunction: 'ease, ease, cubic-bezier(.2, 0, .2, 1)',
     transitionDelay: '0s, 0s, .1s',
   },
-  // The news text's own width: exactly this many characters.
   newsTextOn: (chars: number) => ({
     opacity: 1,
     transform: 'none',
@@ -97,11 +94,15 @@ const styles = stylex.create({
   manorBack: { fontFamily: fonts.pixel },
 })
 
-// The front page's toast: it shows while there is news, then fades.
 export const Toast = <M>(h: Html.H<M>, toast: ToastState) =>
   sx(h.div, styles.toast, toast._tag === 'Showing' && styles.on)
     .attr('role', 'status')
-    .children(toast._tag === 'Showing' ? toast.text : '')
+    .children(
+      ToastState.$match(toast, {
+        Hidden: () => '',
+        Showing: ({ text }) => text,
+      }),
+    )
 
 export const Dock = <M>(
   h: Html.H<M>,
@@ -109,7 +110,10 @@ export const Dock = <M>(
   room: 'blueprint' | 'manor' | 'rest',
 ) => {
   const news = toast._tag === 'Showing'
-  const text = news ? toast.text : toast.last
+  const text = ToastState.$match(toast, {
+    Hidden: ({ last }) => last,
+    Showing: ({ text }) => text,
+  })
   return sx(
     h.a,
     base.link,

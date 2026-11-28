@@ -1,4 +1,4 @@
-const COMMON = /* wgsl */ `
+const COMMON = `
 struct Frame {
   viewport: vec2f,
   scroll: vec2f,
@@ -30,7 +30,7 @@ fn lensOffset(p: vec2f) -> vec2f {
 }
 `
 
-export const BACKGROUND = /* wgsl */ `
+export const BACKGROUND = `
 ${COMMON}
 
 struct Out {
@@ -79,16 +79,13 @@ fn fs(@builtin(position) position: vec4f) -> @location(0) vec4f {
 export const PARTICLE_COUNT = 320
 export const WORKGROUP = 64
 export const PARTICLE_FLOATS = 8
-// Pen 0 is patient zero: a zombie from the start that never gets better.
 export const PATIENT_ZERO = 0
 export const PATIENT_ZERO_SPEED = 70
-// A new outbreak has one zombie: patient zero.
 export const FIRST_INFECTED = 1
 export const FOREVER = 1e9
-// A pen that has never been sick, and can be caught.
 export const HEALTHY = -1e4
 
-const PEN_STRUCT = /* wgsl */ `
+const PEN_STRUCT = `
 struct Pen {
   pos: vec2f,
   vel: vec2f,
@@ -104,7 +101,7 @@ struct Pen {
 const TRAIL = 30.0;
 `
 
-export const SIMULATE = /* wgsl */ `
+export const SIMULATE = `
 ${COMMON}
 ${PEN_STRUCT}
 
@@ -252,7 +249,7 @@ fn infect(@builtin(global_invocation_id) id: vec3u) {
 }
 `
 
-export const PENS = /* wgsl */ `
+export const PENS = `
 ${COMMON}
 ${PEN_STRUCT}
 

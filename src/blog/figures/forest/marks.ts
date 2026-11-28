@@ -1,10 +1,11 @@
-import { Array as Arr, Option } from 'effect'
+import { Array as Arr, Boolean as Bool, Option } from 'effect'
 
-import { GOLD, LINE, type Projection, WARM, mix, rgba } from '../../animation/kit.ts'
-import type { Dot, Line, Point, Shapes } from '../../animation/scene.ts'
+import { GOLD, LINE, type Projection, type Rgb, WARM, mix, rgba } from '../../animation/kit.ts'
+import type { Dot, Line, Point, Marks } from '../../animation/scene.ts'
 import {
   BOUNDS,
   type Frame,
+  type FrameBranch,
   GROUND,
   HATCHES,
   HATCH_GAP,
@@ -13,17 +14,11 @@ import {
 } from './grove.ts'
 import { REACH_LINES, ROOT_PIECES } from './roots.ts'
 
-// The most a frame draws: the ground and its hatching, every branch and
-// root, a wisp per seed; every leaf, a seed and a landing ring each.
-// Each tree has its own roots, up to ROOT_PIECES lines, plus two reaching
-// roots: its own, and its neighbour's reaching back.
 export const MAX_LINES = 1 + HATCHES + MAX_TREES * (MAX_SEGMENTS + ROOT_PIECES + 2 * REACH_LINES) + MAX_TREES
 export const MAX_DOTS = MAX_TREES * MAX_SEGMENTS + MAX_TREES * 2
 
-// How much of itself the rest of the grove keeps while a tree's picked.
 const DIMMED = 0.55
 
-// Scale and centre the world box into a canvas this big.
 export const projection: Projection = (width, height) => {
   const scale = Math.min(width / (BOUNDS.x * 2 + 0.1), height / (BOUNDS.y * 2 + 0.1))
   return {
@@ -32,7 +27,6 @@ export const projection: Projection = (width, height) => {
   }
 }
 
-// The tree whose crown the pointer is in, nearest its trunk.
 const pickedBy = (
   frame: Frame,
   px: (point: Point) => Point,
@@ -55,49 +49,74 @@ const pickedBy = (
     return best
   })
 
-export const shapesOf = (
+const branchAlpha = (branch: FrameBranch): number => {
+  if (branch.root) return 0.3 + 0.62 * branch.bond
+  return 0.78
+}
+
+const branchTint = (branch: FrameBranch, lit: boolean): Rgb => {
+  if (lit) return WARM
+  if (branch.root) return mix(LINE, GOLD, Math.min(1, branch.bond * 3))
+  return LINE
+}
+
+const thinnestOf = (branch: FrameBranch): number => {
+  if (branch.root) return 0.7 + 0.5 * branch.bond
+  return 0.9
+}
+
+const branchLine = (
+  branch: FrameBranch,
+  lit: boolean,
+  keep: number,
+  scale: number,
+  px: (point: Point) => Point,
+): Line => {
+  const alpha = branchAlpha(branch)
+  const width = Math.max(thinnestOf(branch), branch.width * scale)
+  return {
+    from: px(branch.from),
+    to: px(branch.to),
+    width: Bool.match(lit, { onTrue: () => width + 0.5, onFalse: () => width }),
+    color: rgba(
+      branchTint(branch, lit),
+      Bool.match(lit, { onTrue: () => Math.min(1, alpha + 0.15), onFalse: () => alpha }) * keep,
+    ),
+  }
+}
+
+export const marksOf = (
   frame: Frame,
   width: number,
   height: number,
   pointer: Option.Option<Point> = Option.none(),
-): Shapes => {
+): Marks => {
   const { scale, px } = projection(width, height)
   const picked = pickedBy(frame, px, pointer)
   const isPicked = (tree: number) => Option.exists(picked, id => id === tree)
-  const keep = (tree: number) => (Option.isNone(picked) || isPicked(tree) ? 1 : DIMMED)
+  const keep = (tree: number) => {
+    if (Option.isNone(picked) || isPicked(tree)) return 1
+    return DIMMED
+  }
 
-  // The ground draws out from the middle, and its hatching with it.
   const reach = BOUNDS.x * frame.ground
-  const ground: ReadonlyArray<Line> =
-    frame.ground > 0
-      ? [{ from: px([-reach, GROUND]), to: px([reach, GROUND]), width: 1.25, color: rgba(LINE, 0.7) }]
-      : []
+  const ground = Arr.filter(
+    [{ from: px([-reach, GROUND]), to: px([reach, GROUND]), width: 1.25, color: rgba(LINE, 0.7) }],
+    () => frame.ground > 0,
+  )
   const hatching = Arr.flatMap(Arr.range(0, HATCHES - 1), (k): ReadonlyArray<Line> => {
     const x = -BOUNDS.x + 0.06 + k * HATCH_GAP
     if (Math.abs(x) > reach - 0.05 || x > BOUNDS.x - 0.02) return []
     return [{ from: px([x, GROUND]), to: px([x - 0.045, GROUND + 0.045]), width: 1, color: rgba(LINE, 0.2) }]
   })
 
-  const branches = Arr.map(frame.branches, (branch): Line => {
-    const lit = isPicked(branch.tree)
-    // Roots are fainter than the crowns, so the crowns lead, except where
-    // they've knotted with a neighbour's: those turn gold and brighten as
-    // the tie strengthens.
-    const alpha = branch.root ? 0.3 + 0.62 * branch.bond : 0.78
-    const tint = lit ? WARM : branch.root ? mix(LINE, GOLD, Math.min(1, branch.bond * 3)) : LINE
-    const thinnest = branch.root ? 0.7 + 0.5 * branch.bond : 0.9
-    return {
-      from: px(branch.from),
-      to: px(branch.to),
-      width: Math.max(thinnest, branch.width * scale) + (lit ? 0.5 : 0),
-      color: rgba(tint, (lit ? Math.min(1, alpha + 0.15) : alpha) * keep(branch.tree)),
-    }
-  })
+  const branches = Arr.map(frame.branches, (branch): Line =>
+    branchLine(branch, isPicked(branch.tree), keep(branch.tree), scale, px),
+  )
 
-  const wisps = Arr.flatMap(frame.seeds, (seed): ReadonlyArray<Line> =>
-    seed.flying
-      ? [{ from: px(seed.tail), to: px([seed.x, seed.y]), width: 1.2, color: rgba(GOLD, 0.45 * seed.alpha) }]
-      : [],
+  const wisps = Arr.map(
+    Arr.filter(frame.seeds, seed => seed.flying),
+    (seed): Line => ({ from: px(seed.tail), to: px([seed.x, seed.y]), width: 1.2, color: rgba(GOLD, 0.45 * seed.alpha) }),
   )
 
   const rings = Arr.map(frame.rings, (ring): Dot => {
@@ -109,14 +128,17 @@ export const shapesOf = (
   const leaves = Arr.map(frame.leaves, (leaf): Dot => {
     const [x, y] = px([leaf.x, leaf.y])
     const lit = isPicked(leaf.tree)
-    const radius = Math.max(1.1, leaf.size * scale) * (leaf.size > 0 ? 1 : 0)
+    const radius = Math.max(1.1, leaf.size * scale) * Bool.match(leaf.size > 0, { onTrue: () => 1, onFalse: () => 0 })
     return {
       x,
       y,
       radius: radius * (1 + 0.35 * leaf.blossom),
-      glow: (2 + 10 * leaf.blossom + (lit ? 4 : 0)) * Math.min(1, radius / 1.5),
+      glow: (2 + 10 * leaf.blossom + Bool.match(lit, { onTrue: () => 4, onFalse: () => 0 })) * Math.min(1, radius / 1.5),
       ring: 0,
-      color: rgba(lit ? WARM : GOLD, (0.85 + 0.15 * leaf.blossom) * keep(leaf.tree)),
+      color: rgba(
+        Bool.match(lit, { onTrue: () => WARM, onFalse: () => GOLD }),
+        (0.85 + 0.15 * leaf.blossom) * keep(leaf.tree),
+      ),
     }
   })
 
@@ -126,7 +148,7 @@ export const shapesOf = (
       x,
       y,
       radius: Math.max(2, seed.size * scale),
-      glow: seed.flying ? 10 : 6,
+      glow: Bool.match(seed.flying, { onTrue: () => 10, onFalse: () => 6 }),
       ring: 0,
       color: rgba(GOLD, seed.alpha),
     }

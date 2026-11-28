@@ -1,5 +1,6 @@
 import type { Html } from '@effect/ui/html'
 import * as stylex from '@stylexjs/stylex'
+import { Boolean as Bool } from 'effect'
 
 import { Sprite } from '#components/Sprite'
 
@@ -27,7 +28,6 @@ const styles = stylex.create({
     padding: { default: 14, [media.narrow]: 12 },
     minHeight: 130,
   },
-  // Cut off too many times, he shakes and shouts.
   upset: {
     backgroundColor: manor.red,
     color: manor.pale,
@@ -38,10 +38,10 @@ const styles = stylex.create({
     animationIterationCount: 'infinite',
   },
   sprite: {
-    transform: { default: null, [media.narrow]: 'scale(.6)' },
-    transformOrigin: { default: null, [media.narrow]: 'top left' },
-    marginRight: { default: null, [media.narrow]: -35 },
-    marginBottom: { default: null, [media.narrow]: -35 },
+    transform: { [media.narrow]: 'scale(.6)' },
+    transformOrigin: { [media.narrow]: 'top left' },
+    marginRight: { [media.narrow]: -35 },
+    marginBottom: { [media.narrow]: -35 },
   },
   who: { fontFamily: fonts.pixel, fontWeight: 700, fontSize: 12, color: manor.purple, lineHeight: 'normal' },
   whoUpset: { color: manor.ink },
@@ -54,7 +54,12 @@ const styles = stylex.create({
   },
 })
 
-// Rattles' speech box. Upset, he shouts, so screen readers hear it at once.
+const liveness = (upset: boolean) =>
+  Bool.match(upset, {
+    onTrue: () => 'assertive',
+    onFalse: () => 'polite',
+  })
+
 export const RattlesBox = <M>(h: Html.H<M>, rattles: RattlesState) => {
   const upset = rattles._tag === 'Upset'
   return sx(h.div, styles.box, upset && styles.upset).children(
@@ -62,7 +67,7 @@ export const RattlesBox = <M>(h: Html.H<M>, rattles: RattlesState) => {
     h.div(
       sx(h.div, styles.who, upset && styles.whoUpset).children('RATTLES'),
       sx(h.div, styles.text, upset && styles.textUpset)
-        .attr('aria-live', upset ? 'assertive' : 'polite')
+        .attr('aria-live', liveness(upset))
         .children(rattlesSays(rattles)),
     ),
   )

@@ -3,7 +3,6 @@ import { Array as Arr } from 'effect'
 import { type Projection, clamp01, smooth } from '../../animation/kit.ts'
 import type { Line, Point, Rgba } from '../../animation/scene.ts'
 
-// The hero's world: a 16:9 box around the origin, y down.
 export const BOX = { x: 1.6, y: 0.9 } as const
 
 export const projection: Projection = (width, height) => {
@@ -17,14 +16,12 @@ export const projection: Projection = (width, height) => {
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
 export const lerpPoint = (a: Point, b: Point, t: number): Point => [lerp(a[0], b[0], t), lerp(a[1], b[1], t)]
 
-// How far into a window of time we are, 0 before it and 1 after.
 export const within = (time: number, start: number, length: number): number => clamp01((time - start) / length)
 export const eased = (time: number, start: number, length: number): number => smooth(within(time, start, length))
 
 const lengthOf = (points: ReadonlyArray<Point>): number =>
   Arr.reduce(Arr.zip(points, Arr.drop(points, 1)), 0, (sum, [a, b]) => sum + Math.hypot(b[0] - a[0], b[1] - a[1]))
 
-// The first `progress` of a path, by length, so a line draws itself in.
 export const prefix = (points: ReadonlyArray<Point>, progress: number): ReadonlyArray<Point> => {
   const total = lengthOf(points)
   let left = clamp01(progress) * total
@@ -48,7 +45,6 @@ export const prefix = (points: ReadonlyArray<Point>, progress: number): Readonly
   return out
 }
 
-// A path's segments in CSS px.
 export const segments = (
   points: ReadonlyArray<Point>,
   px: (point: Point) => Point,
@@ -57,7 +53,6 @@ export const segments = (
 ): ReadonlyArray<Line> =>
   Arr.map(Arr.zip(points, Arr.drop(points, 1)), ([a, b]): Line => ({ from: px(a), to: px(b), width, color }))
 
-// A quadratic curve through `control`, as `steps` straight pieces.
 export const curve = (from: Point, control: Point, to: Point, steps: number): ReadonlyArray<Point> =>
   Arr.makeBy(steps + 1, i => {
     const t = i / steps

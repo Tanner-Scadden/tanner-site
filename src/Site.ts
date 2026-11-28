@@ -1,8 +1,9 @@
 import { Command, Component, Head, Router, Subscription, UiSchema } from '@effect/ui'
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
-import { Effect, Layer, Match, Option, Schema, Stream, String as Str } from 'effect'
+import { Boolean as Bool, Effect, Layer, Match, Option, Schema, Stream, String as Str } from 'effect'
 
 import { EggId } from '#domain/Egg'
+import type { RoomId } from '#domain/Room'
 
 import { Blueprint } from './blueprint/components/Blueprint.ts'
 import { Outbreak } from './blueprint/components/Outbreak.ts'
@@ -29,7 +30,6 @@ import { paper } from './styles/tokens.stylex.ts'
 import { Thesis, ThesisEvent, thesisText } from './thesis/machines/Thesis.ts'
 import { Dock, Toast } from './toast/components/Toast.ts'
 
-// What the page reports: everything the user did, handed to the actors as is.
 const siteInputs = {
   ClickedThesis: {},
   ClickedWebGpu: {},
@@ -114,15 +114,32 @@ const MANOR: RoomColor = { name: 'manor', color: paper.manor }
 const REST: RoomColor = { name: 'rest', color: paper.rest }
 
 const roomStyle = (room: RoomColor) =>
-  room === MANOR ? documentStyles.manor : room === REST ? documentStyles.rest : null
+  Match.value(room.name).pipe(
+    Match.when('manor', () => Option.some(documentStyles.manor)),
+    Match.when('rest', () => Option.some(documentStyles.rest)),
+    Match.orElse(() => Option.none()),
+  )
+
+const manorTitle = (room: RoomId): string => {
+  if (room === 'parlour') return 'The Manor · Tanner Scadden'
+  return `${Str.capitalize(room)} · The Manor · Tanner Scadden`
+}
+
+interface KeyPress {
+  readonly key: string
+  readonly editable: boolean
+  readonly repeat: boolean
+}
+
+const pressedKey = ({ key, editable, repeat }: KeyPress): Option.Option<SiteMessage> => {
+  if (editable || repeat) return Option.none()
+  return Option.some(SiteMessage.PressedKey({ key }))
+}
 
 const titleOf = (page: PageState): string =>
   PageState.$match(page, {
     Home: () => 'Tanner Scadden',
-    Manor: ({ room }) =>
-      room === 'parlour'
-        ? 'The Manor · Tanner Scadden'
-        : `${Str.capitalize(room)} · The Manor · Tanner Scadden`,
+    Manor: ({ room }) => manorTitle(room),
     Rest: () => 'Rest · Tanner Scadden',
     Blog: () => 'Blog · Tanner Scadden',
     Post: ({ slug }) =>
@@ -167,11 +184,7 @@ export const SiteNoDeps = SiteDef.make({
     SiteMessage.matchOrElse(
       message,
       {
-        // The page shown follows the route the root holds, not the Page
-        // actor's copy, which hears of a new route a step later.
         ChangedActors: ({ snapshot }) => ({ ...snapshot, page: $.model.page }),
-        // The new page goes in with this update, so it's in when the Router
-        // scrolls to the top.
         Navigated: input =>
           $.evolve({ page: pageOf(input.route) }).run(Dispatch.make({ input })),
       },
@@ -185,8 +198,8 @@ export const SiteNoDeps = SiteDef.make({
       'actors',
       Stream.map(siteSnapshots, snapshot => SiteMessage.ChangedActors({ snapshot })),
     ),
-    HtmlSubscription.onDocument('keydown', ({ key, editable, repeat }) =>
-      editable || repeat ? undefined : SiteMessage.PressedKey({ key }),
+    HtmlSubscription.onDocument('keydown', press =>
+      Option.getOrUndefined(pressedKey(press)),
     ),
     devtools(SiteMessage.CalledHello()),
     beforePrint(SiteMessage.StartedPrint()),
@@ -196,8 +209,8 @@ export const SiteNoDeps = SiteDef.make({
     return [
       Head.title(titleOf($.model.page)),
       HtmlHead.lang('en'),
-      HtmlHead.htmlClass(classOf(roomStyle(room))),
-      HtmlHead.bodyClass(classOf(documentStyles.body, roomStyle(room))),
+      HtmlHead.htmlClass(classOf(Option.toArray(roomStyle(room)))),
+      HtmlHead.bodyClass(classOf(documentStyles.body, Option.toArray(roomStyle(room)))),
       HtmlHead.meta({ name: 'theme-color', content: room.color }),
     ]
   },
@@ -206,7 +219,6 @@ export const SiteNoDeps = SiteDef.make({
     return h.div(
       Blueprint(h, {
         gpu: model.gpu,
-        // The hidden pages have their own colors, so the blueprint steps out.
         hidden: room !== BLUEPRINT,
         still: h.props.reducedMotion,
         started: supported => SiteMessage.StartedGpu({ supported }),
@@ -214,12 +226,11 @@ export const SiteNoDeps = SiteDef.make({
       }),
       page(h, model),
       Zombies(h, zombiesOf(model.horde), id => SiteMessage.ClickedZombie({ id })),
-      // The counter only shows on pages that show the pens.
       room === BLUEPRINT && Outbreak(h, model.gpu),
-      // The hidden pages dock the toast as the way home; the blog keeps it.
-      room === BLUEPRINT && model.page._tag !== 'NotFound'
-        ? Toast(h, model.toast)
-        : Dock(h, model.toast, room.name),
+      Bool.match(room === BLUEPRINT && model.page._tag !== 'NotFound', {
+        onTrue: () => Toast(h, model.toast),
+        onFalse: () => Dock(h, model.toast, room.name),
+      }),
     )
   },
 })

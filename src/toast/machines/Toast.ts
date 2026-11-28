@@ -7,8 +7,6 @@ export const TOAST_MS = 2600
 export const MUNCHED_MS = 900
 
 export const ToastState = State({
-  // The last text shown outlives its toast, so the dock on a hidden page can
-  // shrink it away smoothly instead of dropping it at once.
   Hidden: { last: Schema.String },
   Showing: { text: Schema.String, ms: Schema.Finite },
 })

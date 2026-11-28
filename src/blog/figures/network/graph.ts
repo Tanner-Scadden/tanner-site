@@ -1,27 +1,21 @@
-import { Array as Arr, Number as Num, Option } from 'effect'
+import { Array as Arr, Boolean as Bool, Number as Num, Option } from 'effect'
 
 import { FADE, HOLD } from '../../animation/controls.ts'
 import { clamp01, random } from '../../animation/kit.ts'
 
 export interface GraphNode {
-  // When they appear, once the link that brings them in reaches them.
   readonly born: number
-  // Who they joined through.
   readonly parent: number
-  // The person you helped whose network they belong to. You're -1.
   readonly circle: number
 }
 
 export interface GraphEdge {
   readonly a: number
   readonly b: number
-  // When it starts drawing, from `a` toward `b`.
   readonly born: number
-  // Made by you, rather than by the network on its own.
   readonly yours: boolean
 }
 
-// You help someone new: a link reaches out from you to them.
 export interface Help {
   readonly person: number
   readonly start: number
@@ -31,43 +25,38 @@ export interface Timeline {
   readonly nodes: ReadonlyArray<GraphNode>
   readonly edges: ReadonlyArray<GraphEdge>
   readonly helps: ReadonlyArray<Help>
-  // When the last thing has happened.
   readonly end: number
-  // Where everyone is every KEY seconds, as x, y pairs in node order.
   readonly layout: ReadonlyArray<Float32Array>
 }
 
-// The graph lives in a box this wide and tall around you, in world units.
 export const BOUNDS = { x: 1.6, y: 0.9 } as const
 export const MAX_NODES = 72
 export const MAX_EDGES = 150
 
-// How long a link takes to draw, and a person to appear once it reaches
-// them.
 const GROW = 0.5
 const POP = 0.35
-// When you help the first person, and how long until the next.
 const FIRST_HELP = 0.8
 const HELP_GAP = 1.3
-// How long a circle stays lit after you help the person at its middle.
 const PULSE = 1.8
-// The network grows on its own from GROWTH_START until GROWTH_END.
 const GROWTH_START = 2.4
 const GROWTH_END = 17.8
 const GROWTH_TICK = 0.25
-// Joins per second for each person already there, so it compounds.
 const GROWTH_RATE = 0.09
-// A beat after the last link finishes drawing, so the run doesn't stop the
-// instant it's done.
 const TAIL = 0.8
-// Layout keyframes, and simulation steps per keyframe.
 const KEY = 1 / 20
 const STEPS = 2
 
-const keyOf = (a: number, b: number) => (a < b ? `${a}:${b}` : `${b}:${a}`)
+const keyOf = (a: number, b: number) => {
+  if (a < b) return `${a}:${b}`
+  return `${b}:${a}`
+}
 
-// How many links each person is from you, over these links, by
-// breadth-first search. -1 is out of reach.
+const otherEnd = (edge: GraphEdge, i: number): ReadonlyArray<number> => {
+  if (edge.a === i) return [edge.b]
+  if (edge.b === i) return [edge.a]
+  return []
+}
+
 export const distancesFrom = (count: number, links: ReadonlyArray<GraphEdge>) => {
   const around: Array<Array<number>> = Arr.makeBy(count, () => [])
   for (const { a, b } of links) {
@@ -88,9 +77,6 @@ export const distancesFrom = (count: number, links: ReadonlyArray<GraphEdge>) =>
   return { distance }
 }
 
-// ---------------------------------------------------------------------------
-// What happens, and when
-// ---------------------------------------------------------------------------
 
 const buildEvents = (seed: number) => {
   const next = random(seed)
@@ -104,9 +90,10 @@ const buildEvents = (seed: number) => {
 
   const present = (i: number, at: number) => nodes[i]!.born <= at
   const neighbours = (i: number, at: number): ReadonlyArray<number> =>
-    Arr.flatMap(edges, edge => (edge.born > at ? [] : edge.a === i ? [edge.b] : edge.b === i ? [edge.a] : []))
-  // Friends of friends who haven't met yet. Never you: you're not in this
-  // part.
+    Arr.flatMap(edges, edge => {
+      if (edge.born > at) return []
+      return otherEnd(edge, i)
+    })
   const reachable = (i: number, at: number): ReadonlyArray<number> => {
     const known = new Set(neighbours(i, at))
     return Arr.dedupe(
@@ -124,19 +111,19 @@ const buildEvents = (seed: number) => {
     return true
   }
 
-  // Someone new joins through `from`, in `circle`, or a circle of their own
-  // when that's -1. The link starts at `at`, and they appear as it reaches
-  // them.
   const meet = (from: number, at: number, yours: boolean, circle: number): Option.Option<number> => {
     if (nodes.length >= MAX_NODES || edges.length >= MAX_EDGES || !present(from, at)) return Option.none()
     const i = nodes.length
-    nodes.push({ born: at + GROW * 0.9, parent: from, circle: circle === -1 ? i : circle })
+    nodes.push({
+      born: at + GROW * 0.9,
+      parent: from,
+      circle: Bool.match(circle === -1, { onTrue: () => i, onFalse: () => circle }),
+    })
     pairs.add(keyOf(from, i))
     edges.push({ a: from, b: i, born: at, yours })
     return Option.some(i)
   }
 
-  // Beat 1: you help people, and each brings a few of their own.
   const helpCount = 6 + Math.floor(next() * 2)
   for (let k = 0; k < helpCount; k++) {
     const start = FIRST_HELP + k * HELP_GAP
@@ -148,29 +135,25 @@ const buildEvents = (seed: number) => {
   }
   const spokes = Arr.map(helps, help => help.person)
 
-  // Beat 2: meanwhile, without you. Each tick, everyone there has a small
-  // chance of bringing someone in, so the more people there are, the
-  // faster it grows.
   for (let at = GROWTH_START; at < GROWTH_END; at += GROWTH_TICK) {
     const people = Arr.filter(Arr.range(1, nodes.length - 1), i => present(i, at))
     const joins = people.length * GROWTH_RATE * GROWTH_TICK
-    const count = Math.floor(joins) + (chance(joins - Math.floor(joins)) ? 1 : 0)
+    const count = Math.floor(joins) + Bool.match(chance(joins - Math.floor(joins)), { onTrue: () => 1, onFalse: () => 0 })
     for (let e = 0; e < count; e++) {
       const when = at + next() * GROWTH_TICK
-      // Of two people, whoever knows fewer, so nobody becomes a hub.
       const host = Option.flatMap(pick(people), a =>
-        Option.map(pick(people), b => (neighbours(a, when).length <= neighbours(b, when).length ? a : b)),
+        Option.map(pick(people), b =>
+          Bool.match(neighbours(a, when).length <= neighbours(b, when).length, { onTrue: () => a, onFalse: () => b }),
+        ),
       )
       Option.map(host, p => {
         const circle = nodes[p]!.circle
         meet(p, when, false, circle)
-        // Sometimes friends of friends meet, or the network reaches across
-        // to the one beside it.
         const roll = next()
         if (roll < 0.4) Option.map(pick(reachable(p, when)), q => link(p, q, when + 0.2, false))
         else if (roll < 0.6) {
           const side = Arr.findFirstIndex(spokes, s => s === circle)
-          const step = chance(0.5) ? 1 : spokes.length - 1
+          const step = Bool.match(chance(0.5), { onTrue: () => 1, onFalse: () => spokes.length - 1 })
           const beside = Option.flatMap(side, k => Arr.get(spokes, (k + step) % spokes.length))
           const across = Option.flatMap(beside, other =>
             pick(Arr.filter(people, j => nodes[j]!.circle === other && j !== other && present(j, when))),
@@ -186,14 +169,7 @@ const buildEvents = (seed: number) => {
   return { nodes, edges, helps, end }
 }
 
-// ---------------------------------------------------------------------------
-// Where everyone is
-// ---------------------------------------------------------------------------
 
-// People push each other apart, links pull them together at a length that
-// depends on whose link it is, and everyone is drawn gently toward you in
-// the middle, harder up and down, so the network fills the wide canvas.
-// Soft walls keep them on it.
 const REPEL = 0.0004
 const SPRING = 0.06
 const YOUR_LENGTH = 0.42
@@ -201,15 +177,10 @@ const THEIR_LENGTH = 0.2
 const GRAVITY = { x: 0.006, y: 0.02 } as const
 const WALL = 0.08
 const DAMP = 0.72
-// Settling the finished network: steps, and the top speed as it cools.
 const SETTLE_STEPS = 600
 const SETTLE_SPEED = 0.05
-// While it plays: how hard everyone is held to their settled spot, and how
-// fast anyone may move, in world units per step.
 const ANCHOR = 0.05
 const MAX_SPEED = 0.004
-// How much of the settling forces still act while it plays, so people
-// shift a little as their neighbours arrive.
 const LIVE = 0.35
 
 const WX = BOUNDS.x - 0.12
@@ -240,13 +211,18 @@ const repel = ({ x, y, fx, fy }: Forces, active: ReadonlyArray<number>, scale: n
   }
 }
 
+const restLength = (yours: boolean): number => {
+  if (yours) return YOUR_LENGTH
+  return THEIR_LENGTH
+}
+
 const pull = ({ x, y, fx, fy }: Forces, links: ReadonlyArray<GraphEdge>, strength: (edge: GraphEdge) => number) => {
   for (const edge of links) {
     const { a, b } = edge
     const dx = x[b]! - x[a]!
     const dy = y[b]! - y[a]!
     const d = Math.max(Math.hypot(dx, dy), 0.001)
-    const f = SPRING * strength(edge) * (d - (edge.yours ? YOUR_LENGTH : THEIR_LENGTH))
+    const f = SPRING * strength(edge) * (d - restLength(edge.yours))
     fx[a]! += (dx / d) * f
     fy[a]! += (dy / d) * f
     fx[b]! -= (dx / d) * f
@@ -254,7 +230,6 @@ const pull = ({ x, y, fx, fy }: Forces, links: ReadonlyArray<GraphEdge>, strengt
   }
 }
 
-// Moves everyone but you by their force, damped and capped.
 const move = (
   forces: Forces,
   v: { vx: Float64Array; vy: Float64Array },
@@ -269,26 +244,22 @@ const move = (
     if (Math.abs(y[i]!) > WY) fy[i]! -= Math.sign(y[i]!) * (Math.abs(y[i]!) - WY) * WALL
     vx[i] = (vx[i]! + fx[i]!) * DAMP
     vy[i] = (vy[i]! + fy[i]!) * DAMP
-    const speed = Math.hypot(vx[i]!, vy[i]!)
+    const speed = Math.hypot(vx[i], vy[i])
     if (speed > cap) {
-      vx[i] = (vx[i]! / speed) * cap
-      vy[i] = (vy[i]! / speed) * cap
+      vx[i] = (vx[i] / speed) * cap
+      vy[i] = (vy[i] / speed) * cap
     }
-    x[i] = Num.clamp(x[i]! + vx[i]!, {
+    x[i] = Num.clamp(x[i]! + vx[i], {
       minimum: -BOUNDS.x + 0.02,
       maximum: BOUNDS.x - 0.02,
     })
-    y[i] = Num.clamp(y[i]! + vy[i]!, {
+    y[i] = Num.clamp(y[i]! + vy[i], {
       minimum: -BOUNDS.y + 0.02,
       maximum: BOUNDS.y - 0.02,
     })
   }
 }
 
-// Where everyone ends up once the whole network is there. The people you
-// helped start evenly round you, everyone else just outside whoever brought
-// them in, then it all settles as it cools. Starting round you keeps each
-// network on its own side.
 const settle = (seed: number, nodes: ReadonlyArray<GraphNode>, edges: ReadonlyArray<GraphEdge>) => {
   const next = random(seed ^ 0x9e3779b9)
   const n = nodes.length
@@ -310,7 +281,7 @@ const settle = (seed: number, nodes: ReadonlyArray<GraphNode>, edges: ReadonlyAr
         onNone: () => Math.atan2(forces.y[parent]!, forces.x[parent]!) + (next() - 0.5) * 1.6,
       },
     )
-    const length = parent === 0 ? YOUR_LENGTH : THEIR_LENGTH
+    const length = restLength(parent === 0)
     forces.x[i] = Num.clamp(forces.x[parent]! + Math.cos(angle) * length * 1.6, { minimum: -WX, maximum: WX })
     forces.y[i] = Num.clamp(forces.y[parent]! + Math.sin(angle) * length, { minimum: -WY, maximum: WY })
   }
@@ -349,7 +320,6 @@ const simulate = (
 
   for (let k = 0; k * KEY <= until + KEY; k++) {
     const t = k * KEY
-    // Nobody moves before they're there, so they appear on their spot.
     const active = Arr.filter(Arr.range(0, n - 1), i => nodes[i]!.born <= t)
     const links = Arr.filter(edges, edge => edge.born <= t)
     for (let step = 0; step < STEPS; step++) {
@@ -379,7 +349,6 @@ export const buildTimeline = (seed: number): Timeline => {
   return { nodes, edges, helps, end, layout }
 }
 
-// Where person `i` is at `time`, between the two nearest keyframes.
 export const positionAt = (timeline: Timeline, i: number, time: number): readonly [number, number] => {
   const { layout } = timeline
   const k = Num.clamp(time / KEY, { minimum: 0, maximum: layout.length - 1 })
@@ -391,26 +360,17 @@ export const positionAt = (timeline: Timeline, i: number, time: number): readonl
   return [a[i * 2]! + (b[i * 2]! - a[i * 2]!) * f, a[i * 2 + 1]! + (b[i * 2 + 1]! - a[i * 2 + 1]!) * f]
 }
 
-// ---------------------------------------------------------------------------
-// One moment of a run
-// ---------------------------------------------------------------------------
 
-// You, the people you've helped, the people one link past them, and
-// everyone further out.
 export type DotKind = 'you' | 'met' | 'circle' | 'stranger'
-// Links that touch you, links that touch someone you helped, and the rest.
 export type EdgeKind = 'yours' | 'circle' | 'remote'
 
 export interface FrameEdge {
-  // The two people it joins.
   readonly a: number
   readonly b: number
   readonly from: readonly [number, number]
   readonly to: readonly [number, number]
   readonly kind: EdgeKind
-  // 0 to 1 while its circle is lit up.
   readonly lit: number
-  // 0 to 1 as a bad interaction dims it.
   readonly cut: number
 }
 
@@ -418,25 +378,19 @@ export interface FrameDot {
   readonly id: number
   readonly x: number
   readonly y: number
-  // 0 to 1 as the person appears.
   readonly grown: number
   readonly kind: DotKind
   readonly lit: number
-  // 0 to 1 as a bad interaction dims their branch.
   readonly cut: number
 }
 
-// A ring that spreads out from someone when you help them.
 export interface FrameRing {
   readonly x: number
   readonly y: number
   readonly progress: number
-  // Red, from a bad interaction.
   readonly alarm?: boolean
 }
 
-// Your link to someone, just torn: each end springs back toward its own
-// side from the middle.
 export interface FrameSnap {
   readonly you: readonly [number, number]
   readonly them: readonly [number, number]
@@ -448,15 +402,15 @@ export interface Frame {
   readonly edges: ReadonlyArray<FrameEdge>
   readonly dots: ReadonlyArray<FrameDot>
   readonly rings: ReadonlyArray<FrameRing>
-  // Bright points travelling a link: your help going out.
   readonly sparks: ReadonlyArray<readonly [number, number]>
-  // Bad interactions on their way out along your link, from you to where
-  // they've got to.
   readonly ripples: ReadonlyArray<{ readonly from: readonly [number, number]; readonly to: readonly [number, number] }>
   readonly snaps: ReadonlyArray<FrameSnap>
 }
 
-const ease = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2)
+const ease = (t: number): number => {
+  if (t < 0.5) return 2 * t * t
+  return 1 - (-2 * t + 2) ** 2 / 2
+}
 const lerp = (a: readonly [number, number], b: readonly [number, number], t: number): readonly [number, number] => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
@@ -464,41 +418,23 @@ const lerp = (a: readonly [number, number], b: readonly [number, number], t: num
 
 const xy = ([x, y]: readonly [number, number]) => ({ x, y })
 
-// ---------------------------------------------------------------------------
-// Bad interactions
-// ---------------------------------------------------------------------------
 
-// A bad interaction with someone you helped: the ripple leaves you at
-// `start` and tears your link to them when it gets there. -1 is a bad
-// interaction with nobody left to lose, which only ripples out from you.
 export interface Tear {
   readonly person: number
   readonly start: number
-  // Their branch: everyone in their circle.
   readonly branch: ReadonlyArray<number>
-  // Which way their branch pulls away, a unit vector away from you.
   readonly away: readonly [number, number]
 }
 
-// The ripple's trip along your link, how long the torn ends take to
-// spring back, and how long the branch takes to dim and pull away, and how
-// far it goes.
 export const RIPPLE = 0.7
 const SNAP = 0.9
 const DRIFT = 1.4
 const PULL = 0.1
-// Seconds until a tear has played out.
 export const TEAR_SETTLE = RIPPLE + DRIFT
-// The most bad interactions a run takes: one per person you could help,
-// and one more with nobody left.
 export const MAX_TEARS = 8
 
 export const tornAt = (tear: Tear): number => tear.start + RIPPLE
 
-// What each interaction does, in the order they happened. An interaction
-// aimed near someone you helped who's still with you tears their link;
-// otherwise it's the biggest branch you still have. `aim` is in world
-// units.
 export const tearsOf = (
   timeline: Timeline,
   interactions: ReadonlyArray<{ readonly time: number; readonly aim: Option.Option<readonly [number, number]> }>,
@@ -526,32 +462,36 @@ export const tearsOf = (
     const biggest = Arr.reduce(left, Option.none<number>(), (best, { person }) =>
       Option.match(best, {
         onNone: () => Option.some(person),
-        onSome: b => Option.some(sizeOf(person) > sizeOf(b) ? person : b),
+        onSome: b => Option.some(Bool.match(sizeOf(person) > sizeOf(b), { onTrue: () => person, onFalse: () => b })),
       }),
     )
     const person = Option.getOrElse(Option.orElse(aimed, () => biggest), () => -1)
     const branch = Arr.filter(Arr.range(1, nodes.length - 1), i => person >= 0 && nodes[i]!.circle === person)
-    const [ax, ay] = person >= 0 ? positionAt(timeline, person, time) : [1, 0]
+    const [ax, ay] = Bool.match(person >= 0, {
+      onTrue: () => positionAt(timeline, person, time),
+      onFalse: (): readonly [number, number] => [1, 0],
+    })
     const d = Math.max(Math.hypot(ax, ay), 1e-6)
     tears.push({ person, start: time, branch, away: [ax / d, ay / d] })
   }
   return tears
 }
 
-// How close, in world units, an aimed interaction has to be to someone.
 const AIM_REACH = 0.25
 
-// How long a ring takes to spread.
 const RING = 1.2
 
-export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<Tear> = []): Frame => {
-  const { nodes, edges, helps } = timeline
+type Xy = readonly [number, number]
 
-  // The bad interactions so far: how far each branch has dimmed and pulled
-  // away, and which of your links have torn.
-  const started = Arr.filter(tears, tear => tear.start <= time)
+interface TearOffsets {
+  readonly cut: ReadonlyMap<number, number>
+  readonly pulls: ReadonlyMap<number, Xy>
+  readonly torn: ReadonlySet<number>
+}
+
+const tearOffsets = (started: ReadonlyArray<Tear>, time: number): TearOffsets => {
   const cut = new Map<number, number>()
-  const pulls = new Map<number, readonly [number, number]>()
+  const pulls = new Map<number, Xy>()
   const torn = new Set<number>()
   for (const tear of started) {
     if (tear.person < 0) continue
@@ -563,25 +503,19 @@ export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<T
       pulls.set(i, [px + tear.away[0] * PULL * drift, py + tear.away[1] * PULL * drift])
     }
   }
-  const cutOf = (i: number) => cut.get(i) ?? 0
-  const at = (i: number): readonly [number, number] => {
-    const [x, y] = positionAt(timeline, i, time)
-    const [px, py] = pulls.get(i) ?? [0, 0]
-    return [
-      Num.clamp(x + px, { minimum: -BOUNDS.x + 0.02, maximum: BOUNDS.x - 0.02 }),
-      Num.clamp(y + py, { minimum: -BOUNDS.y + 0.02, maximum: BOUNDS.y - 0.02 }),
-    ]
-  }
+  return { cut, pulls, torn }
+}
 
-  // How far everyone is from you over the links started so far, so nobody
-  // changes colour just as they appear.
-  const { distance } = distancesFrom(
-    nodes.length,
-    Arr.filter(edges, edge => edge.born <= time),
-  )
+interface HelpMarks {
+  readonly rings: ReadonlyArray<FrameRing>
+  readonly sparks: ReadonlyArray<Xy>
+  readonly pulse: ReadonlyMap<number, number>
+}
 
+const helpMarks = (timeline: Timeline, time: number, at: (i: number) => Xy): HelpMarks => {
+  const { nodes, helps } = timeline
   const rings: Array<FrameRing> = []
-  const sparks: Array<readonly [number, number]> = []
+  const sparks: Array<Xy> = []
   const pulse = new Map<number, number>()
   for (const help of helps) {
     const grown = (time - help.start) / GROW
@@ -592,16 +526,18 @@ export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<T
       pulse.set(help.person, 1 - since / PULSE)
     }
   }
-  const litOf = (i: number) => Math.max(pulse.get(nodes[i]!.circle) ?? 0, pulse.get(i) ?? 0)
+  return { rings, sparks, pulse }
+}
 
-  const known = (i: number) => distance[i]! >= 0
-  const kindOf = (i: number): DotKind => {
-    const d = distance[i]!
-    return d === 0 ? 'you' : d === 1 ? 'met' : d === 2 ? 'circle' : 'stranger'
-  }
+interface TearMarks {
+  readonly rings: ReadonlyArray<FrameRing>
+  readonly ripples: Frame['ripples']
+  readonly snaps: ReadonlyArray<FrameSnap>
+}
 
-  // The ripples on their way out, and the torn links springing back.
-  const ripples: Array<{ readonly from: readonly [number, number]; readonly to: readonly [number, number] }> = []
+const tearMarks = (started: ReadonlyArray<Tear>, time: number, at: (i: number) => Xy): TearMarks => {
+  const rings: Array<FrameRing> = []
+  const ripples: Array<{ readonly from: Xy; readonly to: Xy }> = []
   const snaps: Array<FrameSnap> = []
   for (const tear of started) {
     const since = time - tear.start
@@ -616,6 +552,52 @@ export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<T
     if (sinceTorn < SNAP) snaps.push({ you: at(0), them: at(tear.person), mid, progress: sinceTorn / SNAP })
     if (sinceTorn < RING) rings.push({ ...xy(mid), progress: sinceTorn / RING, alarm: true })
   }
+  return { rings, ripples, snaps }
+}
+
+const dotKindOf = (distance: Int32Array, i: number): DotKind => {
+  if (i === 0) return 'you'
+  const d = distance[i]!
+  if (d === 0) return 'you'
+  if (d === 1) return 'met'
+  if (d === 2) return 'circle'
+  return 'stranger'
+}
+
+const edgeKindOf = (near: number): EdgeKind => {
+  if (near === 0) return 'yours'
+  if (near === 1) return 'circle'
+  return 'remote'
+}
+
+const hopsOf = (distance: Int32Array, i: number): number => {
+  if (distance[i]! >= 0) return distance[i]!
+  return 99
+}
+
+export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<Tear> = []): Frame => {
+  const { nodes, edges } = timeline
+
+  const started = Arr.filter(tears, tear => tear.start <= time)
+  const { cut, pulls, torn } = tearOffsets(started, time)
+  const cutOf = (i: number) => cut.get(i) ?? 0
+  const at = (i: number): Xy => {
+    const [x, y] = positionAt(timeline, i, time)
+    const [px, py] = pulls.get(i) ?? [0, 0]
+    return [
+      Num.clamp(x + px, { minimum: -BOUNDS.x + 0.02, maximum: BOUNDS.x - 0.02 }),
+      Num.clamp(y + py, { minimum: -BOUNDS.y + 0.02, maximum: BOUNDS.y - 0.02 }),
+    ]
+  }
+
+  const { distance } = distancesFrom(
+    nodes.length,
+    Arr.filter(edges, edge => edge.born <= time),
+  )
+
+  const helped = helpMarks(timeline, time, at)
+  const litOf = (i: number) => Math.max(helped.pulse.get(nodes[i]!.circle) ?? 0, helped.pulse.get(i) ?? 0)
+  const tearing = tearMarks(started, time, at)
 
   const tornLink = (edge: GraphEdge) =>
     (edge.a === 0 && torn.has(edge.b)) || (edge.b === 0 && torn.has(edge.a))
@@ -625,17 +607,14 @@ export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<T
       const grown = ease(clamp01((time - edge.born) / GROW))
       if (grown <= 0 || tornLink(edge)) return []
       const from = at(edge.a)
-      const near = Math.min(
-        known(edge.a) ? distance[edge.a]! : 99,
-        known(edge.b) ? distance[edge.b]! : 99,
-      )
+      const near = Math.min(hopsOf(distance, edge.a), hopsOf(distance, edge.b))
       return [
         {
           a: edge.a,
           b: edge.b,
           from,
           to: lerp(from, at(edge.b), grown),
-          kind: near === 0 ? 'yours' : near === 1 ? 'circle' : 'remote',
+          kind: edgeKindOf(near),
           lit: Math.max(litOf(edge.a), litOf(edge.b)),
           cut: Math.max(cutOf(edge.a), cutOf(edge.b)),
         },
@@ -651,15 +630,15 @@ export const frameAt = (timeline: Timeline, time: number, tears: ReadonlyArray<T
           x,
           y,
           grown,
-          kind: i === 0 ? 'you' : kindOf(i),
+          kind: dotKindOf(distance, i),
           lit: litOf(i),
           cut: cutOf(i),
         },
       ]
     }),
-    rings,
-    sparks,
-    ripples,
-    snaps,
+    rings: [...helped.rings, ...tearing.rings],
+    sparks: helped.sparks,
+    ripples: tearing.ripples,
+    snaps: tearing.snaps,
   }
 }

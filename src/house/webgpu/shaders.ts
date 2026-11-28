@@ -1,6 +1,6 @@
 import { HIDDEN, HIGHLIGHT, INK, LINE, OUT, OVER, PAINT, QUAD, SEGMENT, TO_CLIP } from '../../gpu/wgsl.ts'
 
-const COMMON = /* wgsl */ `
+const COMMON = `
 struct View {
   size: vec2f,
   dpr: f32,
@@ -46,7 +46,7 @@ ${QUAD}
 ${OUT}
 ${HIDDEN}`
 
-export const FLOOR = /* wgsl */ `
+export const FLOOR = `
 ${COMMON}
 
 const PAD = 40.0;
@@ -96,7 +96,7 @@ fn fs(in: Out) -> @location(0) vec4f {
 
 export const ROOM_FLOATS = 8
 
-export const ROOMS = /* wgsl */ `
+export const ROOMS = `
 ${COMMON}
 
 struct Room {
@@ -148,7 +148,7 @@ fn fs(in: Out) -> @location(0) vec4f {
 
 export const WALL_FLOATS = 16
 
-const WALL_STRUCT = /* wgsl */ `
+const WALL_STRUCT = `
 struct Wall {
   path: vec4f,
   // width, reveal, gold, dash
@@ -162,7 +162,7 @@ struct Wall {
 @group(0) @binding(1) var<storage, read> walls: array<Wall>;
 `
 
-export const STROKES = /* wgsl */ `
+export const STROKES = `
 ${COMMON}
 ${WALL_STRUCT}
 
@@ -230,7 +230,7 @@ fn fs(in: Out) -> @location(0) vec4f {
 }
 `
 
-export const PANELS = /* wgsl */ `
+export const PANELS = `
 ${COMMON}
 ${WALL_STRUCT}
 
@@ -316,7 +316,7 @@ fn fs(in: PanelOut) -> @location(0) vec4f {
 }
 `
 
-export const LINES = /* wgsl */ `
+export const LINES = `
 ${COMMON}
 ${WALL_STRUCT}
 
@@ -347,12 +347,12 @@ fn fs(in: Out) -> @location(0) vec4f {
 
 export const DOT_FLOATS = 8
 
-export const DOTS = /* wgsl */ `
+export const DOTS = `
 ${COMMON}
 
 struct Dot {
   // centre, radius, ring
-  shape: vec4f,
+  mark: vec4f,
   // gold, alpha, unused
   look: vec4f,
 }
@@ -364,11 +364,11 @@ const MARGIN = 3.0;
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
   let d = dots[i];
-  if (d.look.y <= 0.0 || d.shape.z <= 0.0) { return hidden(i); }
-  let reach = d.shape.z + MARGIN;
+  if (d.look.y <= 0.0 || d.mark.z <= 0.0) { return hidden(i); }
+  let reach = d.mark.z + MARGIN;
   var out: Out;
   out.i = i;
-  let p = mix(d.shape.xy - reach, d.shape.xy + reach, QUAD[v]);
+  let p = mix(d.mark.xy - reach, d.mark.xy + reach, QUAD[v]);
   out.position = toClip(p);
   out.p = p;
   return out;
@@ -377,9 +377,9 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
 @fragment
 fn fs(in: Out) -> @location(0) vec4f {
   let d = dots[in.i];
-  let r = length(in.p - d.shape.xy);
-  let radius = d.shape.z;
-  let ring = d.shape.w;
+  let r = length(in.p - d.mark.xy);
+  let radius = d.mark.z;
+  let ring = d.mark.w;
   let color = mix(INK, HIGHLIGHT, d.look.x);
   var cover: f32;
   if (ring > 0.0) {
@@ -393,7 +393,7 @@ fn fs(in: Out) -> @location(0) vec4f {
 
 export const SPRITE_FLOATS = 12
 
-export const spritesShader = (cols: number, rows: number) => /* wgsl */ `
+export const spritesShader = (cols: number, rows: number) => `
 ${COMMON}
 
 struct Sprite {

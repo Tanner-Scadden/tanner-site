@@ -1,8 +1,15 @@
-import stylex from '@stylexjs/unplugin/vite'
 import { defineConfig } from 'vitest/config'
 
-// StyleX has no runtime, so the tests compile it as the build does.
+import { stylex } from './vite.plugins.ts'
+
+const DOM_TESTS = ['src/Site.test.ts', 'src/blog/highlight.test.ts']
+
 export default defineConfig({
   plugins: [stylex()],
-  test: { include: ['src/**/*.test.ts'] },
+  test: {
+    projects: [
+      { extends: true, test: { name: 'node', include: ['src/**/*.test.ts'], exclude: DOM_TESTS } },
+      { extends: true, test: { name: 'dom', include: DOM_TESTS, environment: 'happy-dom' } },
+    ],
+  },
 })

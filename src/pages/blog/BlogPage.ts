@@ -13,7 +13,6 @@ import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint } from '../../styles/tokens.stylex.ts'
 
-// The bar along the top of every blog sheet.
 export const BlogBar = <M>(h: Html.H<M>, right: string) =>
   sx(h.div, sheet.bar).children(
     sx(h.nav, sheet.nav).children(
@@ -23,9 +22,14 @@ export const BlogBar = <M>(h: Html.H<M>, right: string) =>
     h.span(right),
   )
 
-const BlogIndex = Component.lazy('BlogIndex', () =>
-  import('../../blog/components/BlogIndex.ts').then(module => module.BlogIndex),
-)
+const loadBlogIndex = () => import('../../blog/components/BlogIndex.ts')
+
+const BlogIndex = Component.lazy('BlogIndex', () => loadBlogIndex().then(module => module.BlogIndex))
+
+const sheetsWord = (count: number): string => {
+  if (count === 1) return 'SHEET'
+  return 'SHEETS'
+}
 
 const Waiting = <M>(h: Html.H<M>) =>
   h.div(
@@ -36,7 +40,7 @@ const Waiting = <M>(h: Html.H<M>) =>
 
 export const BlogPage = <M>(h: Html.H<M>) =>
   sx(h.main, sheet.sheet).children(
-    BlogBar(h, `SET B · ${POSTS.length} ${POSTS.length === 1 ? 'SHEET' : 'SHEETS'}`),
+    BlogBar(h, `SET B · ${POSTS.length} ${sheetsWord(POSTS.length)}`),
     sx(h.header, sheet.hero).children(
       sx(h.h1, sheet.title).children(BLOG.title),
       sx(h.p, styles.intro).children(BLOG.intro),

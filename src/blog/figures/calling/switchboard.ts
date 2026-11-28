@@ -1,19 +1,9 @@
-import { Array as Arr, Option, Order } from 'effect'
+import { Array as Arr, Boolean as Bool, Option, Order, Schema } from 'effect'
 
 import { GOLD, LINE, RED, type Rgb, WARM, mix, random, rgba } from '../../animation/kit.ts'
-import type { Dot, Interaction, Line, Point, Shapes } from '../../animation/scene.ts'
+import type { Dot, Interaction, Line, Point, Marks } from '../../animation/scene.ts'
 import { curve, eased, lerpPoint, prefix, projection, segments, within } from './world.ts'
 
-// An old operator's switchboard, drawn as a plan: a panel of jacks, each
-// with its lamp, and a shelf of cords below. Over the years the cords go up
-// one by one, each one someone who knows your work. Then a lamp you've
-// never wired starts to blink. The call comes in, a cord goes up to answer
-// it, and the whole board lights.
-//
-// Readers can grab a cord by its end and pull it out. Its lamp flashes red
-// as it goes dark, the end follows the pointer, and when they let go it
-// falls to the floor. Letting go over a free jack plugs it in there
-// instead, and a cord on the floor can be picked up and plugged back in.
 
 const COLS = 12
 const ROWS = 3
@@ -35,29 +25,26 @@ export const jackAt = (jack: number): Point => {
 export const lampOf = ([x, y]: Point): Point => [x, y - 0.085]
 const plugAt = (plug: number): Point => [-1.36 + (plug * 2.72) / (PLUGS - 1), SHELF]
 
-// Where a cord's end can be: on the board, above the floor.
 const inReach = ([x, y]: Point): Point => [Math.min(1.5, Math.max(-1.5, x)), Math.min(FLOOR, Math.max(-0.85, y))]
 
-// A cord from a plug on the shelf to wherever its end is, sagging between
-// them, though never through the floor.
 const cordTo = (plug: number, end: Point): ReadonlyArray<Point> => {
   const from = plugAt(plug)
   const control: Point = [(from[0] + end[0]) / 2, Math.min(FLOOR, Math.max(from[1], end[1]) + 0.32)]
   return curve(from, control, end, 14)
 }
 
-// What a reader did with a cord: let go of it over a free jack, which it
-// snaps into, or anywhere else, where it falls.
-type Move =
-  | { readonly _tag: 'Plugged'; readonly time: number; readonly from: Point; readonly jack: number }
-  | { readonly _tag: 'Dropped'; readonly time: number; readonly from: Point }
+const At = Schema.Tuple([Schema.Finite, Schema.Finite])
+
+const Move = Schema.TaggedUnion({
+  Plugged: { time: Schema.Finite, from: At, jack: Schema.Finite },
+  Dropped: { time: Schema.Finite, from: At },
+})
+type Move = typeof Move.Type
 
 interface Cord {
   readonly start: number
   readonly plug: number
-  // The jack it goes up to on its own.
   readonly jack: number
-  // In the order the reader made them.
   readonly moves: ReadonlyArray<Move>
 }
 
@@ -70,21 +57,16 @@ const RING = 10.8
 const ANSWER = 12.6
 const END = 15.4
 
-// How close, in world units, a press has to be to a cord's end to grab it,
-// and a release to a jack to plug into it.
 const REACH = 0.16
 
 export interface Switchboard {
   readonly end: number
-  // Every cord that goes up on its own, the call's last.
   readonly cords: ReadonlyArray<Cord>
-  // The lamp that rings.
   readonly calling: number
 }
 
 export const buildSwitchboard = (seed: number): Switchboard => {
   const next = random(seed * 104729 + 7)
-  // Every jack once, in an order of the seed's: 11 shares no factor with 36.
   const jacks = Arr.makeBy(JACKS, i => (i * 11 + seed * 5) % JACKS)
   const cords = Arr.makeBy(CORDS - 1, (i): Cord => ({
     start: 1.8 + i * 1.45 + next() * 0.4,
@@ -108,8 +90,6 @@ const distance = (a: Point, b: Point): number => Math.hypot(a[0] - b[0], a[1] - 
 const risen = (cord: Cord, time: number): boolean => cord.start + RISE <= time
 const lastMove = (cord: Cord, time: number): Option.Option<Move> => Arr.findLast(cord.moves, move => move.time <= time)
 
-// Where an end let go of at `from` is `after` seconds later: falling, a
-// small bounce, then lying on the floor.
 const fallen = (from: Point, after: number): Point => {
   const drop = FLOOR - from[1]
   const land = Math.sqrt((2 * drop) / GRAVITY)
@@ -118,22 +98,52 @@ const fallen = (from: Point, after: number): Point => {
   return [from[0], FLOOR - Math.min(1, drop) * 0.2 * p * (1 - p)]
 }
 
-// Where a risen cord's end is, and the jack it's in or on its way into.
 const endOf = (cord: Cord, time: number): { readonly at: Point; readonly jack: Option.Option<number> } =>
   Option.match(lastMove(cord, time), {
     onNone: () => ({ at: jackAt(cord.jack), jack: Option.some(cord.jack) }),
-    onSome: move =>
-      move._tag === 'Plugged'
-        ? { at: lerpPoint(move.from, jackAt(move.jack), eased(time, move.time, SNAP)), jack: Option.some(move.jack) }
-        : { at: fallen(move.from, time - move.time), jack: Option.none() },
+    onSome: Move.match({
+      Plugged: move => ({
+        at: lerpPoint(move.from, jackAt(move.jack), eased(time, move.time, SNAP)),
+        jack: Option.some(move.jack),
+      }),
+      Dropped: move => ({ at: fallen(move.from, time - move.time), jack: Option.none<number>() }),
+    }),
   })
 
-// The jack a cord is in, or will be: one that hasn't gone up yet keeps its
-// own, so it can still go up.
-const claim = (cord: Cord, time: number): Option.Option<number> =>
-  risen(cord, time) ? endOf(cord, time).jack : Option.some(cord.jack)
+const claim = (cord: Cord, time: number): Option.Option<number> => {
+  if (risen(cord, time)) return endOf(cord, time).jack
+  return Option.some(cord.jack)
+}
 
-// The cord whose end is nearest `point`, if it's close enough to grab.
+const freeJackNear = (taken: ReadonlySet<number>, from: Point): Option.Option<number> =>
+  Arr.findFirst(
+    Arr.sort(
+      Arr.filter(
+        Arr.makeBy(JACKS, i => i),
+        j => !taken.has(j),
+      ),
+      Order.mapInput(Order.Number, (j: number) => distance(jackAt(j), from)),
+    ),
+    j => distance(jackAt(j), from) < REACH,
+  )
+
+const moveCord = (cords: ReadonlyArray<Cord>, cord: Cord, time: number, from: Point): ReadonlyArray<Cord> => {
+  const taken = new Set(
+    Arr.flatMap(cords, c => {
+      if (c === cord) return []
+      return Option.toArray(claim(c, time))
+    }),
+  )
+  const move = Option.match(freeJackNear(taken, from), {
+    onNone: (): Move => Move.cases.Dropped.make({ time, from }),
+    onSome: (j): Move => Move.cases.Plugged.make({ time, from, jack: j }),
+  })
+  return Arr.map(cords, c => {
+    if (c === cord) return { ...c, moves: [...c.moves, move] }
+    return c
+  })
+}
+
 const grabbed = (cords: ReadonlyArray<Cord>, point: Point, time: number): Option.Option<Cord> =>
   Arr.findFirst(
     Arr.sort(
@@ -143,41 +153,21 @@ const grabbed = (cords: ReadonlyArray<Cord>, point: Point, time: number): Option
     cord => distance(endOf(cord, time).at, point) < REACH,
   )
 
-// The board's cords once the reader's drags are in, in the order they
-// happened. A drag from a cord's end carries it to wherever it was let go.
 export const withReader = (
   board: Switchboard,
   interactions: ReadonlyArray<Interaction>,
   worldOfAim: (aim: Point) => Point,
 ): ReadonlyArray<Cord> =>
   Arr.reduce(Arr.take(interactions, MAX_PRESSES), board.cords, (cords, { time, aim, to }) => {
-    if (to === undefined || Option.isNone(aim)) return cords
-    return Option.match(grabbed(cords, worldOfAim(aim.value), time), {
+    const drag = Option.all([aim, Option.fromNullishOr(to)])
+    if (Option.isNone(drag)) return cords
+    const [grip, drop] = drag.value
+    return Option.match(grabbed(cords, worldOfAim(grip), time), {
       onNone: () => cords,
-      onSome: cord => {
-        const from = inReach(worldOfAim(to))
-        const taken = new Set(Arr.flatMap(cords, c => (c === cord ? [] : Option.toArray(claim(c, time)))))
-        const jack = Arr.findFirst(
-          Arr.sort(
-            Arr.filter(
-              Arr.makeBy(JACKS, i => i),
-              j => !taken.has(j),
-            ),
-            Order.mapInput(Order.Number, (j: number) => distance(jackAt(j), from)),
-          ),
-          j => distance(jackAt(j), from) < REACH,
-        )
-        const move: Move = Option.match(jack, {
-          onNone: () => ({ _tag: 'Dropped', time, from }),
-          onSome: j => ({ _tag: 'Plugged', time, from, jack: j }),
-        })
-        return Arr.map(cords, c => (c === cord ? { ...c, moves: [...c.moves, move] } : c))
-      },
+      onSome: cord => moveCord(cords, cord, time, inReach(worldOfAim(drop))),
     })
   })
 
-// Each spell a cord spends in a jack: from when it lands to when it's
-// pulled out, if it has been.
 interface Stint {
   readonly cord: Cord
   readonly jack: number
@@ -191,37 +181,33 @@ const stintsOf = (cord: Cord): ReadonlyArray<Stint> => {
   return [
     first,
     ...Arr.flatMap(cord.moves, (move, i): ReadonlyArray<Stint> =>
-      move._tag === 'Plugged' ? [{ cord, jack: move.jack, from: move.time + SNAP, until: leaves(i + 1) }] : [],
+      Move.match(move, {
+        Plugged: plugged => [{ cord, jack: plugged.jack, from: plugged.time + SNAP, until: leaves(i + 1) }],
+        Dropped: () => [],
+      }),
     ),
   ]
 }
 
-export const switchboardShapes = (
-  board: Switchboard,
-  cords: ReadonlyArray<Cord>,
-  time: number,
-  width: number,
-  height: number,
-  pointer: Option.Option<Point>,
-  held: Option.Option<Point>,
-): Shapes => {
-  const { px, scale } = projection(width, height)
-  const worldOf = ([x, y]: Point): Point => [(x - width / 2) / scale, (y - height / 2) / scale]
-  const drawn = eased(time, 0, DRAWN)
-  const glowUp = eased(time, ANSWER + RISE, 0.8)
+interface Lamp {
+  readonly lit: number
+  readonly red: number
+}
 
-  // The cord the reader is holding, if any: its end follows the pointer
-  // until they let go.
-  const gripped = Option.flatMap(held, at => grabbed(cords, worldOf(at), time))
-  const hand = inReach(
-    worldOf(
-      Option.getOrElse(
-        Option.orElse(pointer, () => held),
-        () => [0, 0] as Point,
-      ),
-    ),
-  )
+interface View {
+  readonly board: Switchboard
+  readonly cords: ReadonlyArray<Cord>
+  readonly time: number
+  readonly px: (point: Point) => Point
+  readonly drawn: number
+  readonly glowUp: number
+  readonly gripped: Option.Option<Cord>
+  readonly hand: Point
+}
 
+const ANSWERED = ANSWER + RISE
+
+const planLines = ({ px, drawn }: View): ReadonlyArray<Line> => {
   const frame: ReadonlyArray<Point> = [
     [PANEL.left, PANEL.top],
     [PANEL.right, PANEL.top],
@@ -229,7 +215,7 @@ export const switchboardShapes = (
     [PANEL.left, PANEL.bottom],
     [PANEL.left, PANEL.top],
   ]
-  const plan: Array<Line> = [
+  return [
     ...segments(prefix(frame, drawn), px, 1.5, rgba(LINE, 0.5)),
     ...segments(
       prefix(
@@ -268,7 +254,15 @@ export const switchboardShapes = (
       rgba(LINE, 0.18),
     ),
   ]
+}
 
+const brightnessOf = (view: View, cord: Cord): number => {
+  if (cord.jack === view.board.calling && cord.start === ANSWER) return 1
+  return view.glowUp
+}
+
+const cordMarks = (view: View): Marks => {
+  const { cords, time, px, gripped, hand } = view
   const lines: Array<Line> = []
   const heads: Array<Dot> = []
   const head = (point: Point, color: Rgb) => {
@@ -278,7 +272,7 @@ export const switchboardShapes = (
 
   for (const cord of cords) {
     if (cord.start > time) continue
-    const bright = cord.jack === board.calling && cord.start === ANSWER ? 1 : glowUp
+    const bright = brightnessOf(view, cord)
     const color = rgba(mix(WARM, GOLD, bright), 0.55 + 0.4 * bright)
     const width = 1.5 + bright
     if (Option.contains(gripped, cord)) {
@@ -298,13 +292,20 @@ export const switchboardShapes = (
       head(end.at, WARM)
     }
   }
+  return { lines, dots: heads }
+}
 
-  // How lit each lamp is: a flash as a cord lands in it, then a steady
-  // glow. Pulled out, or held by the reader, it flashes red and goes dark.
-  // The call's lamp blinks while it rings, until it's answered.
-  const stints = Arr.flatMap(cords, stintsOf)
-  const answeredAt = ANSWER + RISE
-  const lampState = (jack: number): { readonly lit: number; readonly red: number } => {
+const ringingLamp = (view: View, jack: number): number => {
+  const { board, time } = view
+  if (jack !== board.calling || time < RING || time >= ANSWERED) return 0
+  if (Math.sin((time - RING) * Math.PI * 5) > 0) return 1
+  return 0.15
+}
+
+const lampStateOf =
+  (view: View, stints: ReadonlyArray<Stint>) =>
+  (jack: number): Lamp => {
+    const { time, gripped, glowUp } = view
     const mine = Arr.filter(stints, stint => stint.jack === jack && stint.from <= time)
     const now = Arr.findFirst(mine, stint => stint.until > time)
     if (Option.isSome(now)) {
@@ -317,13 +318,13 @@ export const switchboardShapes = (
       const t = within(time, left, 0.7)
       return { lit: 1 - t, red: 1 - t }
     }
-    const ringing = jack === board.calling && time >= RING && time < answeredAt
-    return { lit: ringing ? (Math.sin((time - RING) * Math.PI * 5) > 0 ? 1 : 0.15) : 0, red: 0 }
+    return { lit: ringingLamp(view, jack), red: 0 }
   }
 
+const callRings = ({ board, time, px }: View): ReadonlyArray<Dot> => {
   const rings: Array<Dot> = []
   const callLamp = px(lampOf(jackAt(board.calling)))
-  if (time >= RING && time < answeredAt) {
+  if (time >= RING && time < ANSWERED) {
     for (const lag of [0, 0.6, 1.2]) {
       if (time < RING + lag) continue
       const p = ((time - RING - lag) % 1.8) / 1.8
@@ -338,38 +339,86 @@ export const switchboardShapes = (
     }
   }
   for (const lag of [0, 0.25]) {
-    const p = within(time, answeredAt + lag, 1.4)
-    if (time >= answeredAt + lag && p < 1) {
+    const p = within(time, ANSWERED + lag, 1.4)
+    if (time >= ANSWERED + lag && p < 1) {
       rings.push({ x: callLamp[0], y: callLamp[1], radius: 6 + 40 * p, glow: 0, ring: 2, color: rgba(GOLD, 1 - p) })
     }
   }
+  return rings
+}
 
-  const panel: Array<Dot> = Arr.flatMap(
+const lampHue = ({ lit, red }: Lamp): Rgb => {
+  if (red > 0) return mix(GOLD, RED, red)
+  return mix(LINE, GOLD, lit)
+}
+
+const panelDots = (view: View): ReadonlyArray<Dot> => {
+  const { px, drawn } = view
+  const lampState = lampStateOf(view, Arr.flatMap(view.cords, stintsOf))
+  return Arr.flatMap(
     Arr.makeBy(JACKS, i => i),
     (jack): ReadonlyArray<Dot> => {
       const [jx, jy] = px(jackAt(jack))
       const [lx, ly] = px(lampOf(jackAt(jack)))
-      const { lit, red } = lampState(jack)
-      const hue = red > 0 ? mix(GOLD, RED, red) : mix(LINE, GOLD, lit)
+      const lamp = lampState(jack)
+      const { lit } = lamp
       return [
         { x: jx, y: jy, radius: 4.2, glow: 0, ring: 1.3, color: rgba(LINE, 0.5 * drawn) },
-        { x: lx, y: ly, radius: 2.4 + lit, glow: 10 * lit, ring: 0, color: rgba(hue, (0.18 + 0.8 * lit) * drawn) },
+        { x: lx, y: ly, radius: 2.4 + lit, glow: 10 * lit, ring: 0, color: rgba(lampHue(lamp), (0.18 + 0.8 * lit) * drawn) },
       ]
     },
   )
-  const plugs: Array<Dot> = Arr.map(
+}
+
+const plugDots = ({ cords, time, px, drawn }: View): ReadonlyArray<Dot> =>
+  Arr.map(
     Arr.makeBy(PLUGS, i => i),
     (plug): Dot => {
       const [x, y] = px(plugAt(plug))
       const up = Arr.some(cords, cord => cord.plug === plug && cord.start <= time)
-      return { x, y, radius: 3, glow: 0, ring: up ? 1.2 : 0, color: rgba(up ? GOLD : LINE, 0.6 * drawn) }
+      return Bool.match(up, {
+        onTrue: () => ({ x, y, radius: 3, glow: 0, ring: 1.2, color: rgba(GOLD, 0.6 * drawn) }),
+        onFalse: () => ({ x, y, radius: 3, glow: 0, ring: 0, color: rgba(LINE, 0.6 * drawn) }),
+      })
     },
   )
 
-  return { lines: [...plan, ...lines], dots: [...panel, ...plugs, ...rings, ...heads] }
+const ORIGIN: Point = [0, 0]
+
+export const switchboardMarks = (
+  board: Switchboard,
+  cords: ReadonlyArray<Cord>,
+  time: number,
+  width: number,
+  height: number,
+  pointer: Option.Option<Point>,
+  held: Option.Option<Point>,
+): Marks => {
+  const { px, scale } = projection(width, height)
+  const worldOf = ([x, y]: Point): Point => [(x - width / 2) / scale, (y - height / 2) / scale]
+  const view: View = {
+    board,
+    cords,
+    time,
+    px,
+    drawn: eased(time, 0, DRAWN),
+    glowUp: eased(time, ANSWER + RISE, 0.8),
+    gripped: Option.flatMap(held, at => grabbed(cords, worldOf(at), time)),
+    hand: inReach(
+      worldOf(
+        Option.getOrElse(
+          Option.orElse(pointer, () => held),
+          () => ORIGIN,
+        ),
+      ),
+    ),
+  }
+  const moving = cordMarks(view)
+  return {
+    lines: [...planLines(view), ...moving.lines],
+    dots: [...panelDots(view), ...plugDots(view), ...callRings(view), ...moving.dots],
+  }
 }
 
-// The most a frame draws: the plan, every cord in 14 pieces, and the
-// lamps, plugs, rings and cord ends.
 export const SWITCHBOARD_LINES = 7 + CORDS * 14
 export const SWITCHBOARD_DOTS = JACKS * 2 + PLUGS + 5 + CORDS
