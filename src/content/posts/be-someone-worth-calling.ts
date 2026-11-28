@@ -91,7 +91,7 @@ export const beSomeoneWorthCalling: Post = {
       'Years later, after a dev bootcamp, I posted that I was looking for work. One of that company’s founders had started something new, remembered my work, and reached out. That became my first engineering job: Solo.',
     ),
     h.p(
-      'A few years in, I took a leap of faith and started my own thing with no clients lined up. I was betting that the people I’d worked with would remember how I showed up.',
+      'A few years in, I took a leap of faith and started my own company with no clients lined up. I was betting that the people I’d worked with would remember how I showed up.',
     ),
     h.p(
       'It paid off that same week. An engineer from Solo, who’d left a year before me, heard I was going out on my own and gave me a call. That call became my first contract: Webaholics.',
