@@ -211,7 +211,7 @@ export const SiteNoDeps = SiteDef.make({
     return [
       Head.title(titleOf($.model.page)),
       HtmlHead.lang('en'),
-      HtmlHead.htmlClass(classOf(Option.toArray(roomStyle(room)))),
+      roomStyle(room).pipe(Option.toArray, classOf, HtmlHead.htmlClass),
       HtmlHead.bodyClass(classOf(documentStyles.body, Option.toArray(roomStyle(room)))),
       HtmlHead.meta({ name: 'theme-color', content: room.color }),
     ]

@@ -65,7 +65,7 @@ layer(Digest.layerWebCrypto)('share cards', it => {
             Effect.gen(function* () {
               const png = Rec.get(PNGS, path)
               assert.isTrue(Option.isSome(png), `${path} isn't in public/og.`)
-              const hash = yield* pngHashOf(bytesOf(Option.getOrThrow(png)))
+              const hash = yield* png.pipe(Option.getOrThrow, bytesOf, pngHashOf)
               assert.strictEqual(
                 made.png,
                 hash,

@@ -160,6 +160,5 @@ comments, no notes to yourself, and no drafts or briefs in the repo.
 
 ## Before it goes up
 
-Run `bun run typecheck`, `bun run lint`, `bun run test` and
-`bun run build`, then look at the post under `bun run dev`. Check it at
+Run `bun run check`, `bun run test` and `bun run build`, then look at the post under `bun run dev`. Check it at
 phone width too.

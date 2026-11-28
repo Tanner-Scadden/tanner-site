@@ -67,7 +67,7 @@ const loadHighlighter = Effect.gen(function* () {
   )
 })
 
-const highlighter = Effect.runSync(Effect.cached(loadHighlighter))
+const highlighter = loadHighlighter.pipe(Effect.cached, Effect.runSync)
 
 export const tokenize = ({
   code,

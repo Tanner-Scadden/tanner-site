@@ -26,7 +26,7 @@ const JsonLd = Schema.Struct({
   headline: Schema.optional(Schema.String),
   datePublished: Schema.optional(Schema.String),
   image: Schema.optional(Schema.String),
-  blogPost: Schema.optional(Schema.Array(Schema.Json)),
+  blogPost: Schema.Json.pipe(Schema.Array, Schema.optional),
 })
 const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(JsonLd))
 const jsonLdOf = (html: string): typeof JsonLd.Type =>

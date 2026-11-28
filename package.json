@@ -11,8 +11,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "effect-tsgo tsrs --noEmit --fast",
-    "lint": "OXLINT_TSGOLINT_PATH=node_modules/.bin/tsrs-lint oxlint",
+    "check": "effect-tsgo oxlint",
     "test": "vitest run",
     "card": "bun .claude/skills/blog-share-card/card.ts"
   },
@@ -26,7 +25,7 @@
   },
   "devDependencies": {
     "@effect/platform-bun": "4.1.4",
-    "@effect/tsgo": "0.67.5",
+    "@effect/tsgo": "0.74.1",
     "@effect/vitest": "4.1.4",
     "@oxlint/plugins": "1.95.0",
     "@stylexjs/eslint-plugin": "0.19.2",
@@ -36,7 +35,7 @@
     "oxlint": "1.95.0",
     "oxlint-plugin-effect": "0.32.4",
     "playwright-core": "1.65.1",
-    "tsrs": "0.23.0-ts7.1.0-beta",
+    "tsrs": "7.1.0-beta.tsrs5",
     "typescript": "7.0.2",
     "unplugin": "^2.3.11",
     "vite": "^8.3.1",

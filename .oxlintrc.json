@@ -7,7 +7,7 @@
     { "name": "stylex", "specifier": "@stylexjs/eslint-plugin" },
     "./lint/site.ts"
   ],
-  "options": { "typeAware": true, "denyWarnings": true, "reportUnusedDisableDirectives": "error" },
+  "options": { "typeAware": true, "typeCheck": true, "denyWarnings": true, "reportUnusedDisableDirectives": "error" },
   "ignorePatterns": ["dist", "infra", "node_modules"],
   "rules": {
     "site/noSwitch": "error",

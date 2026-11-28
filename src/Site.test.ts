@@ -28,20 +28,21 @@ const drainWhileUnmounting = Layer.effectDiscard(
   Effect.gen(function* () {
     const host = yield* TestHost.TestHost
     yield* Effect.forkScoped(
-      TestClock.withLive(
-        Effect.repeat(
-          Effect.sync(() => host.drain(host.budget)),
-          Schedule.spaced('1 millis'),
-        ),
+      Effect.sync(() => host.drain(host.budget)).pipe(
+        Effect.repeat(Schedule.spaced('1 millis')),
+        TestClock.withLive,
       ),
     )
   }),
 )
 
 const eventually = <A, E, R>(step: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-  TestClock.withLive(
-    Effect.retry(Effect.sandbox(step), { schedule: Schedule.spaced('5 millis'), times: 99 }),
-  ).pipe(Effect.catch(Effect.failCause))
+  step.pipe(
+    Effect.sandbox,
+    Effect.retry({ schedule: Schedule.spaced('5 millis'), times: 99 }),
+    TestClock.withLive,
+    Effect.catch(Effect.failCause),
+  )
 
 const playLayer = (url: string) =>
   Layer.mergeAll(
