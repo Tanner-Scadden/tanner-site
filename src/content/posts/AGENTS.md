@@ -61,7 +61,9 @@ anything yourself.
     habits list
   - `h.em` is italic, for titles and light emphasis
   - `h.code` is inline code
-- Links: `h.a.attr('href', url).children('text')`.
+- Links: `h.a.attr('href', url).children('text')`. They open in a new tab,
+  since they lead off the site. For a link to another page here, add
+  `.attr('target', undefined)` so it opens in place.
 - Lists: `h.ul` or `h.ol`, with an `h.li` for each item. Keep items short.
 - Quotes: `h.blockquote(h.p('…'), h.p(h.em('Source')))`.
 - A rule: `h.hr`.
