@@ -25,13 +25,13 @@ export const callingScene: Scene = {
     const cords = rememberLast((interactions: ReadonlyArray<Interaction>) => withReader(board, interactions, worldOf))
     return {
       end: board.end,
-      shapesAt: (time, width, height, _pointer, interactions, held = Option.none()) =>
-        switchboardShapes(board, cords(interactions), time, width, height, held),
+      shapesAt: (time, width, height, pointer, interactions, held = Option.none()) =>
+        switchboardShapes(board, cords(interactions), time, width, height, pointer, held),
     }
   },
   maxLines: SWITCHBOARD_LINES,
   maxDots: SWITCHBOARD_DOTS,
-  interact: { hint: 'Put a cord up, or grab one by its jack and yank it out', settle: SETTLE, max: MAX_PRESSES },
+  interact: { hint: 'Grab a cord by its end and pull it out, or plug it in somewhere else', settle: SETTLE, max: MAX_PRESSES },
   drag: true,
   once: true,
 }

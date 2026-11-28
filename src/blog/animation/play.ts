@@ -86,6 +86,14 @@ const aimOnClick = (
     Effect.forkScoped,
   )
 
+// Where a pointer event is over the canvas, in CSS px.
+const overCanvas =
+  (canvas: HTMLCanvasElement) =>
+  (event: PointerEvent): Point => {
+    const rect = canvas.getBoundingClientRect()
+    return [event.clientX - rect.left, event.clientY - rect.top]
+  }
+
 // The browser had already let go of the pointer, so the canvas can't hold
 // on to it.
 class PointerGone extends Schema.TaggedError<PointerGone, { readonly brand: unique symbol }>()('PointerGone', {
@@ -96,8 +104,8 @@ class PointerGone extends Schema.TaggedError<PointerGone, { readonly brand: uniq
 const DRAG = 8
 
 // In a scene that takes drags: a press on the drawing, held, then let go.
-// While it's held, `held` says where it went down. Letting go close by is a
-// click; further away, a drag to there.
+// While it's held, `held` says where it went down. Letting go further away
+// is a drag to there; letting go close by changes nothing.
 const dragOnPointer = (
   scene: Scene,
   canvas: HTMLCanvasElement,
@@ -110,11 +118,7 @@ const dragOnPointer = (
     const rect = canvas.getBoundingClientRect()
     return [clamp01(x / Math.max(1, rect.width)), clamp01(y / Math.max(1, rect.height))]
   }
-  // Where the event is over the canvas, in CSS px.
-  const at = (event: PointerEvent): Point => {
-    const rect = canvas.getBoundingClientRect()
-    return [event.clientX - rect.left, event.clientY - rect.top]
-  }
+  const at = overCanvas(canvas)
   const pressed = Stream.fromEventListener<PointerEvent>(canvas, 'pointerdown').pipe(
     Stream.runForEach(event =>
       // Keep the drag even when it leaves the canvas. A pointer the browser
@@ -134,7 +138,7 @@ const dragOnPointer = (
         const up = at(event)
         const moved = Math.hypot(up[0] - from.value[0], up[1] - from.value[1]) > DRAG
         const grew = yield* Ref.modify(clock, now => {
-          const next = interact(scene, now, Option.some(aimOf(from.value)), moved ? aimOf(up) : undefined)
+          const next = moved ? interact(scene, now, Option.some(aimOf(from.value)), aimOf(up)) : now
           return [next.interactions.length > now.interactions.length, next]
         })
         yield* Latch.open(wake)
@@ -155,7 +159,7 @@ const dragOnPointer = (
 const followPointer = (canvas: HTMLCanvasElement, pointer: Ref.Ref<Option.Option<Point>>, wake: Latch.Latch) =>
   Stream.merge(
     Stream.fromEventListener<PointerEvent>(canvas, 'pointermove', { passive: true }).pipe(
-      Stream.map((event): Option.Option<Point> => Option.some([event.offsetX, event.offsetY])),
+      Stream.map((event): Option.Option<Point> => Option.some(overCanvas(canvas)(event))),
     ),
     Stream.fromEventListener(canvas, 'pointerleave').pipe(Stream.as(Option.none<Point>())),
   ).pipe(
