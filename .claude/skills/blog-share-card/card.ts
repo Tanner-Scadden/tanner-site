@@ -1,9 +1,22 @@
 import { BunRuntime, BunServices } from '@effect/platform-bun'
-import { Array as Arr, Console, Effect, FileSystem, Option, Schema, String as Str, pipe } from 'effect'
+import { Array as Arr, Console, Effect, FileSystem, Layer, Option, Schema, String as Str, pipe } from 'effect'
 import { Argument, Command, Flag } from 'effect/cli'
+import { Digest } from 'effect/crypto'
 import { type Browser, type Locator, type Page, chromium } from 'playwright-core'
 
 import { THESES } from '../../../src/content/home.ts'
+import {
+  ART,
+  type Card,
+  Cards,
+  HOME_CARD,
+  POST_KICKER,
+  cardHtml,
+  pngHashOf,
+  stampOf,
+} from '../../../src/seo/card.ts'
+
+const CARDS_JSON = 'src/seo/cards.json'
 
 class BrowserError extends Schema.TaggedError<BrowserError>()('BrowserError', { cause: Schema.Unknown }) {}
 class NotDrawn extends Schema.TaggedError<NotDrawn>()('NotDrawn', { what: Schema.String }) {}
@@ -40,58 +53,33 @@ const shootClear = (page: Page, canvas: Locator, what: string) =>
     return { png, width: box.width, height: box.height }
   })
 
-interface Card {
-  readonly kicker: string
-  readonly title: string
-  readonly dek: string
-  readonly art: Option.Option<{ readonly src: string; readonly width: number; readonly height: number }>
+const CardsJson = Schema.fromJsonString(Cards, { space: 2 })
+const decodeCards = Schema.decodeUnknownEffect(CardsJson)
+const encodeCards = Schema.encodeEffect(CardsJson)
+
+const record = (path: string, entry: Cards[string]) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem
+    const cards = yield* fs.readFileString(CARDS_JSON).pipe(Effect.flatMap(decodeCards))
+    const next = { ...cards, [path]: entry }
+    const json = yield* encodeCards(next)
+    yield* fs.writeFileString(CARDS_JSON, `${json}\n`)
+    yield* Console.log(`Recorded ${path} in ${CARDS_JSON}`)
+  })
+
+const recordServed = (out: string, entry: Cards[string]) => {
+  if (!Str.startsWith('public/')(out)) return Effect.void
+  return record(Str.slice('public'.length)(out), entry)
 }
-
-const ART = { width: 720, height: 405 } as const
-
-const escape = (text: string) =>
-  pipe(text, Str.replaceAll('&', '&amp;'), Str.replaceAll('<', '&lt;'), Str.replaceAll('>', '&gt;'))
-
-const textWidth = (card: Card): number =>
-  Option.match(card.art, { onNone: () => 1000, onSome: () => 560 })
-
-const cardHtml = (card: Card) => `<!doctype html>
-<html><head><meta charset="utf-8">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  html,body{margin:0;background:#0f3b78}
-  .card{position:relative;width:1200px;height:630px;overflow:hidden;background:#0f3b78;
-    background-image:linear-gradient(rgba(200,222,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(200,222,255,.05) 1px,transparent 1px),
-    linear-gradient(rgba(200,222,255,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(200,222,255,.12) 1px,transparent 1px);
-    background-size:24px 24px,24px 24px,120px 120px,120px 120px;font-family:Archivo,sans-serif}
-  .frame{position:absolute;inset:32px;border:2px solid rgba(220,235,255,.75)}
-  .frame::after{content:'';position:absolute;inset:5px;border:1px solid rgba(220,235,255,.4)}
-  .art{position:absolute;right:46px;top:56px}
-  .text{position:absolute;left:78px;top:78px;bottom:78px;width:${textWidth(card)}px;display:flex;flex-direction:column}
-  .kicker{font-family:'Space Mono',monospace;font-weight:700;font-size:20px;letter-spacing:.18em;color:#ffd166}
-  h1{margin:22px 0 0;font-weight:900;font-stretch:125%;font-size:70px;line-height:.95;letter-spacing:.01em;text-transform:uppercase;color:#cfe0f6;text-shadow:0 2px 24px #0f3b78,0 0 40px #0f3b78}
-  .dek{margin-top:auto;max-width:600px;display:flex;gap:16px;font-family:'Space Mono',monospace;font-size:22px;line-height:1.4;color:rgba(220,235,255,.9)}
-  .dek::before{content:'';flex:0 0 3px;background:#ffd166}
-  .site{position:absolute;right:72px;bottom:62px;font-family:'Space Mono',monospace;font-weight:700;font-size:16px;letter-spacing:.22em;color:#ffd166}
-</style></head>
-<body><div class="card">
-  ${Option.match(card.art, {
-    onNone: () => '',
-    onSome: ({ src, width, height }) =>
-      `<img class="art" src="${src}" style="width:${width}px;height:${height}px;top:${56 + (ART.height - height) / 2}px">`,
-  })}
-  <div class="frame"></div>
-  <div class="text">
-    <div class="kicker">${escape(card.kicker)}</div>
-    <h1>${escape(card.title)}</h1>
-    <div class="dek">${escape(card.dek)}</div>
-  </div>
-  <div class="site">TANNERSCADDEN.COM</div>
-</div></body></html>`
 
 const dataUrl = (png: Buffer) => `data:image/png;base64,${png.toString('base64')}`
 
-const render = (url: string, out: string, contents: (page: Page) => Effect.Effect<Card, BrowserError | NotDrawn>) =>
+const render = (
+  url: string,
+  out: string,
+  made: string,
+  contents: (page: Page) => Effect.Effect<Card, BrowserError | NotDrawn>,
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const b = yield* browser
@@ -105,6 +93,9 @@ const render = (url: string, out: string, contents: (page: Page) => Effect.Effec
       const fs = yield* FileSystem.FileSystem
       yield* fs.writeFile(out, png)
       yield* Console.log(`Wrote ${out}`)
+      const stamp = yield* stampOf(card)
+      const hash = yield* pngHashOf(png)
+      yield* recordServed(out, { made, stamp, png: hash })
     }),
   )
 
@@ -113,6 +104,20 @@ const url = Flag.String('url').pipe(
   Flag.withDefault('http://localhost:5199'),
 )
 const out = Flag.String('out').pipe(Flag.withDescription('Where to write the card'), Flag.optional)
+
+const outFlag = (path: Option.Option<string>): ReadonlyArray<string> =>
+  Option.match(path, { onNone: () => [], onSome: given => [`--out ${given}`] })
+
+const readTimeOf = (when: string) =>
+  pipe(
+    Str.split(when, ' · '),
+    Arr.last,
+    Option.filter(Str.endsWith('MIN READ')),
+    Option.match({
+      onNone: () => Effect.fail(new NotDrawn({ what: 'the read time' })),
+      onSome: Effect.succeed,
+    }),
+  )
 
 const post = Command.make(
   'post',
@@ -141,17 +146,31 @@ const post = Command.make(
     out,
   },
   Effect.fn('card.post')(function* (args) {
-    yield* render(`${args.url}/blog/${args.slug}`, Option.getOrElse(args.out, () => `public/og/${args.slug}.png`), page =>
+    const made = Arr.join(
+      [
+        `bun run card post ${args.slug} --figure ${args.figure} --seek ${args.seek} --interact ${args.interact}`,
+        ...Option.match(args.aim, { onNone: () => [], onSome: aim => [`--aim ${aim}`] }),
+        `--wait ${args.wait} --art-scale ${args.artScale}`,
+        ...outFlag(args.out),
+      ],
+      ' ',
+    )
+    yield* render(`${args.url}/blog/${args.slug}`, Option.getOrElse(args.out, () => `public/og/${args.slug}.png`), made, page =>
       Effect.gen(function* () {
-        const title = yield* use(() => page.locator('article > header h1').innerText())
-        const summary = yield* use(() => page.locator('article > header p').first().innerText())
+        const text = (selector: string) =>
+          use(() => page.locator(selector).textContent()).pipe(
+            Effect.map(found => Option.getOrElse(Option.fromNullishOr(found), () => '')),
+          )
+        const title = yield* text('article > header h1')
+        const summary = yield* text('article > header h1 + p')
+        const read = yield* readTimeOf(yield* text('article > header p:has(time)'))
         const figures = yield* use(() =>
           page.$$eval('figure:has(canvas)', all =>
             all.map((f, i) => `${i + 1}: ${f.querySelector('[aria-label^="Interact"]')?.getAttribute('aria-label') ?? 'figure'}`),
           ),
         )
         yield* Console.log(`Figures: ${Arr.join(figures, ' | ') || 'none'}`)
-        if (args.figure <= 0) return { kicker: 'TANNER SCADDEN · BLOG', title, dek: summary, art: Option.none() }
+        if (args.figure <= 0) return { kicker: POST_KICKER, title, dek: summary, corner: read, art: Option.none() }
 
         const figure = page.locator('figure:has(canvas)').nth(args.figure - 1)
         yield* use(() => figure.scrollIntoViewIfNeeded())
@@ -181,9 +200,10 @@ const post = Command.make(
         yield* use(() => figure.locator('button[aria-label="Pause"]').click({ timeout: 500 })).pipe(Effect.ignore)
         const shot = yield* shootClear(page, canvas, `figure ${args.figure}`)
         return {
-          kicker: 'TANNER SCADDEN · BLOG',
+          kicker: POST_KICKER,
           title,
           dek: summary,
+          corner: read,
           art: Option.some({ src: dataUrl(shot.png), width: ART.width * args.artScale, height: ART.height * args.artScale }),
         }
       }),
@@ -207,14 +227,14 @@ const home = Command.make(
     out,
   },
   Effect.fn('card.home')(function* (args) {
-    yield* render(`${args.url}/`, Option.getOrElse(args.out, () => 'public/og/home.png'), page =>
+    const made = Arr.join([`bun run card home --wait ${args.wait}`, ...outFlag(args.out)], ' ')
+    yield* render(`${args.url}/`, Option.getOrElse(args.out, () => 'public/og/home.png'), made, page =>
       Effect.gen(function* () {
         yield* pause(page, args.wait)
         const shot = yield* shootClear(page, page.locator('figure[data-gpu] canvas'), 'the house')
         const scale = Math.min(640 / shot.width, 500 / shot.height)
         return {
-          kicker: 'SOFTWARE ENGINEER',
-          title: 'Tanner Scadden',
+          ...HOME_CARD,
           dek: THESES[0],
           art: Option.some({
             src: dataUrl(shot.png),
@@ -231,6 +251,6 @@ Command.make('card').pipe(
   Command.withDescription('Render a 2400×1260 share card from the dev server'),
   Command.withSubcommands([post, home]),
   Command.run({ version: '1.0.0' }),
-  Effect.provide(BunServices.layer),
+  Effect.provide(Layer.mergeAll(BunServices.layer, Digest.layerWebCrypto)),
   BunRuntime.runMain,
 )
