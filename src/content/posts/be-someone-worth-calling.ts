@@ -28,7 +28,7 @@ export const beSomeoneWorthCalling: Post = {
       'I didn’t have to pitch myself. That same teammate vouched for me, and the rest of the team already knew how I’d shown up in Arena of Valor.',
     ),
     h.p(
-      'Almost every big turn in my life has started with a call like that. The best bet is to keep showing up, and your network will grow from there.',
+      'Almost every big turn in my life has started with a call like that.',
     ),
 
     h.h2('Becoming someone worth calling'),
@@ -44,17 +44,17 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Be the first to jump in.'),
-      ' Answer the question in Slack. Fix problems as you find them. Be the person people come to because they know it’ll get done.',
+      ' Answer questions in Slack. Fix problems as you find them. Be the person people come to because they know it’ll get done.',
     ),
     h.p(
-      h.strong('Keep the cup half full.'),
-      ' Things will break, deals will fall through, and launches will slip. Look for what you can still do. Find the bright side, and crack a joke. People want to work with someone who makes the hard days lighter.',
+      h.strong('Control what you can.'),
+      ' Things will break, deals will fall through, and launches will slip. Most of that isn’t up to you. What you do next is. Find the part you can move, and move it. People want to work with someone who makes the hard days lighter.',
     ),
     h.p(
       h.strong('Believe in yourself.'),
-      ' Your ceiling is one you put there yourself. When you’re stuck, ask what a version of you with ten times the agency would do. George Mack’s ',
+      ' Your ceiling is one you put there yourself. When you’re stuck, ask what the version of you with ten times the agency would do. If you haven’t read George Mack’s ',
       h.a.attr('href', 'https://www.highagency.com/').children(h.em('High Agency')),
-      ' is built on that question. If you haven’t read it, do.',
+      ', do.',
     ),
     h.p(
       h.strong('Choose your people.'),
@@ -97,7 +97,7 @@ export const beSomeoneWorthCalling: Post = {
       'It paid off that same week. An engineer from Solo, who’d left a year before me, heard I was going out on my own and gave me a call. That call became my first contract, Webaholics.',
     ),
     h.p(
-      'More calls followed. Some people wanted to build something together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
+      'More calls followed. Some of my contacts wanted to build projects together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
     ),
     h.p('Other people did the vouching. They got me into rooms I’d never have reached alone.'),
     h.p(

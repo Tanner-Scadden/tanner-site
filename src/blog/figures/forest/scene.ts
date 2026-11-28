@@ -15,8 +15,7 @@ export const forestScene: Scene = {
     {
       id: 'grove',
       label: 'ONE SEED',
-      // The quote above it says what it's for.
-      caption: '',
+      caption: 'One seed grows into a forest, and the trees hold each other up underground. Press the hand to plant another.',
       tone: 'hi',
     },
   ],
