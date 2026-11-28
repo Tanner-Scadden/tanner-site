@@ -122,7 +122,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       return sx(h.figure, hero ? styles.hero : styles.figure)
         .attr('data-blueprint-quiet', '')
         .children(
-          sx(h.canvas, styles.canvas)
+          sx(h.canvas, styles.canvas, scene.drag === true && styles.grab)
             .attr('aria-hidden', 'true')
             .onMount(
               Drawing({
@@ -241,6 +241,8 @@ const styles = stylex.create({
   // Bare beside the title, and gone on paper.
   hero: { display: { default: 'block', [media.print]: 'none' }, margin: 0 },
   canvas: { display: 'block', width: '100%', aspectRatio: '16 / 9', touchAction: 'pan-y' },
+  // A drawing you can grab keeps the drag for itself, rather than scrolling.
+  grab: { touchAction: 'none', cursor: 'grab' },
   controls: {
     display: { default: 'flex', [media.print]: 'none' },
     flexWrap: 'wrap',

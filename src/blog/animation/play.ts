@@ -1,4 +1,4 @@
-import { Effect, Latch, Option, Ref, Stream, String as Str } from 'effect'
+import { Effect, Latch, Option, Ref, Schema, Stream, String as Str } from 'effect'
 
 import { nextFrame } from '../../blueprint/webgpu/renderer.ts'
 import { type Clock, follow, interact, opacityAt, startClock, tick } from './clock.ts'
@@ -86,6 +86,71 @@ const aimOnClick = (
     Effect.forkScoped,
   )
 
+// The browser had already let go of the pointer, so the canvas can't hold
+// on to it.
+class PointerGone extends Schema.TaggedError<PointerGone, { readonly brand: unique symbol }>()('PointerGone', {
+  cause: Schema.Unknown,
+}) {}
+
+// How far, in CSS px, a press has to travel before it's a drag, not a click.
+const DRAG = 8
+
+// In a scene that takes drags: a press on the drawing, held, then let go.
+// While it's held, `held` says where it went down. Letting go close by is a
+// click; further away, a drag to there.
+const dragOnPointer = (
+  scene: Scene,
+  canvas: HTMLCanvasElement,
+  clock: Ref.Ref<Clock>,
+  held: Ref.Ref<Option.Option<Point>>,
+  wake: Latch.Latch,
+  report: (report: Report) => Effect.Effect<unknown>,
+) => {
+  const aimOf = ([x, y]: Point): Point => {
+    const rect = canvas.getBoundingClientRect()
+    return [clamp01(x / Math.max(1, rect.width)), clamp01(y / Math.max(1, rect.height))]
+  }
+  // Where the event is over the canvas, in CSS px.
+  const at = (event: PointerEvent): Point => {
+    const rect = canvas.getBoundingClientRect()
+    return [event.clientX - rect.left, event.clientY - rect.top]
+  }
+  const pressed = Stream.fromEventListener<PointerEvent>(canvas, 'pointerdown').pipe(
+    Stream.runForEach(event =>
+      // Keep the drag even when it leaves the canvas. A pointer the browser
+      // has already let go of can't be captured, and that's fine.
+      Effect.try({ try: () => canvas.setPointerCapture(event.pointerId), catch: cause => PointerGone.make({ cause }) }).pipe(
+        Effect.ignore,
+        Effect.andThen(Ref.set(held, Option.some(at(event)))),
+        Effect.andThen(Latch.open(wake)),
+      ),
+    ),
+  )
+  const released = Stream.fromEventListener<PointerEvent>(canvas, 'pointerup').pipe(
+    Stream.runForEach(event =>
+      Effect.gen(function* () {
+        const from = yield* Ref.getAndSet(held, Option.none())
+        if (Option.isNone(from)) return
+        const up = at(event)
+        const moved = Math.hypot(up[0] - from.value[0], up[1] - from.value[1]) > DRAG
+        const grew = yield* Ref.modify(clock, now => {
+          const next = interact(scene, now, Option.some(aimOf(from.value)), moved ? aimOf(up) : undefined)
+          return [next.interactions.length > now.interactions.length, next]
+        })
+        yield* Latch.open(wake)
+        if (grew) yield* report({ _tag: 'Aimed' })
+      }),
+    ),
+  )
+  // The browser took the press, say to scroll: it lets go of nothing.
+  const cancelled = Stream.fromEventListener(canvas, 'pointercancel').pipe(
+    Stream.runForEach(() => Ref.set(held, Option.none()).pipe(Effect.andThen(Latch.open(wake)))),
+  )
+  return Effect.all([pressed, released, cancelled], { concurrency: 'unbounded', discard: true }).pipe(
+    Effect.forkScoped,
+  )
+}
+
 // Where the reader's pointer is over the canvas, in CSS px.
 const followPointer = (canvas: HTMLCanvasElement, pointer: Ref.Ref<Option.Option<Point>>, wake: Latch.Latch) =>
   Stream.merge(
@@ -115,10 +180,11 @@ export const playScene = (
     const readout = Option.fromNullishOr(figure?.querySelector<HTMLElement>('[data-clock]'))
     const clock = yield* Ref.make(startClock(scene, controls, still))
     const pointer = yield* Ref.make(Option.none<Point>())
+    const held = yield* Ref.make(Option.none<Point>())
 
-    const draw = (now: Clock, at: Option.Option<Point>) => {
+    const draw = (now: Clock, at: Option.Option<Point>, holding: Option.Option<Point>) => {
       const size = fit(canvas)
-      const shapes = now.run.shapesAt(now.time, size.width, size.height, at, now.interactions)
+      const shapes = now.run.shapesAt(now.time, size.width, size.height, at, now.interactions, holding)
       painter.paint(shapes, size.width, size.height, opacityAt(scene, now))
       Option.map(slider, input => {
         // Not while the reader is holding it, or it'd fight their drag.
@@ -135,7 +201,10 @@ export const playScene = (
     const wake = yield* Latch.make(true)
     yield* wakeOnResize(canvas, wake)
     yield* followPointer(canvas, pointer, wake)
-    if (scene.interact !== undefined) yield* aimOnClick(scene, canvas, clock, wake, report)
+    if (scene.interact !== undefined) {
+      if (scene.drag === true) yield* dragOnPointer(scene, canvas, clock, held, wake, report)
+      else yield* aimOnClick(scene, canvas, clock, wake, report)
+    }
     yield* Stream.runForEach(changes, next =>
       Ref.update(clock, now => follow(scene, now, next)).pipe(Effect.andThen(Latch.open(wake))),
     ).pipe(Effect.forkScoped)
@@ -155,7 +224,8 @@ export const playScene = (
         return [[c.playing && !next.playing, next] as const, next]
       })
       const at = yield* Ref.get(pointer)
-      draw(now, at)
+      const holding = yield* Ref.get(held)
+      draw(now, at, holding)
       if (now.interactions.length !== counted) {
         counted = now.interactions.length
         yield* report({ _tag: 'Counted', interactions: counted })

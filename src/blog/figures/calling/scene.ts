@@ -1,7 +1,8 @@
+import { Option } from 'effect'
+
 import { makeAnimation } from '../../animation/Animation.ts'
 import { worldOfAim } from '../../animation/kit.ts'
-import type { Scene } from '../../animation/scene.ts'
-import { MINIMAP_DOTS, MINIMAP_LINES, buildMinimap, minimapShapes } from './minimap.ts'
+import { type Interaction, type Scene, rememberLast } from '../../animation/scene.ts'
 import {
   MAX_PRESSES,
   SETTLE,
@@ -9,36 +10,30 @@ import {
   SWITCHBOARD_LINES,
   buildSwitchboard,
   switchboardShapes,
+  withReader,
 } from './switchboard.ts'
 import { projection } from './world.ts'
 
 const worldOf = worldOfAim(projection)
 
-// Be Someone Worth Calling's hero: the call coming in, two ways.
+// Be Someone Worth Calling's hero: the call coming in on a switchboard. It
+// plays once and rests on the lit board.
 export const callingScene: Scene = {
-  variants: [
-    { id: 'minimap', label: 'MINIMAP', caption: '', tone: 'hi' },
-    { id: 'switchboard', label: 'SWITCHBOARD', caption: '', tone: 'hi' },
-  ],
-  run: (variant, seed) => {
-    if (variant === 'switchboard') {
-      const board = buildSwitchboard(seed)
-      return {
-        end: board.end,
-        shapesAt: (time, width, height, _pointer, interactions) =>
-          switchboardShapes(board, time, width, height, interactions, worldOf),
-      }
-    }
-    const map = buildMinimap(seed)
+  variants: [{ id: 'switchboard', label: 'SWITCHBOARD', caption: '', tone: 'hi' }],
+  run: (_variant, seed) => {
+    const board = buildSwitchboard(seed)
+    const cords = rememberLast((interactions: ReadonlyArray<Interaction>) => withReader(board, interactions, worldOf))
     return {
-      end: map.end,
-      shapesAt: (time, width, height, _pointer, interactions) =>
-        minimapShapes(map, time, width, height, interactions, worldOf),
+      end: board.end,
+      shapesAt: (time, width, height, _pointer, interactions, held = Option.none()) =>
+        switchboardShapes(board, cords(interactions), time, width, height, held),
     }
   },
-  maxLines: Math.max(MINIMAP_LINES, SWITCHBOARD_LINES),
-  maxDots: Math.max(MINIMAP_DOTS, SWITCHBOARD_DOTS),
-  interact: { hint: 'Ping the map, or put a cord up', settle: SETTLE, max: MAX_PRESSES },
+  maxLines: SWITCHBOARD_LINES,
+  maxDots: SWITCHBOARD_DOTS,
+  interact: { hint: 'Put a cord up, or grab one by its jack and yank it out', settle: SETTLE, max: MAX_PRESSES },
+  drag: true,
+  once: true,
 }
 
 export const CallingHero = makeAnimation('CallingHero', callingScene, { hero: true })
