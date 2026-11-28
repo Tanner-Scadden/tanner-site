@@ -4,7 +4,8 @@ import { BrowserHost, BrowserRouter } from '@effect/ui/html'
 import { HtmlLocator, HtmlPlay, TestGlobalEvents } from '@effect/ui/html/testing'
 import { Locator, TestHost } from '@effect/ui/testing'
 import { assert, describe, it } from '@effect/vitest'
-import { Effect, Layer } from 'effect'
+import { vi } from 'vitest'
+import { Effect, Layer, String as Str } from 'effect'
 
 import { BLOG } from '#content/blog'
 import { EGG_HINTS, EGG_NAMES } from '#content/eggs'
@@ -192,7 +193,9 @@ it.layer(playLayer('/blog/no-such-post'), { buildPerTest: true })(
 )
 
 // The browser Router scrolls to the top once the root has the new route, so
-// this mounts on the real host and Router rather than the test ones.
+// this mounts on the real host and Router rather than the test ones. The new
+// page has to be in by then: scrolling the old one leaves a phone at the
+// bottom of the new page.
 describe('Site in the browser', () => {
   it.live('a new page starts at the top', () =>
     Effect.gen(function* () {
@@ -207,12 +210,21 @@ describe('Site in the browser', () => {
       window.scrollTo(0, 800)
       assert.strictEqual(window.scrollY, 800)
 
+      const onRestWhenScrolled: Array<boolean> = []
+      const scrollTo = vi.spyOn(window, 'scrollTo')
+      scrollTo.mockImplementation(() => {
+        onRestWhenScrolled.push(Str.includes('GG, BACK TO WORK')(container.textContent))
+        scrollTo.mockRestore()
+        window.scrollTo(0, 0)
+      })
+      yield* Effect.addFinalizer(() => Effect.sync(() => scrollTo.mockRestore()))
+
       for (const key of ['r', 'e', 's', 't']) {
         document.dispatchEvent(new KeyboardEvent('keydown', { key }))
       }
       yield* Effect.sleep('50 millis')
       assert.strictEqual(location.pathname, '/rest')
-      assert.include(container.textContent, 'GG, BACK TO WORK')
+      assert.deepStrictEqual(onRestWhenScrolled, [true])
       assert.strictEqual(window.scrollY, 0)
     }).pipe(Effect.scoped),
   )

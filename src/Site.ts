@@ -23,7 +23,7 @@ import { SiteRoute } from './routes.ts'
 import { documentStyles } from './site/document.ts'
 import { SiteSnapshot, initialSnapshot, siteActors, siteSnapshots } from './site/actors.ts'
 import { Keys, KeysEvent } from './site/machines/Keys.ts'
-import { Page, PageEvent, PageState } from './site/machines/Page.ts'
+import { Page, PageEvent, PageState, pageOf } from './site/machines/Page.ts'
 import { classOf } from './styles/sx.ts'
 import { paper } from './styles/tokens.stylex.ts'
 import { Thesis, ThesisEvent, thesisText } from './thesis/machines/Thesis.ts'
@@ -166,10 +166,22 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
 
 export const SiteNoDeps = SiteDef.make({
   init: $ => initialSnapshot($.props),
-  update: ($, message) =>
-    message._tag === 'ChangedActors'
-      ? message.snapshot
-      : $.run(Dispatch.make({ input: message })),
+  update: ($, message) => {
+    switch (message._tag) {
+      // The page shown follows the route the root holds, not the Page actor's
+      // copy, which hears of a new route a step later.
+      case 'ChangedActors':
+        return { ...message.snapshot, page: $.model.page }
+      // The new page goes in with this update, so it's in when the Router
+      // scrolls to the top.
+      case 'Navigated':
+        return $.evolve({ page: pageOf(message.route) }).run(
+          Dispatch.make({ input: message }),
+        )
+      default:
+        return $.run(Dispatch.make({ input: message }))
+    }
+  },
   subscriptions: $ => [
     Router.subscription(SiteRoute, $.props.route, route =>
       SiteMessage.Navigated({ route }),
