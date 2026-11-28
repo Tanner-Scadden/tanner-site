@@ -1,12 +1,7 @@
 import { Effect } from 'effect'
 
-import {
-  GpuUnavailable,
-  acquireBuffer,
-  acquireContext,
-  acquireDevice,
-  requestAdapter,
-} from '../../../gpu/device.ts'
+import { acquireBuffer, acquireGpu, unavailable } from '../../../gpu/device.ts'
+import { bound, renderPipeline, whole } from '../../../gpu/pipeline.ts'
 import type { Rgba, Shapes } from '../scene.ts'
 import { DOTS, DOT_FLOATS, LINES, LINE_FLOATS } from './shaders.ts'
 
@@ -16,16 +11,9 @@ export interface Painter {
 
 const VIEW_FLOATS = 4
 
-const BLEND: GPUBlendState = {
-  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-}
-
 const gpuPainter = (canvas: HTMLCanvasElement, maxLines: number, maxDots: number) =>
   Effect.gen(function* () {
-    const adapter = yield* requestAdapter
-    const device = yield* acquireDevice(adapter)
-    const { context, format } = yield* acquireContext(canvas, device, 'premultiplied')
+    const { device, context, format } = yield* acquireGpu(canvas, 'premultiplied')
 
     const viewBuffer = yield* acquireBuffer(device, {
       size: VIEW_FLOATS * 4,
@@ -40,23 +28,12 @@ const gpuPainter = (canvas: HTMLCanvasElement, maxLines: number, maxDots: number
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     })
 
-    const pipelineOf = (code: string, buffer: GPUBuffer) => {
-      const module = device.createShaderModule({ code })
-      const pipeline = device.createRenderPipeline({
-        layout: 'auto',
-        vertex: { module, entryPoint: 'vs' },
-        fragment: { module, entryPoint: 'fs', targets: [{ format, blend: BLEND }] },
-        primitive: { topology: 'triangle-list' },
+    const pipelineOf = (code: string, buffer: GPUBuffer) =>
+      bound({
+        device,
+        pipeline: renderPipeline({ device, format, code }),
+        resources: [whole(viewBuffer), whole(buffer)],
       })
-      const group = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: viewBuffer } },
-          { binding: 1, resource: { buffer } },
-        ],
-      })
-      return { pipeline, group }
-    }
     const lines = pipelineOf(LINES, lineBuffer)
     const dots = pipelineOf(DOTS, dotBuffer)
 
@@ -120,7 +97,7 @@ const css = ([r, g, b, a]: Rgba): string =>
 const canvasPainter = (canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
     const context = canvas.getContext('2d')
-    if (context === null) return yield* GpuUnavailable.make({ reason: 'no-context' })
+    if (context === null) return yield* unavailable('no-context')
     const painter: Painter = {
       paint: (shapes, width, height, opacity) => {
         const ratio = canvas.width / Math.max(1, width)
