@@ -6,7 +6,7 @@ import {
   acquireContext,
   acquireDevice,
   requestAdapter,
-} from '../../../blueprint/webgpu/renderer.ts'
+} from '../../../gpu/device.ts'
 import type { Rgba, Shapes } from '../scene.ts'
 import { DOTS, DOT_FLOATS, LINES, LINE_FLOATS } from './shaders.ts'
 

@@ -1,13 +1,7 @@
 import { Data, Effect, Queue, Ref, type Scope, Stream } from 'effect'
 
-import {
-  type GpuUnavailable,
-  acquireBuffer,
-  acquireContext,
-  acquireDevice,
-  nextFrame,
-  requestAdapter,
-} from '../../blueprint/webgpu/renderer.ts'
+import { type GpuUnavailable, acquireBuffer, acquireContext, acquireDevice, requestAdapter } from '../../gpu/device.ts'
+import { nextFrame } from '../../gpu/loop.ts'
 import {
   type Draft,
   MAX_WALLS,

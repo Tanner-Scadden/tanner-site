@@ -5,11 +5,12 @@ import {
   Queue,
   Random,
   Ref,
-  Schema,
   type Scope,
   Stream,
 } from 'effect'
 
+import { type GpuUnavailable, acquireBuffer, acquireContext, acquireDevice, requestAdapter, unavailable } from '../../gpu/device.ts'
+import { nextFrame } from '../../gpu/loop.ts'
 import {
   type Frame,
   MINOR,
@@ -37,16 +38,6 @@ import {
   WORKGROUP,
 } from './shaders.ts'
 
-export class GpuUnavailable extends Schema.TaggedError<
-  GpuUnavailable,
-  { readonly brand: unique symbol }
->()('GpuUnavailable', {
-  reason: Schema.Literals(['no-webgpu', 'no-adapter', 'no-device', 'no-context']),
-}) {}
-
-const unavailable = (reason: typeof GpuUnavailable.fields.reason.Type) =>
-  GpuUnavailable.make({ reason })
-
 const FRAME_FLOATS = 16
 // How fast a pen draws, in CSS px per second.
 const PEN_SPEED = { min: 15, max: 125 }
@@ -54,49 +45,6 @@ const MAX_PIXEL_RATIO = 2
 const PENS_BYTES = PARTICLE_COUNT * PARTICLE_FLOATS * 4
 // How often the page counts the zombies, for the INFECTED counter.
 const COUNT_EVERY = Duration.millis(250)
-
-// ---------------------------------------------------------------------------
-// Acquiring the GPU
-// ---------------------------------------------------------------------------
-
-export const requestAdapter = Effect.gen(function* () {
-  if (!('gpu' in navigator)) return yield* unavailable('no-webgpu')
-  const adapter = yield* Effect.promise(() =>
-    navigator.gpu.requestAdapter({ powerPreference: 'low-power' }),
-  )
-  return adapter ?? (yield* unavailable('no-adapter'))
-})
-
-export const acquireDevice = (adapter: GPUAdapter) =>
-  Effect.acquireRelease(
-    Effect.tryPromise({
-      try: () => adapter.requestDevice(),
-      catch: () => unavailable('no-device'),
-    }),
-    device => Effect.sync(() => device.destroy()),
-  )
-
-export const acquireContext = (
-  canvas: HTMLCanvasElement,
-  device: GPUDevice,
-  alphaMode: GPUCanvasAlphaMode = 'opaque',
-) =>
-  Effect.acquireRelease(
-    Effect.gen(function* () {
-      const context = canvas.getContext('webgpu')
-      if (context === null) return yield* unavailable('no-context')
-      const format = navigator.gpu.getPreferredCanvasFormat()
-      context.configure({ device, format, alphaMode })
-      return { context, format }
-    }),
-    ({ context }) => Effect.sync(() => context.unconfigure()),
-  )
-
-export const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor) =>
-  Effect.acquireRelease(
-    Effect.sync(() => device.createBuffer(descriptor)),
-    buffer => Effect.sync(() => buffer.destroy()),
-  )
 
 // The pens start somewhere on a large field, so they never need reseeding
 // when the window grows.
@@ -341,12 +289,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
     pass.end()
     gpu.device.queue.submit([encoder.finish()])
   })
-
-// The next animation frame's time, cancelled if the fiber is interrupted.
-export const nextFrame = Effect.callback<number>(resume => {
-  const id = requestAnimationFrame(now => resume(Effect.succeed(now)))
-  return Effect.sync(() => cancelAnimationFrame(id))
-})
 
 // ---------------------------------------------------------------------------
 // Input

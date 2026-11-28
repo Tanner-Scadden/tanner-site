@@ -1,6 +1,6 @@
 import { Effect, Latch, Option, Ref, Schema, Stream, String as Str } from 'effect'
 
-import { nextFrame } from '../../blueprint/webgpu/renderer.ts'
+import { nextFrame } from '../../gpu/loop.ts'
 import { type Clock, follow, interact, opacityAt, startClock, tick } from './clock.ts'
 import { type Controls, type Report, SLIDER_STEPS } from './controls.ts'
 import { clamp01 } from './kit.ts'
