@@ -25,7 +25,7 @@ export const callingScene: Scene = {
       id: 'switchboard',
       label: 'SWITCHBOARD',
       caption:
-        'Every cord is someone who knows your work. Enough of them, and a call you never wired for comes in. Drag a cord to unplug it.',
+        'Every cord is someone who knows your work. Enough of them, and a call you never expected will come.',
       tone: 'hi',
     },
   ],
