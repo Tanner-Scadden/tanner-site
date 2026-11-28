@@ -22,10 +22,10 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p('We were signed and made it to Worlds twice. After the second tournament, I set my sights on becoming a software engineer full time, thinking I was done with gaming.'),
     h.p(
-      'About two years later, a teammate from those days reached out. Sentinels was putting together a Wild Rift team and they needed another player.',
+      'Two years later, one of those same teammates reached out. Sentinels was putting together a Wild Rift team and they needed another player.',
     ),
     h.p(
-      'I didn’t have to pitch myself. That same teammate vouched for me, and the rest of the team already knew how I’d shown up in Arena of Valor.',
+      'I didn’t have to pitch myself. That teammate vouched for me, and the rest of the teammates were already aware of my reputation.',
     ),
     h.p(
       'Almost every big turn in my life has started with a call like that.',
