@@ -7,6 +7,7 @@ export const REST_FACTS = [
   'MVP',
   'NA RUNNER-UP',
   '3 TRIPS TO WORLDS',
+  '5TH–8TH AT WORLDS',
 ] as const
 
 export interface Shot {
