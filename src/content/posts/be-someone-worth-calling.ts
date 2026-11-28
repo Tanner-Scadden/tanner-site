@@ -38,8 +38,8 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Lead with what you need.'),
-      ' The first sentence decides how the rest gets read, so make it count. ',
-      h.a.attr('href', 'https://www.smartbrevity.com/').children('Smart Brevity'),
+      ' The first sentence decides how the rest gets read, so make it count. Chris Fenning’s ',
+      h.a.attr('href', 'https://www.amazon.com/dp/B08MWYZPCR').children(h.em('The First Minute')),
       ' is a whole book on doing this well.',
     ),
     h.p(
