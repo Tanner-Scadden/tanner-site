@@ -1,8 +1,8 @@
 import stylex from '@stylexjs/eslint-plugin'
 import babelParser from '@babel/eslint-parser'
 
-// ESLint here is only StyleX's rules. Types and Effect are checked by
-// `bun run typecheck`. The rules need no types, so Babel parses the
+// ESLint here is StyleX's rules and a ban on `switch`. Types and Effect are
+// checked by `bun run typecheck`. The rules need no types, so Babel parses the
 // TypeScript: typescript-eslint doesn't support TypeScript 7 yet.
 export default [
   {
@@ -25,6 +25,14 @@ export default [
       '@stylexjs/no-nonstandard-styles': 'error',
       '@stylexjs/enforce-extension': 'error',
       '@stylexjs/sort-keys': 'off',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'SwitchStatement',
+          message:
+            "Match instead: a tagged enum's match, a state's $match, or Match.valueTags and Match.discriminatorsExhaustive from effect.",
+        },
+      ],
     },
   },
 ]

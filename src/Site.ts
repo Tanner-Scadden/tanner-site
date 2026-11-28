@@ -1,6 +1,6 @@
 import { Command, Component, Head, Router, Subscription, UiSchema } from '@effect/ui'
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
-import { Effect, Layer, Option, Schema, Stream, String as Str } from 'effect'
+import { Effect, Layer, Match, Option, Schema, Stream, String as Str } from 'effect'
 
 import { EggId } from '#domain/Egg'
 
@@ -133,36 +133,33 @@ const titleOf = (page: PageState): string =>
     NotFound: () => 'Not found · Tanner Scadden',
   })
 
-const page = SiteDef.fragment((h, model: SiteSnapshot) => {
-  switch (model.page._tag) {
-    case 'Home':
-      return HomePage(h, {
+const page = SiteDef.fragment((h, model: SiteSnapshot) =>
+  Match.valueTags(model.page, {
+    Home: () =>
+      HomePage(h, {
         eggs: model.eggs,
         thesis: thesisText(model.thesis),
         clickedThesis: SiteMessage.ClickedThesis(),
         clickedWebGpu: SiteMessage.ClickedWebGpu(),
         playedWithTeddy: SiteMessage.PlayedWithTeddy(),
         still: h.props.reducedMotion,
-      })
-    case 'Manor':
-      return ManorPage(h, {
-        room: model.page.room,
+      }),
+    Manor: ({ room }) =>
+      ManorPage(h, {
+        room,
         rattles: model.rattles,
         reducedMotion: h.props.reducedMotion,
-      })
-    case 'Rest':
-      return RestPage(h)
-    case 'Blog':
-      return BlogPage(h)
-    case 'Post':
-      return Option.match(findPost(model.page.slug), {
+      }),
+    Rest: () => RestPage(h),
+    Blog: () => BlogPage(h),
+    Post: ({ slug }) =>
+      Option.match(findPost(slug), {
         onNone: () => NotFoundPage(h),
         onSome: post => PostPage(h, post),
-      })
-    case 'NotFound':
-      return NotFoundPage(h)
-  }
-})
+      }),
+    NotFound: () => NotFoundPage(h),
+  }),
+)
 
 export const SiteNoDeps = SiteDef.make({
   init: $ => initialSnapshot($.props),

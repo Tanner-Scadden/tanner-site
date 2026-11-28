@@ -1,6 +1,6 @@
 import { View } from '@effect/ui'
 import { Html } from '@effect/ui/html'
-import { Array as Arr, Number as Num, Predicate, String as Str } from 'effect'
+import { Array as Arr, Match, Number as Num, Predicate, String as Str } from 'effect'
 
 import type { Post } from '#domain/Post'
 
@@ -28,20 +28,17 @@ const INLINE = new Set([
 const skipped = (node: View.Element<unknown, unknown>): boolean =>
   node.tag === 'button' || node.attrs['aria-hidden'] === 'true' || node.attrs['data-search'] === 'skip'
 
-const textOf = (node: View.Node<unknown, unknown>): string => {
-  switch (node._tag) {
-    case 'Text':
-      return node.text
-    case 'Element': {
-      if (skipped(node)) return ''
-      const inner = Arr.join(Arr.map(node.children, textOf), '')
-      return INLINE.has(node.tag) ? inner : `\n${inner}\n`
-    }
-    case 'Child':
-    case 'Outlet':
-      return ''
-  }
-}
+const textOf = (node: View.Node<unknown, unknown>): string =>
+  Match.valueTags(node, {
+    Text: ({ text }) => text,
+    Element: element => {
+      if (skipped(element)) return ''
+      const inner = Arr.join(Arr.map(element.children, textOf), '')
+      return INLINE.has(element.tag) ? inner : `\n${inner}\n`
+    },
+    Child: () => '',
+    Outlet: () => '',
+  })
 
 // The plain text of a body, one line per block.
 export const plainText = (body: ReadonlyArray<View.Input<unknown, unknown>>): string =>
@@ -59,17 +56,13 @@ const playsFor = (node: View.Child<unknown, unknown>): number =>
     ? Number(node.component.seconds())
     : 0
 
-const secondsOf = (node: View.Node<unknown, unknown>): number => {
-  switch (node._tag) {
-    case 'Child':
-      return playsFor(node)
-    case 'Element':
-      return Num.sumAll(Arr.map(node.children, secondsOf))
-    case 'Text':
-    case 'Outlet':
-      return 0
-  }
-}
+const secondsOf = (node: View.Node<unknown, unknown>): number =>
+  Match.valueTags(node, {
+    Child: playsFor,
+    Element: ({ children }) => Num.sumAll(Arr.map(children, secondsOf)),
+    Text: () => 0,
+    Outlet: () => 0,
+  })
 
 // How long a post's drawings play, its hero's too, in seconds.
 export const postSeconds = (post: Post): number =>

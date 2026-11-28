@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, Stream, String as Str } from 'effect'
+import { Context, Effect, Layer, Match, Schema, Stream, String as Str } from 'effect'
 import { Event, Machine, State } from 'effect-machine'
 
 import { RATTLES_SAYS, RATTLES_UPSET } from '#content/manor'
@@ -57,25 +57,22 @@ export const rattlesMachine = (reducedMotion: boolean) =>
     initial: (input: { readonly route: SiteRoute }) =>
       rattlesOf({ reducedMotion, route: input.route }),
   })
-    .onAny(RattlesEvent.Entered, ({ state, event }) => {
-      switch (state._tag) {
-        case 'Away':
-          return startLine(event.room, 0, reducedMotion)
-        case 'Said':
-          return state.room === event.room
-            ? state
-            : startLine(event.room, 0, reducedMotion)
-        case 'Typing':
-          if (state.room === event.room) return state
-          return state.cutOffs + 1 >= CUT_OFF_LIMIT
-            ? RattlesState.Upset({ room: event.room })
-            : startLine(event.room, state.cutOffs + 1, reducedMotion)
-        case 'Upset':
-          // He's still fuming: the room changes under him, but his timer
-          // doesn't start over.
-          return RattlesState.Upset({ room: event.room })
-      }
-    })
+    .onAny(RattlesEvent.Entered, ({ state, event }) =>
+      Match.valueTags(state, {
+        Away: () => startLine(event.room, 0, reducedMotion),
+        Said: said =>
+          said.room === event.room ? said : startLine(event.room, 0, reducedMotion),
+        Typing: typing =>
+          typing.room === event.room
+            ? typing
+            : typing.cutOffs + 1 >= CUT_OFF_LIMIT
+              ? RattlesState.Upset({ room: event.room })
+              : startLine(event.room, typing.cutOffs + 1, reducedMotion),
+        // He's still fuming: the room changes under him, but his timer
+        // doesn't start over.
+        Upset: () => RattlesState.Upset({ room: event.room }),
+      }),
+    )
     .onAny(RattlesEvent.Left, () => RattlesState.Away)
     .on(RattlesState.Typing, RattlesEvent.Ticked, ({ state }) =>
       state.shown + CHARS_PER_TICK >= RATTLES_SAYS[state.room].length
