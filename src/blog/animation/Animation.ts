@@ -8,7 +8,7 @@ import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, post } from '../../styles/tokens.stylex.ts'
 import { isFull } from './clock.ts'
 import { Controls, PlayerUnavailable, type Report, SLIDER_STEPS, Started } from './controls.ts'
-import type { Scene, Variant } from './scene.ts'
+import { type Scene, type Variant, rememberLast } from './scene.ts'
 
 // How a scene sits on the page. A figure is framed in the text column, with
 // its controls and caption. A hero sits bare beside a post's title and just
@@ -63,7 +63,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       () => Arr.headNonEmpty(scene.variants),
     )
 
-  return Html.component({
+  const component = Html.component({
     name,
     model: Schema.Struct({
       ...Controls.fields,
@@ -218,6 +218,10 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
         )
     },
   })
+  // How long the first version plays, worked out once. Seeds move it by a
+  // fraction of a second at most, so any one will do.
+  const seconds = rememberLast((played: Scene): number => played.run(Arr.headNonEmpty(played.variants).id, 0).end)
+  return Object.assign(component, { seconds: () => seconds(scene) })
 }
 
 // The usual media icons (Material's, Apache 2.0): play, pause, replay
