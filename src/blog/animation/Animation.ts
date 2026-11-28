@@ -194,7 +194,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                   .on('click', Message.ClickedInteract())
                   .children(
                     sx(h.span, styles.glyph, styles.small, glyphs.interact).attr('aria-hidden', 'true'),
-                    'INTERACT',
+                    sx(h.span, styles.word).children('INTERACT'),
                   ),
               scene.variants.length > 1 &&
                 sx(h.div, styles.variants)
@@ -247,9 +247,9 @@ const styles = stylex.create({
     display: { default: 'flex', [media.print]: 'none' },
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 8,
+    gap: { default: 8, [media.phone]: 6 },
     paddingBlock: 8,
-    paddingInline: 10,
+    paddingInline: { default: 10, [media.phone]: 6 },
     borderTopWidth: 1,
     borderTopStyle: 'dashed',
     borderTopColor: blueprint.faint,
@@ -302,28 +302,33 @@ const styles = stylex.create({
     color: blueprint.dim,
     whiteSpace: 'nowrap',
   },
-  // A word and an icon, the height of the icon buttons.
+  // A word and an icon, the height of the icon buttons. On a phone just
+  // the icon, square like the others, so the row still fits on one line.
   // Faded once the run takes no more.
   interact: {
     display: 'inline-flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     flexShrink: 0,
+    width: { default: 'auto', [media.phone]: 32 },
     height: 32,
     paddingBlock: 0,
+    paddingInline: { default: 10, [media.phone]: 0 },
     cursor: { default: 'pointer', ':disabled': 'default' },
     opacity: { default: 1, ':disabled': 0.4 },
   },
-  small: { width: 14, height: 14 },
+  small: { width: { default: 14, [media.phone]: 18 }, height: { default: 14, [media.phone]: 18 } },
+  word: { display: { default: 'inline', [media.phone]: 'none' } },
   alarmLead: { color: post.alarm, borderColor: post.alarm },
   on: { color: blueprint.hi, borderColor: blueprint.hi },
   onAlarm: { color: post.alarm, borderColor: post.alarm },
   slider: {
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: 160,
-    minWidth: 120,
-    marginInline: 4,
+    flexBasis: { default: 160, [media.phone]: 0 },
+    minWidth: { default: 120, [media.phone]: 28 },
+    marginInline: { default: 4, [media.phone]: 2 },
     accentColor: blueprint.hi,
     cursor: 'pointer',
   },
