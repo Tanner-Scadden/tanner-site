@@ -22,10 +22,13 @@ export const PostPage = <M>(h: Html.H<M>, post: Post) => {
   return sx(h.main, sheet.sheet).children(
     BlogBar(h, `SHEET ${sheetNo}`),
     h.article(
-      sx(h.header, sheet.hero).children(
-        sx(h.time, styles.when).attr('datetime', post.date).children(formatDate(post.date)),
-        sx(h.h1, styles.title).children(post.title),
-        sx(h.p, styles.dek).children(post.summary),
+      sx(h.header, sheet.hero, post.hero !== undefined && styles.withHero).children(
+        h.div(
+          sx(h.time, styles.when).attr('datetime', post.date).children(formatDate(post.date)),
+          sx(h.h1, styles.title).children(post.title),
+          sx(h.p, styles.dek).children(post.summary),
+        ),
+        post.hero !== undefined && h.div(...post.hero(h)),
       ),
       sx(h.div, styles.prose).children(...post.body(proseTags(h))),
       sx(h.p, styles.source).children(
@@ -57,6 +60,14 @@ const Pager = <M>(h: Html.H<M>, label: string, post: Option.Option<Post>, older:
   })
 
 const styles = stylex.create({
+  // The title on one side and its drawing on the other, stacked on a
+  // phone, like the home page's hello and house.
+  withHero: {
+    display: 'grid',
+    gridTemplateColumns: { default: 'minmax(0, 1fr) minmax(0, 1fr)', [media.narrow]: '1fr' },
+    gap: { default: 40, [media.narrow]: 28 },
+    alignItems: 'center',
+  },
   when: {
     display: 'block',
     marginBottom: 14,

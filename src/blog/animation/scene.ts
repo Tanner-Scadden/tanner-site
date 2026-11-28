@@ -44,6 +44,10 @@ export interface Variant {
 export interface Interaction {
   readonly time: number
   readonly aim: Option.Option<Point>
+  // Where they let go, as a fraction like `aim`, when they pressed on the
+  // drawing and dragged before letting go. Only scenes that take drags see
+  // one.
+  readonly to?: Point
 }
 
 // A scene that takes interactions. The button always says INTERACT; what it
@@ -72,12 +76,17 @@ export interface Run {
   //
   // The kit passes the same array until it changes, so work out what they
   // do once per array with `rememberLast`, and keep each frame cheap.
+  //
+  // In a scene that takes drags, `held` is where the reader pressed, in CSS
+  // px, for as long as they hold, so the scene can show what they've
+  // grabbed following the pointer.
   readonly shapesAt: (
     time: number,
     width: number,
     height: number,
     pointer: Option.Option<Point>,
     interactions: ReadonlyArray<Interaction>,
+    held?: Option.Option<Point>,
   ) => Shapes
 }
 
@@ -91,6 +100,10 @@ export interface Scene {
   // Readers can add to it with the INTERACT button. The run's frames have
   // to stay inside the buffers with `interact.max` interactions in them.
   readonly interact?: Interact
+  // Readers press on the drawing and drag, instead of clicking it. Letting
+  // go far enough from where they pressed adds an interaction with a `to`;
+  // a short press adds nothing.
+  readonly drag?: boolean
   // Plays once and rests on its last frame, rather than fading into a new
   // run. Play from there replays it from the start.
   readonly once?: boolean

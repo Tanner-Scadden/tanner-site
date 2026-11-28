@@ -4,7 +4,7 @@
 // real one, by the real painter:
 //
 //   bun run dev --port 5199
-//   bun run card post <slug> [--figure 1] [--seek 1] [--interact 0] [--aim x,y] [--wait 2600]
+//   bun run card post <slug> [--figure 1] [--seek 1] [--interact 0] [--aim x,y] [--wait 2600] [--art-scale 1]
 //   bun run card home [--wait 4000]
 //   bun run card --help
 import { BunRuntime, BunServices } from '@effect/platform-bun'
@@ -56,6 +56,9 @@ interface Card {
   readonly art: Option.Option<{ readonly src: string; readonly width: number; readonly height: number }>
 }
 
+// The art's full size on the card, in CSS px.
+const ART = { width: 720, height: 405 } as const
+
 const escape = (text: string) =>
   pipe(text, Str.replaceAll('&', '&amp;'), Str.replaceAll('<', '&lt;'), Str.replaceAll('>', '&gt;'))
 
@@ -81,7 +84,9 @@ const cardHtml = (card: Card) => `<!doctype html>
 <body><div class="card">
   ${Option.match(card.art, {
     onNone: () => '',
-    onSome: ({ src, width, height }) => `<img class="art" src="${src}" style="width:${width}px;height:${height}px">`,
+    // Smaller art stays at the right and centres on where full-size art sits.
+    onSome: ({ src, width, height }) =>
+      `<img class="art" src="${src}" style="width:${width}px;height:${height}px;top:${56 + (ART.height - height) / 2}px">`,
   })}
   <div class="frame"></div>
   <div class="text">
@@ -140,6 +145,10 @@ const post = Command.make(
       Flag.optional,
     ),
     wait: Flag.Int('wait').pipe(Flag.withDescription('Milliseconds to let it play before the shot'), Flag.withDefault(2600)),
+    artScale: Flag.Finite('art-scale').pipe(
+      Flag.withDescription('How big the art is, from 0 to 1, to keep a wide figure clear of the title'),
+      Flag.withDefault(1),
+    ),
     url,
     out,
   },
@@ -147,7 +156,7 @@ const post = Command.make(
     yield* render(`${args.url}/blog/${args.slug}`, Option.getOrElse(args.out, () => `public/og/${args.slug}.png`), page =>
       Effect.gen(function* () {
         const title = yield* use(() => page.locator('article > header h1').innerText())
-        const summary = yield* use(() => page.locator('article > header > p').first().innerText())
+        const summary = yield* use(() => page.locator('article > header p').first().innerText())
         // The post's figures in page order, named by what INTERACT does, so
         // it's easy to tell which number is which.
         const figures = yield* use(() =>
@@ -161,13 +170,17 @@ const post = Command.make(
         const figure = page.locator('figure:has(canvas)').nth(args.figure - 1)
         yield* use(() => figure.scrollIntoViewIfNeeded())
         yield* pause(page, 800)
-        yield* use(() =>
-          figure.locator('input[type="range"]').evaluate((el: HTMLInputElement, seek: number) => {
-            el.value = String(Math.round(Number(el.max) * seek))
-            el.dispatchEvent(new Event('input', { bubbles: true }))
-            el.dispatchEvent(new Event('change', { bubbles: true }))
-          }, args.seek),
-        )
+        // A hero has no slider: it plays once, so --wait lets it finish.
+        const slider = figure.locator('input[type="range"]')
+        if ((yield* use(() => slider.count())) > 0) {
+          yield* use(() =>
+            slider.evaluate((el: HTMLInputElement, seek: number) => {
+              el.value = String(Math.round(Number(el.max) * seek))
+              el.dispatchEvent(new Event('input', { bubbles: true }))
+              el.dispatchEvent(new Event('change', { bubbles: true }))
+            }, args.seek),
+          )
+        }
         yield* pause(page, 300)
         const canvas = figure.locator('canvas')
         const box = yield* use(() => canvas.boundingBox())
@@ -186,7 +199,7 @@ const post = Command.make(
           kicker: 'TANNER SCADDEN · BLOG',
           title,
           dek: summary,
-          art: Option.some({ src: dataUrl(shot.png), width: 720, height: 405 }),
+          art: Option.some({ src: dataUrl(shot.png), width: ART.width * args.artScale, height: ART.height * args.artScale }),
         }
       }),
     )

@@ -134,6 +134,14 @@ describe('animation clock', () => {
       assert.strictEqual(settled.interactions.length, 1)
     })
 
+    it('puts a second interaction after the first one, not back at the end', () => {
+      const ended = run(startClock(once, controls, false), 30)
+      const first = run(press(follow(once, ended, { ...controls, playing: false }), controls), 5)
+      const second = interact(once, first, Option.none())
+      assert.strictEqual(second.time, 12)
+      assert.deepStrictEqual(timesOf(second), [10, 12])
+    })
+
     it('plays on from wherever it was scrubbed back to', () => {
       const ended = run(startClock(once, controls, false), 30)
       const scrubbed = follow(once, ended, { ...controls, playing: false, seek: 0.5, seeks: 1 })

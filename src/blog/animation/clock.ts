@@ -26,13 +26,16 @@ export const isFull = (scene: Scene, count: number): boolean => count >= (scene.
 
 // The clock once the reader interacts now, aimed or not. A full run gives
 // back the same clock.
-export const interact = (scene: Scene, clock: Clock, aim: Option.Option<Point>): Clock => {
+export const interact = (scene: Scene, clock: Clock, aim: Option.Option<Point>, to?: Point): Clock => {
   if (isFull(scene, clock.interactions.length)) return clock
   const settle = scene.interact?.settle ?? 0
-  // Past the end, it goes in at the end, and the hold waits for it.
-  const time = Math.min(clock.time, clock.run.end)
+  // Past the end, it goes in at the end, and the hold waits for it. A scene
+  // that plays once rests where its last interaction settled, so it goes in
+  // there, after the ones before it.
+  const time = scene.once === true ? clock.time : Math.min(clock.time, clock.run.end)
   const at = clock.still ? Math.max(0, time - settle) : time
-  return { ...clock, time, interactions: Arr.sort([...clock.interactions, { time: at, aim }], byTime) }
+  const interaction: Interaction = to === undefined ? { time: at, aim } : { time: at, aim, to }
+  return { ...clock, time, interactions: Arr.sort([...clock.interactions, interaction], byTime) }
 }
 
 // The clock after the controls change. A new variant starts over, unless
