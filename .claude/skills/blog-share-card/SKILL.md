@@ -23,14 +23,17 @@ moments through the AskUserQuestion UI. For example:
   one bad interaction, with the torn branch dimmed and pulled away
 - the post's hero, when it has one: it's figure 1, has no controls and
   plays once, so give `--wait` long enough for it to finish. Be Someone
-  Worth Calling uses its switchboard, lit after the call is answered
+  Worth Calling uses its switchboard, lit after the call is answered,
+  which takes about 15 seconds: `--wait 17500 --art-scale 0.85`
 - a moment mid-interaction (`--wait` shorter than the settle), when the
   break itself is the story. It's more dramatic, but it can read as
   unfinished at thumbnail size
 - no figure (`--figure 0`), when the post has none, or none reads small
 
-Use the post's real title and summary: the script reads them from the
-page, so there's no new copy to write or approve.
+Use the post's real title, summary and read time: the script reads them
+from the page, so there's no new copy to write or approve. The read time
+goes in the bottom right, so remake the card whenever any of the three
+change.
 
 ## 2. Render it
 
@@ -89,8 +92,29 @@ empty.
 Follow the repo's rules: no em dashes in the alt text, curly apostrophes,
 and no notes or scratch files committed. Run `bun run typecheck`,
 `bun run lint`, `bun run test` and `bun run build`. Check that
-`dist/blog/<slug>.html` names the card, then commit the PNG and the post
-change together.
+`dist/blog/<slug>.html` names the card, then commit the PNG,
+`src/seo/cards.json` and the post change together.
+
+## Keeping cards current
+
+Each time the script writes a card, it records it in `src/seo/cards.json`
+by the path it's served at: the command that made it, a stamp, and the
+PNG's sha256. The stamp is the sha256 of the card's layout
+(`cardHtml` in `src/seo/card.ts`) filled in with its words: kicker, title,
+summary and the read time or address in the corner. The art isn't part of
+it.
+
+`src/seo/card.test.ts` runs in CI. It fails when:
+
+- a shipped card has no record. Make it with the script.
+- the stamp no longer matches. The title, summary, read time or the card's
+  layout changed since the card was made. Run the `made` command the
+  failure prints, which reproduces the card with the same flags.
+- the PNG isn't the one the script wrote. Don't edit cards by hand.
+- `cards.json` names a card the site no longer ships. Delete that entry.
+
+It can't see a change to a figure's drawing, so remake a card by hand
+when the figure it shows changes.
 
 ## The site's own card
 
