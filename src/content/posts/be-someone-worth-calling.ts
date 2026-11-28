@@ -48,7 +48,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Control what you can.'),
-      ' Things will break, deals will fall through, and launches will slip. Most of that isn’t up to you. What you do next is. Find the part you can move, and move it. People want to work with someone who makes the hard days lighter.',
+      ' Things will break, deals will fall through, and launches will slip. Most of that isn’t up to you. What you do next is. Find the part you can move, and move it.',
     ),
     h.p(
       h.strong('Believe in yourself.'),
