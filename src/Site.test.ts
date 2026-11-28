@@ -192,6 +192,24 @@ const recordingScrolls = (onScroll: () => void): Window =>
     },
   })
 
+const typeRest = Effect.sync(() => {
+  for (const key of ['r', 'e', 's', 't']) {
+    document.dispatchEvent(new KeyboardEvent('keydown', { key }))
+  }
+})
+
+const restIsOpen = Effect.sync(() => location.pathname).pipe(
+  Effect.filterOrFail(
+    path => path === '/rest',
+    path => `still at ${path}`,
+  ),
+)
+
+const typeRestUntilItOpens = typeRest.pipe(
+  Effect.andThen(restIsOpen),
+  Effect.retry({ schedule: Schedule.spaced('20 millis'), times: 150 }),
+)
+
 describe('Site in the browser', () => {
   it.live('a new page starts at the top', () =>
     Effect.gen(function* () {
@@ -212,9 +230,7 @@ describe('Site in the browser', () => {
       window.scrollTo(0, 800)
       assert.strictEqual(window.scrollY, 800)
 
-      for (const key of ['r', 'e', 's', 't']) {
-        document.dispatchEvent(new KeyboardEvent('keydown', { key }))
-      }
+      yield* typeRestUntilItOpens
       const firstScroll = yield* Queue.take(onRestWhenScrolled)
       assert.isTrue(firstScroll)
       assert.strictEqual(location.pathname, '/rest')
