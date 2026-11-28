@@ -6,7 +6,7 @@ import { KICK_SETTLE, MAX_KICKS, buildTimeline, frameAt, withKicks } from './buc
 import { MAX_DOTS, MAX_LINES, shapesOf } from './shapes.ts'
 
 export const teamScene: Scene = {
-  variants: [{ id: 'team', label: 'TEAM', caption: 'Trust is built in drops and lost in buckets.', tone: 'hi' }],
+  variants: [{ id: 'team', label: 'TEAM', caption: 'Trust is built in drops and lost in buckets. Press the hand to kick the bucket, and see how much spills.', tone: 'hi' }],
   run: (_variant, seed) => {
     const timeline = buildTimeline(seed)
     // Each press is a kick, spilling half of whatever water is there.

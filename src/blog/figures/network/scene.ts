@@ -13,7 +13,8 @@ export const networkScene: Scene = {
     {
       id: 'network',
       label: 'HIGH IMPACT',
-      caption: '',
+      caption:
+        'Everyone you help brings people of their own, and your network grows past who you know. Press the hand to have a bad interaction with someone you helped, and watch who goes with them.',
       tone: 'hi',
     },
   ],

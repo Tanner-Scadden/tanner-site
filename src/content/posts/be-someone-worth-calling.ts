@@ -18,17 +18,17 @@ export const beSomeoneWorthCalling: Post = {
   body: h => [
     h.p('The call to join Sentinels came after I thought I was done playing.'),
     h.p(
-      'A few years earlier, I got really into Arena of Valor. I played more than I’d like to admit, and the people I played with became friends.',
+      'A few years earlier I was really focused on Arena of Valor. I played more than I’d like to admit, and the people I played with became friends.',
     ),
-    h.p('We got signed and made it to worlds twice. After the second tournament, I went to be a software engineer full time, thinking I was done.'),
+    h.p('We were signed and made it to Worlds twice. After the second tournament, I set my sights on becoming a software engineer full time, thinking I was done with gaming.'),
     h.p(
-      'About two years later, a teammate from those days reached out. Sentinels was putting together a Wild Rift team and they needed another player.',
-    ),
-    h.p(
-      'I didn’t have to pitch myself. That same teammate vouched for me, and the rest of the team already knew how I’d shown up in Arena of Valor.',
+      'Two years later, one of those same teammates reached out. Sentinels was putting together a Wild Rift team and they needed another player.',
     ),
     h.p(
-      'Almost every big turn in my life has started with a call like that. The best bet is to keep showing up, and your network will grow from there.',
+      'I didn’t have to pitch myself. That teammate vouched for me, and the rest of the teammates were already aware of my reputation.',
+    ),
+    h.p(
+      'Almost every big opportunity has started with a phone call I didn’t expect. The best bet is to keep showing up.',
     ),
 
     h.h2('Becoming someone worth calling'),
@@ -44,17 +44,17 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Be the first to jump in.'),
-      ' Answer the question in Slack. Fix problems as you find them. Be the person people come to because they know it’ll get done.',
+      ' Answer questions in Slack. Fix problems as you find them. Be the person people come to because they know it’ll get done.',
     ),
     h.p(
-      h.strong('Keep the cup half full.'),
-      ' Things will break, deals will fall through, and launches will slip. Look for what you can still do. Find the bright side, and crack a joke. People want to work with someone who makes the hard days lighter.',
+      h.strong('Control what you can.'),
+      ' Things will break, deals will fall through, and launches will slip. Most of that isn’t up to you. What you do next is. Find the part you can move, and move it. People want to work with someone who makes the hard days lighter.',
     ),
     h.p(
       h.strong('Believe in yourself.'),
-      ' Your ceiling is one you put there yourself. When you’re stuck, ask what a version of you with ten times the agency would do. George Mack’s ',
+      ' Your ceiling is one you put there yourself. When you’re stuck, ask what the version of you with ten times the agency would do. If you haven’t read George Mack’s ',
       h.a.attr('href', 'https://www.highagency.com/').children(h.em('High Agency')),
-      ' is built on that question. If you haven’t read it, do.',
+      ', do.',
     ),
     h.p(
       h.strong('Choose your people.'),
@@ -97,7 +97,7 @@ export const beSomeoneWorthCalling: Post = {
       'It paid off that same week. An engineer from Solo, who’d left a year before me, heard I was going out on my own and gave me a call. That call became my first contract, Webaholics.',
     ),
     h.p(
-      'More calls followed. Some people wanted to build something together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
+      'More calls followed. Some of my contacts wanted to build projects together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
     ),
     h.p('Other people did the vouching. They got me into rooms I’d never have reached alone.'),
     h.p(
@@ -109,7 +109,7 @@ export const beSomeoneWorthCalling: Post = {
       'If you’ve been useful to people, you have a safety net you can’t see. Sometimes you have to jump to find out it’s there.',
     ),
     h.p(
-      'Arnold’s book is named after what his dad used to tell him: “Be useful, Arnold.” Give your best even when nobody’s keeping score. That’s what people remember when they’re deciding who to call.',
+      'Schwarzenegger’s book is named after what his dad used to tell him: “Be useful, Arnold.” Give your best even when nobody’s keeping score. That’s what people remember when they’re deciding who to call.',
     ),
     h.p('You don’t control when the call comes. You control whether you’re someone worth calling.'),
     h.blockquote(
