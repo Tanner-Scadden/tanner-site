@@ -100,9 +100,9 @@ export interface Scene {
   // Readers can add to it with the INTERACT button. The run's frames have
   // to stay inside the buffers with `interact.max` interactions in them.
   readonly interact?: Interact
-  // Readers can also press on the drawing and drag. Letting go far enough
-  // from where they pressed adds an interaction with a `to`; a short press
-  // is a click, as usual.
+  // Readers press on the drawing and drag, instead of clicking it. Letting
+  // go far enough from where they pressed adds an interaction with a `to`;
+  // a short press adds nothing.
   readonly drag?: boolean
   // Plays once and rests on its last frame, rather than fading into a new
   // run. Play from there replays it from the start.
