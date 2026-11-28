@@ -7,6 +7,8 @@ import { type Browser, type Locator, type Page, chromium } from 'playwright-core
 import { THESES } from '../../../src/content/home.ts'
 import {
   ART,
+  type Art,
+  CROPPED,
   type Card,
   Cards,
   HOME_CARD,
@@ -30,7 +32,7 @@ const browser = Effect.acquireRelease(
 
 const pause = (page: Page, ms: number) => use(() => page.waitForTimeout(ms))
 
-const shootClear = (page: Page, canvas: Locator, what: string) =>
+const shootClear = (page: Page, canvas: Locator, what: string, crop = 1) =>
   Effect.gen(function* () {
     yield* use(() =>
       page.addStyleTag({
@@ -49,8 +51,9 @@ const shootClear = (page: Page, canvas: Locator, what: string) =>
       onNone: () => Effect.fail(new NotDrawn({ what })),
       onSome: Effect.succeed,
     })
-    const png = yield* use(() => page.screenshot({ clip: box, omitBackground: true }))
-    return { png, width: box.width, height: box.height }
+    const clip = { ...box, x: box.x + (box.width * (1 - crop)) / 2, width: box.width * crop }
+    const png = yield* use(() => page.screenshot({ clip, omitBackground: true }))
+    return { png, width: clip.width, height: clip.height }
   })
 
 const CardsJson = Schema.fromJsonString(Cards, { space: 2 })
@@ -142,6 +145,10 @@ const post = Command.make(
       Flag.withDescription('How big the art is, from 0 to 1, to keep a wide figure clear of the title'),
       Flag.withDefault(1),
     ),
+    crop: Flag.Finite('crop').pipe(
+      Flag.withDescription('Keep only the middle of the drawing, as a fraction of its width, and show it tall'),
+      Flag.optional,
+    ),
     url,
     out,
   },
@@ -151,6 +158,7 @@ const post = Command.make(
         `bun run card post ${args.slug} --figure ${args.figure} --seek ${args.seek} --interact ${args.interact}`,
         ...Option.match(args.aim, { onNone: () => [], onSome: aim => [`--aim ${aim}`] }),
         `--wait ${args.wait} --art-scale ${args.artScale}`,
+        ...Option.match(args.crop, { onNone: () => [], onSome: crop => [`--crop ${crop}`] }),
         ...outFlag(args.out),
       ],
       ' ',
@@ -198,14 +206,16 @@ const post = Command.make(
         for (let k = 0; k < args.interact; k++) yield* press
         yield* pause(page, args.wait)
         yield* use(() => figure.locator('button[aria-label="Pause"]').click({ timeout: 500 })).pipe(Effect.ignore)
-        const shot = yield* shootClear(page, canvas, `figure ${args.figure}`)
-        return {
-          kicker: POST_KICKER,
-          title,
-          dek: summary,
-          corner: read,
-          art: Option.some({ src: dataUrl(shot.png), width: ART.width * args.artScale, height: ART.height * args.artScale }),
-        }
+        const shot = yield* shootClear(page, canvas, `figure ${args.figure}`, Option.getOrElse(args.crop, () => 1))
+        const src = dataUrl(shot.png)
+        const art = Option.match(args.crop, {
+          onNone: (): Art => ({ src, width: ART.width * args.artScale, height: ART.height * args.artScale }),
+          onSome: (): Art => {
+            const height = CROPPED.height * args.artScale
+            return { src, width: (height * shot.width) / shot.height, height, centre: CROPPED.centre }
+          },
+        })
+        return { kicker: POST_KICKER, title, dek: summary, corner: read, art: Option.some(art) }
       }),
     )
   }),

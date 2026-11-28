@@ -11,7 +11,7 @@ export const beSomeoneWorthCalling: Post = {
   date: '2026-11-27',
   summary: 'The best opportunities come from people who vouch for you.',
   image: {
-    path: '/og/be-someone-worth-calling-v2.png',
+    path: '/og/be-someone-worth-calling-v3.png',
     alt: 'Be Someone Worth Calling: a phone ringing with an incoming call, its green answer button glowing beside a red decline.',
   },
   hero: (h, found) => [CallingHero(h, { key: 'calling', onEmit: { FoundEgg: () => found('calling') } })],

@@ -23,8 +23,8 @@ moments through the AskUserQuestion UI. For example:
   one bad interaction, with the torn branch dimmed and pulled away
 - the post's hero, when it has one: it's figure 1, has no controls and
   plays once, so give `--wait` long enough for it to finish. Be Someone
-  Worth Calling uses its switchboard, lit after the call is answered,
-  which takes about 15 seconds: `--wait 17500 --art-scale 0.85`
+  Worth Calling uses its phone mid-ring, with the answer button glowing:
+  `--wait 7200 --crop 0.42 --art-scale 0.86`
 - a moment mid-interaction (`--wait` shorter than the settle), when the
   break itself is the story. It's more dramatic, but it can read as
   unfinished at thumbnail size
@@ -50,6 +50,7 @@ bun run card post <slug> --figure 2 --interact 1 --wait 2600
 | `--interact` | How many times to press INTERACT. | `0` |
 | `--aim x,y` | Click the drawing there instead of pressing the button, as fractions of its width and height. | none |
 | `--wait` | Milliseconds to let it play before the shot. | `2600` |
+| `--crop` | Keep only the middle of the drawing, as a fraction of its width, and show it tall beside the title. For a narrow subject in a wide figure, so the card isn't mostly empty. | none |
 | `--art-scale` | How big the art is, from 0 to 1. Shrink a wide figure until the title stops covering it. | `1` |
 | `--out` | Where to write the card. | `public/og/<slug>.png` |
 | `--url` | The dev server. | `http://localhost:5199` |
@@ -64,7 +65,8 @@ since it drives Chrome through `playwright-core`.
 Open the PNG and look at it before showing anyone. Check that:
 
 - the title doesn't cover the figure's focal point. If it does, try
-  `--art-scale`: Be Someone Worth Calling's switchboard needs `0.85`
+  `--art-scale` to shrink a wide figure until the title clears it, and
+  check cropped art clears the read time in the corner
 - the moment reads at small sizes: squint, or view it at 400px wide
 - nothing from the page leaked in, such as the paper grid or controls
 
