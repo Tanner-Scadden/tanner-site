@@ -2,7 +2,8 @@ import { Array as Arr, Boolean as Bool, Option } from 'effect'
 
 import { GOLD, LINE, RED, type Rgb, WARM, clamp01, mix, random, rgba, worldOfAim } from '../../animation/kit.ts'
 import type { Dot, Interaction, Line, Marks, Point } from '../../animation/scene.ts'
-import { curve, eased, projection, segments, within } from './world.ts'
+import { HANDSET_DOTS, HUNG_UP, type GlyphDot, PICKED_UP } from './handsets.ts'
+import { eased, projection, segments, within } from './world.ts'
 
 const ROWS = 11
 export const MAX_PRESSES = 16
@@ -155,29 +156,6 @@ const arc = (center: Point, radius: number, from: number, to: number, steps: num
     const a = from + ((to - from) * i) / steps
     return [center[0] + radius * Math.cos(a), center[1] + radius * Math.sin(a)]
   })
-
-interface GlyphDot {
-  readonly at: Point
-  readonly radius: number
-}
-
-const HANDSET_DOTS = 13
-const HANDLE_RADIUS = 1.9
-const END_RADIUS = 3
-
-const handset = (from: Point, control: Point, to: Point, ends: readonly [Point, Point]): ReadonlyArray<GlyphDot> => [
-  ...Arr.map(curve(from, control, to, HANDSET_DOTS - 3), (at): GlyphDot => ({ at, radius: HANDLE_RADIUS })),
-  ...Arr.map(ends, (at): GlyphDot => ({ at, radius: END_RADIUS })),
-]
-
-const PICKED_UP = handset([-6, -7], [-6, 6], [7, 6], [
-  [-6, -7],
-  [7, 6],
-])
-const HUNG_UP = handset([-8, 1], [0, -9], [8, 1], [
-  [-8, 3],
-  [8, 3],
-])
 
 const GREEN: Rgb = [0.61, 0.89, 0.69]
 const PAPER: Rgb = [0.06, 0.23, 0.47]
@@ -521,4 +499,4 @@ export const phoneMarks = (
 }
 
 export const PHONE_LINES = 28 * 2 + 5 + ROWS * 4 + 8 + 2 + VOICE_BARS + 2 * 3 * 5
-export const PHONE_DOTS = 2 + ROWS * 4 + 2 + 2 + 2 + HANDSET_DOTS * 2 + 1
+export const PHONE_DOTS = 2 + ROWS * 4 + 2 + 2 + 2 + HANDSET_DOTS + 1

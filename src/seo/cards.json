@@ -7,6 +7,6 @@
   "/og/be-someone-worth-calling-v3.png": {
     "made": "bun run card post be-someone-worth-calling --figure 1 --seek 1 --interact 0 --wait 7200 --art-scale 0.86 --crop 0.42 --out public/og/be-someone-worth-calling-v3.png",
     "stamp": "07254ed333d58ed8f21d6248b9daf2840b0937e7bf94afce8e2f5053c75b5cb6",
-    "png": "1e58ab2435f3896248b2a0d1ae8d9caa7e893f3f2999c01ea3953dd3f14d2f6c"
+    "png": "4b25f20d99642d46303079957b84f84d45cd700d66c7798ae38b14fc9e9cfcfe"
   }
 }
