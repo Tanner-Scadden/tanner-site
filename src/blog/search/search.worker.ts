@@ -23,4 +23,4 @@ const Main = RpcServer.layer(SearchRpcs).pipe(
   Layer.provide(BrowserWorkerRunner.layer),
 )
 
-BrowserRuntime.runMain(Layer.launch(Main))
+Main.pipe(Layer.launch, BrowserRuntime.runMain)

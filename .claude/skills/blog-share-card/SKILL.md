@@ -92,8 +92,8 @@ empty.
 ## 4. Ship it
 
 Follow the repo's rules: no em dashes in the alt text, curly apostrophes,
-and no notes or scratch files committed. Run `bun run typecheck`,
-`bun run lint`, `bun run test` and `bun run build`. Check that
+and no notes or scratch files committed. Run `bun run check`,
+`bun run test` and `bun run build`. Check that
 `dist/blog/<slug>.html` names the card, then commit the PNG,
 `src/seo/cards.json` and the post change together.
 

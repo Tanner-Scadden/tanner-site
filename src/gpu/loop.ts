@@ -29,7 +29,7 @@ export const stepSince = ({ before, now }: { readonly before: Option.Option<numb
 export const wakeToDraw = <E, R>(burst: Effect.Effect<void, E, R>) =>
   Effect.gen(function* () {
     const wakes = yield* Queue.sliding<true>(1)
-    yield* Effect.forkScoped(Effect.forever(Effect.andThen(Queue.take(wakes), burst)))
+    yield* Queue.take(wakes).pipe(Effect.andThen(burst), Effect.forever, Effect.forkScoped)
     const wake: Effect.Effect<void> = Queue.offer(wakes, true).pipe(Effect.asVoid)
     return { wake }
   })

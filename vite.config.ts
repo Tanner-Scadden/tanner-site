@@ -35,19 +35,15 @@ const seo = (): Plugin => ({
     const index = bundle['index.html']
     if (index?.type !== 'asset') return this.error('seo: the build has no index.html')
     const html = String(index.source)
-    return Effect.runPromise(
-      Effect.scoped(
-        Effect.gen({ self: this }, function* () {
-          const server = yield* loader
-          const { PUBLISHED } = yield* load<typeof Blog>(server, '/src/content/blog.ts')
-          const head = yield* load<typeof Head>(server, '/src/seo/head.ts')
-          for (const page of head.pagesOf(PUBLISHED)) {
-            this.emitFile({ type: 'asset', fileName: page.file, source: head.withHead(html, page) })
-          }
-          this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: head.sitemap(PUBLISHED) })
-        }),
-      ),
-    )
+    return Effect.gen({ self: this }, function* () {
+      const server = yield* loader
+      const { PUBLISHED } = yield* load<typeof Blog>(server, '/src/content/blog.ts')
+      const head = yield* load<typeof Head>(server, '/src/seo/head.ts')
+      for (const page of head.pagesOf(PUBLISHED)) {
+        this.emitFile({ type: 'asset', fileName: page.file, source: head.withHead(html, page) })
+      }
+      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: head.sitemap(PUBLISHED) })
+    }).pipe(Effect.scoped, Effect.runPromise)
   },
 })
 

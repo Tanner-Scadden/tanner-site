@@ -348,18 +348,14 @@ export const runBlueprint = (
         }),
     })
 
-    yield* Effect.forkScoped(
-      Effect.forever(
-        Effect.gen(function* () {
-          yield* Effect.sleep(COUNT_EVERY)
-          const { flow } = yield* Ref.get(settings)
-          if (!flow) return
-          const count = yield* countInfected(gpu)
-          const last = yield* Ref.getAndSet(told, count)
-          if (count !== last) yield* infected(count)
-        }).pipe(Effect.ignore),
-      ),
-    )
+    yield* Effect.gen(function* () {
+      yield* Effect.sleep(COUNT_EVERY)
+      const { flow } = yield* Ref.get(settings)
+      if (!flow) return
+      const count = yield* countInfected(gpu)
+      const last = yield* Ref.getAndSet(told, count)
+      if (count !== last) yield* infected(count)
+    }).pipe(Effect.ignore, Effect.forever, Effect.forkScoped)
 
     yield* markDrawing({ element: canvas, device: gpu.device })
     yield* poke

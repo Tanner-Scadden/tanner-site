@@ -18,7 +18,7 @@ const browserStorage = (): Storage =>
   // oxlint-disable-next-line effect/noGlobals -- this is the one adapter to the browser's localStorage; reads and writes go through Effect.try around it
   localStorage
 
-const StoredEggs = Schema.fromJsonString(Schema.Array(Schema.Unknown))
+const StoredEggs = Schema.Unknown.pipe(Schema.Array, Schema.fromJsonString)
 const decodeStoredEggs = Schema.decodeUnknownOption(StoredEggs)
 const encodeFoundEggs = Schema.encodeEffect(
   Schema.fromJsonString(Schema.Array(EggId)),
