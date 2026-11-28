@@ -23,7 +23,14 @@ export const proseTags = <M>(h: Html.H<M>): Html.H<M> => {
     ol: { value: View.shorthand(sx(h.ol, prose.block, prose.list)) },
     li: { value: View.shorthand(sx(h.li, prose.item)) },
     blockquote: { value: View.shorthand(sx(h.blockquote, prose.block, prose.quote)) },
-    a: { value: View.shorthand(sx(h.a, base.link, prose.link)) },
+    // Links in a post lead off the site, to what it quotes or cites, so
+    // they open in a new tab and leave the post where the reader was. A
+    // link back into the site drops it with `.attr('target', undefined)`.
+    a: {
+      value: View.shorthand(
+        sx(h.a, base.link, prose.link).attrs({ target: '_blank', rel: 'noopener noreferrer' }),
+      ),
+    },
     strong: { value: View.shorthand(sx(h.strong, prose.strong)) },
     code: { value: View.shorthand(sx(h.code, prose.code)) },
     hr: { value: sx(h.hr, prose.rule) },
