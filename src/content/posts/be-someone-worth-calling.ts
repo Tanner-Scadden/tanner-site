@@ -28,7 +28,7 @@ export const beSomeoneWorthCalling: Post = {
       'I didn’t have to pitch myself. That teammate vouched for me, and the rest of the teammates were already aware of my reputation.',
     ),
     h.p(
-      'Almost every big turn in my life has started with a call like that.',
+      'Almost every big opportunity has started with a phone call I didn’t expect. The best bet is to keep showing up.',
     ),
 
     h.h2('Becoming someone worth calling'),
