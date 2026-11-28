@@ -9,6 +9,7 @@ export const EggId = Schema.Literals([
   'print',
   'gpu',
   'teddy',
+  'calling',
 ])
 export type EggId = typeof EggId.Type
 

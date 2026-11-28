@@ -4,6 +4,7 @@ import { Option } from 'effect'
 
 import { sheet } from '#components/Sheet'
 import { BLOG } from '#content/blog'
+import type { EggId } from '#domain/Egg'
 import { type Post, formatDate, sourcePath } from '#domain/Post'
 import { SITE_REPO_URL } from '#content/home'
 
@@ -16,7 +17,7 @@ import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
 import { BlogBar } from './BlogPage.ts'
 
-export const PostPage = <M>(h: Html.H<M>, post: Post) => {
+export const PostPage = <M>(h: Html.H<M>, post: Post, found: (egg: EggId) => M) => {
   const sheetNo = sheetOf(post)
   const { newer, older } = neighboursOf(post)
   const hero = Option.fromNullishOr(post.hero)
@@ -32,7 +33,7 @@ export const PostPage = <M>(h: Html.H<M>, post: Post) => {
           sx(h.h1, styles.title).children(post.title),
           sx(h.p, styles.dek).children(post.summary),
         ),
-        ...Option.match(hero, { onNone: () => [], onSome: drawing => [h.div(...drawing(h))] }),
+        ...Option.match(hero, { onNone: () => [], onSome: drawing => [h.div(...drawing(h, found))] }),
       ),
       sx(h.div, styles.prose).children(...post.body(proseTags(h))),
       sx(h.p, styles.source).children(

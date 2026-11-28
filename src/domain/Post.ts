@@ -2,13 +2,15 @@ import type { View } from '@effect/ui'
 import type { Html } from '@effect/ui/html'
 import { Array as Arr, Order, Schema, String as Str } from 'effect'
 
+import type { EggId } from './Egg.ts'
+
 export interface Post {
   readonly slug: string
   readonly title: string
   readonly date: string
   readonly summary: string
   readonly body: <M>(h: Html.H<M>) => View.Children<M, never>
-  readonly hero?: <M>(h: Html.H<M>) => View.Children<M, never>
+  readonly hero?: <M>(h: Html.H<M>, found: (egg: EggId) => M) => View.Children<M, never>
   readonly source?: string
   readonly image?: { readonly path: string; readonly alt: string }
 }

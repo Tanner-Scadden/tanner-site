@@ -47,8 +47,13 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     Aimed: {},
     Counted: { interactions: Schema.Finite },
     Ended: {},
+    FoundEgg: {},
     MovedSlider: { value: Schema.String },
     Started: Started.fields,
+  })
+
+  const Events = UiSchema.TaggedEnum({
+    FoundEgg: {},
   })
 
   const variantOf = (id: string): Variant =>
@@ -66,6 +71,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       interactions: Schema.Finite,
     }),
     message: Message,
+    events: Events,
   }).make({
     init: () => ({
       variant: Arr.headNonEmpty(scene.variants).id,
@@ -99,6 +105,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
       Aimed: $ => $.evolve({ playing: playing => playing || !$.model.still }),
       Counted: ($, { interactions }) => $.evolve({ interactions: () => interactions }),
       Ended: $ => $.evolve({ playing: () => false }),
+      FoundEgg: $ => $.emit(Events.FoundEgg()),
       MovedSlider: ($, { value }) =>
         $.evolve({
           seek: () => Option.getOrElse(Num.parse(value), () => 0) / SLIDER_STEPS,
@@ -112,7 +119,12 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
         .attr('data-blueprint-quiet', '')
         .children(
           sx(h.canvas, styles.canvas, scene.drag === true && styles.grab)
-            .attr('aria-hidden', 'true')
+            .attrs(
+              Option.match(Option.fromNullishOr(shown.description), {
+                onNone: () => ({ 'aria-hidden': 'true' }),
+                onSome: description => ({ role: 'img', 'aria-label': description }),
+              }),
+            )
             .onMount(
               Drawing({
                 variant: model.variant,
@@ -127,6 +139,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                     Aimed: () => Message.Aimed(),
                     Counted: ({ interactions }) => Message.Counted({ interactions }),
                     Ended: () => Message.Ended(),
+                    FoundEgg: () => Message.FoundEgg(),
                     Started: ({ drawable, still }) => Message.Started({ drawable, still }),
                   }),
                 ),

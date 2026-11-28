@@ -88,8 +88,15 @@ example.
 - `makeAnimation(name, scene)` (`Animation.ts`) wraps a scene in a figure
   with play/pause, restart, a scrubber, the time, an INTERACT button when
   the scene takes interactions, and a caption. An empty caption hides the
-  caption. Drop the result into a body:
+  caption; give the variant a `description` then, so screen readers still
+  hear what the drawing shows. Drop the result into a body:
   `NetworkFigure(h, { key: 'network' })`.
+- A scene can hide an Easter egg: its run's `foundEgg` says when the
+  reader's interactions have found it, and the figure emits `FoundEgg`
+  once. A post's hero gets `found`, so it maps that to the egg's id:
+  `hero: (h, found) => [CallingHero(h, { key: 'calling', onEmit: { FoundEgg: () => found('calling') } })]`.
+  Add the egg to `src/domain/Egg.ts` with its name and quest-log hint in
+  `src/content/eggs.ts`.
 - Shared helpers are in `kit.ts`: the seeded `random`, `clamp01`,
   `smooth`, the sheet's colours with `rgba` and `mix`, and `worldOfAim`.
 - Build the timeline once, from a seed, up front, then answer each frame

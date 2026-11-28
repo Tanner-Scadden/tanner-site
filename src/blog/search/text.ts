@@ -2,6 +2,7 @@ import { View } from '@effect/ui'
 import { Html } from '@effect/ui/html'
 import { Array as Arr, Match, Number as Num, Predicate, String as Str } from 'effect'
 
+import type { EggId } from '#domain/Egg'
 import type { Post } from '#domain/Post'
 
 const INLINE = new Set([
@@ -69,5 +70,7 @@ const secondsOf = (node: View.Node<unknown, unknown>): number =>
     Outlet: () => 0,
   })
 
+const heroTags: Html.H<EggId> = tags
+
 export const postSeconds = (post: Post): number =>
-  Num.sumAll(Arr.map(View.children([...post.body(tags), ...(post.hero?.(tags) ?? [])]), secondsOf))
+  Num.sumAll(Arr.map(View.children([...post.body(tags), ...(post.hero?.(heroTags, egg => egg) ?? [])]), secondsOf))
