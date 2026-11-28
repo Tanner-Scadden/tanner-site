@@ -9,6 +9,7 @@ export const EGG_NAMES: Record<EggId, string> = {
   print: 'Paper copy',
   gpu: 'Drafting pens',
   teddy: 'Play time',
+  calling: 'Not now',
 }
 
 export const EGG_HINTS: Record<EggId, string> = {
@@ -20,4 +21,5 @@ export const EGG_HINTS: Record<EggId, string> = {
   print: 'Some things only show up on paper.',
   gpu: 'Look at what this site is built with. One of them can draw.',
   teddy: 'Someone in the house wants to play. Go say hi.',
+  calling: 'Someone on the blog keeps calling. Don’t pick up.',
 }

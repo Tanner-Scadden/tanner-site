@@ -34,6 +34,7 @@ const siteInputs = {
   ClickedThesis: {},
   ClickedWebGpu: {},
   PlayedWithTeddy: {},
+  FoundEggInPost: { egg: EggId },
   StartedGpu: { supported: Schema.Boolean },
   CountedInfected: { infected: Schema.Finite },
   ClickedZombie: { id: Schema.Finite },
@@ -68,6 +69,7 @@ export class Dispatch extends Command.Service<Dispatch>()('site/Dispatch', {
           ClickedThesis: () => thesis.send(ThesisEvent.Clicked),
           ClickedWebGpu: () => gpu.send(GpuEvent.Clicked),
           PlayedWithTeddy: () => eggs.send(EggsEvent.Found({ egg: 'teddy' })),
+          FoundEggInPost: ({ egg }) => eggs.send(EggsEvent.Found({ egg })),
           StartedGpu: ({ supported }) => gpu.send(GpuEvent.Started({ supported })),
           CountedInfected: ({ infected }) => gpu.send(GpuEvent.Counted({ infected })),
           ClickedZombie: ({ id }) => horde.send(HordeEvent.Munched({ id })),
@@ -172,7 +174,7 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) =>
     Post: ({ slug }) =>
       Option.match(findPost(slug), {
         onNone: () => NotFoundPage(h),
-        onSome: post => PostPage(h, post),
+        onSome: post => PostPage(h, post, egg => SiteMessage.FoundEggInPost({ egg })),
       }),
     NotFound: () => NotFoundPage(h),
   }),

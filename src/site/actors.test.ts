@@ -50,7 +50,7 @@ it.layer(site(), { buildPerTest: true })('Eggs', it => {
       assert.isFalse(again.transitioned)
       const after = yield* eggs.snapshot
       assert.deepStrictEqual(after.found, ['console'])
-      yield* toastSays('EGG FOUND: DEVTOOLS · 1/8')
+      yield* toastSays('EGG FOUND: DEVTOOLS · 1/9')
     }),
   )
 
@@ -58,19 +58,19 @@ it.layer(site(), { buildPerTest: true })('Eggs', it => {
     Effect.gen(function* () {
       const eggs = yield* Eggs
       yield* eggs.call(EggsEvent.Found({ egg: 'print' }))
-      yield* toastSays('EGG FOUND: PAPER COPY · 1/8')
+      yield* toastSays('EGG FOUND: PAPER COPY · 1/9')
       yield* TestClock.adjust('3 seconds')
       const toasts = yield* Toasts
       const hidden = yield* toasts.waitFor(state => state._tag === 'Hidden')
       assert.deepStrictEqual(
         hidden,
-        ToastState.Hidden({ last: 'EGG FOUND: PAPER COPY · 1/8' }),
+        ToastState.Hidden({ last: 'EGG FOUND: PAPER COPY · 1/9' }),
       )
     }),
   )
 })
 
-it.layer(site(['manor', 'worlds', 'thesis', 'konami', 'console', 'print', 'teddy']))(
+it.layer(site(['manor', 'worlds', 'thesis', 'konami', 'console', 'print', 'teddy', 'calling']))(
   'Eggs, one short',
   it => {
     it.effect('the last egg finds them all', () =>

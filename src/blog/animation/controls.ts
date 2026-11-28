@@ -21,6 +21,7 @@ export const Report = Schema.TaggedUnion({
   Aimed: {},
   Counted: { interactions: Schema.Finite },
   Ended: {},
+  FoundEgg: {},
 })
 export type Report = typeof Report.Type
 

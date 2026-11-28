@@ -172,6 +172,7 @@ export const playScene = (
     const visible = yield* onScreen(canvas)
     let last = yield* nextFrame
     let counted = 0
+    let found = false
     while (true) {
       yield* visible.await
       yield* Latch.close(wake)
@@ -188,6 +189,10 @@ export const playScene = (
       if (now.interactions.length !== counted) {
         counted = now.interactions.length
         yield* report(Report.cases.Counted.make({ interactions: counted }))
+        if (!found && now.run.foundEgg?.(now.interactions) === true) {
+          found = true
+          yield* report(Report.cases.FoundEgg.make({}))
+        }
       }
       if (ended) yield* report(Report.cases.Ended.make({}))
       if (!now.playing) yield* wake.await

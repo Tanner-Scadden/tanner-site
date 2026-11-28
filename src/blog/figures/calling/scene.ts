@@ -1,44 +1,39 @@
-import { Option } from 'effect'
-
 import { makeAnimation } from '../../animation/Animation.ts'
-import { worldOfAim } from '../../animation/kit.ts'
 import { type Interaction, type Scene, rememberLast } from '../../animation/scene.ts'
 import {
   MAX_PRESSES,
+  PHONE_DOTS,
+  PHONE_LINES,
   SETTLE,
-  SWITCHBOARD_DOTS,
-  SWITCHBOARD_LINES,
-  buildSwitchboard,
-  switchboardMarks,
+  buildPhone,
+  foundEgg,
+  phoneMarks,
   withReader,
-} from './switchboard.ts'
-import { projection } from './world.ts'
-
-const worldOf = worldOfAim(projection)
+} from './phone.ts'
 
 export const callingScene: Scene = {
   variants: [
     {
-      id: 'switchboard',
-      label: 'SWITCHBOARD',
-      caption:
-        'Every cord is someone who knows your work. Enough of them, and a call you never expected will come.',
+      id: 'phone',
+      label: 'THE CALL',
+      caption: '',
+      description: 'A phone fills with contacts, faster as the list grows, until one of the oldest calls.',
       tone: 'hi',
     },
   ],
   run: (_variant, seed) => {
-    const board = buildSwitchboard(seed)
-    const cords = rememberLast((interactions: ReadonlyArray<Interaction>) => withReader(board, interactions, worldOf))
+    const phone = buildPhone(seed)
+    const calls = rememberLast((interactions: ReadonlyArray<Interaction>) => withReader(phone, interactions))
     return {
-      end: board.end,
-      marksAt: (time, width, height, pointer, interactions, held = Option.none()) =>
-        switchboardMarks(board, cords(interactions), time, width, height, pointer, held),
+      end: phone.end,
+      marksAt: (time, width, height, _pointer, interactions) =>
+        phoneMarks(phone, calls(interactions), time, width, height),
+      foundEgg: interactions => foundEgg(calls(interactions)),
     }
   },
-  maxLines: SWITCHBOARD_LINES,
-  maxDots: SWITCHBOARD_DOTS,
-  interact: { hint: 'Grab a cord by its end and pull it out, or plug it in somewhere else', settle: SETTLE, max: MAX_PRESSES },
-  drag: true,
+  maxLines: PHONE_LINES,
+  maxDots: PHONE_DOTS,
+  interact: { hint: 'Answer the call, or decline it', settle: SETTLE, max: MAX_PRESSES },
   once: true,
 }
 

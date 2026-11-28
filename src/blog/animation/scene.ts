@@ -28,6 +28,7 @@ export interface Variant {
   readonly id: string
   readonly label: string
   readonly caption: string
+  readonly description?: string
   readonly tone: 'hi' | 'alarm'
 }
 
@@ -53,6 +54,7 @@ export interface Run {
     interactions: ReadonlyArray<Interaction>,
     held?: Option.Option<Point>,
   ) => Marks
+  readonly foundEgg?: (interactions: ReadonlyArray<Interaction>) => boolean
 }
 
 export interface Scene {

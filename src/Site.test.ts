@@ -82,7 +82,7 @@ it.layer(playLayer('/manor/trophy'), { buildPerTest: true })(
         yield* TestHost.settle
         assert.strictEqual(play.root.model()?.page._tag, 'Home')
         assert.strictEqual(play.root.head().title, 'Tanner Scadden')
-        yield* play.expect(Locator.text('EGGS 1/8')).toExist()
+        yield* play.expect(Locator.text('EGGS 1/9')).toExist()
       }).pipe(Effect.scoped),
     )
   },
@@ -106,7 +106,7 @@ it.layer(playLayer('/'), { buildPerTest: true })('Site at /', it => {
     () =>
       Effect.gen(function* () {
         const play = yield* HtmlPlay.make(Site, propsFinding(['manor']))
-        yield* play.expect(Locator.text('QUEST LOG · 1 OF 8 FOUND')).toExist()
+        yield* play.expect(Locator.text('QUEST LOG · 1 OF 9 FOUND')).toExist()
         yield* play.expect(Locator.text(EGG_NAMES.manor)).toExist()
         yield* play.expect(Locator.text(EGG_HINTS.manor)).toBeAbsent()
         yield* play.expect(Locator.text(EGG_HINTS.worlds)).toExist()

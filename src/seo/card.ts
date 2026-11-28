@@ -8,8 +8,15 @@ export interface CardText {
   readonly corner: string
 }
 
+export interface Art {
+  readonly src: string
+  readonly width: number
+  readonly height: number
+  readonly centre?: number
+}
+
 export interface Card extends CardText {
-  readonly art: Option.Option<{ readonly src: string; readonly width: number; readonly height: number }>
+  readonly art: Option.Option<Art>
 }
 
 export const POST_KICKER = 'TANNER SCADDEN · BLOG'
@@ -21,6 +28,16 @@ export const HOME_CARD = {
 } as const
 
 export const ART = { width: 720, height: 405 } as const
+
+export const CROPPED = { height: 570, centre: 850 } as const
+
+const artHtml = ({ src, width, height, centre }: Art): string =>
+  Option.match(Option.fromNullishOr(centre), {
+    onNone: () =>
+      `<img class="art" src="${src}" style="width:${width}px;height:${height}px;top:${56 + (ART.height - height) / 2}px">`,
+    onSome: middle =>
+      `<img class="art" src="${src}" style="width:${width}px;height:${height}px;top:${(630 - height) / 2}px;right:auto;left:${middle - width / 2}px">`,
+  })
 
 const escape = (text: string) =>
   pipe(text, Str.replaceAll('&', '&amp;'), Str.replaceAll('<', '&lt;'), Str.replaceAll('>', '&gt;'))
@@ -48,11 +65,7 @@ export const cardHtml = (card: Card) => `<!doctype html>
   .corner{position:absolute;right:72px;bottom:62px;font-family:'Space Mono',monospace;font-weight:700;font-size:16px;letter-spacing:.22em;color:#ffd166}
 </style></head>
 <body><div class="card">
-  ${Option.match(card.art, {
-    onNone: () => '',
-    onSome: ({ src, width, height }) =>
-      `<img class="art" src="${src}" style="width:${width}px;height:${height}px;top:${56 + (ART.height - height) / 2}px">`,
-  })}
+  ${Option.match(card.art, { onNone: () => '', onSome: artHtml })}
   <div class="frame"></div>
   <div class="text">
     <div class="kicker">${escape(card.kicker)}</div>
