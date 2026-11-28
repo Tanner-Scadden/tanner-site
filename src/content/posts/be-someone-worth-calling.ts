@@ -109,7 +109,7 @@ export const beSomeoneWorthCalling: Post = {
       'If you’ve been useful to people, you have a safety net you can’t see. Sometimes you have to jump to find out it’s there.',
     ),
     h.p(
-      'Arnold’s book is named after what his dad used to tell him: “Be useful, Arnold.” Give your best even when nobody’s keeping score. That’s what people remember when they’re deciding who to call.',
+      'Schwarzenegger’s book is named after what his dad used to tell him: “Be useful, Arnold.” Give your best even when nobody’s keeping score. That’s what people remember when they’re deciding who to call.',
     ),
     h.p('You don’t control when the call comes. You control whether you’re someone worth calling.'),
     h.blockquote(
