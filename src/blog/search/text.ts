@@ -1,5 +1,8 @@
 import { View } from '@effect/ui'
+import { Html } from '@effect/ui/html'
 import { Array as Arr, String as Str } from 'effect'
+
+import type { Post } from '#domain/Post'
 
 const INLINE = new Set([
   'a',
@@ -43,3 +46,9 @@ const textOf = (node: View.Node<unknown, unknown>): string => {
 // The plain text of a body, one line per block.
 export const plainText = (body: ReadonlyArray<View.Input<unknown, unknown>>): string =>
   Str.trim(Str.replace(/[ \t]*\n\s*/g, '\n')(Arr.join(Arr.map(View.children(body), textOf), '')))
+
+// Only Html's tag builders: enough to read a body without mounting it.
+const tags = Html.tags as unknown as Html.H<never>
+
+// The plain text of a post's body.
+export const postText = (post: Post): string => plainText(post.body(tags))

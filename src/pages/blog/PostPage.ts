@@ -9,7 +9,7 @@ import { SITE_REPO_URL } from '#content/home'
 
 import { proseTags } from '../../blog/components/Prose.ts'
 import { flow } from '../../blog/components/prose.stylex.ts'
-import { neighboursOf, sheetOf } from '../../blog/posts.ts'
+import { minutesOf, neighboursOf, sheetOf } from '../../blog/posts.ts'
 import { blogRoute, href, postRoute } from '../../routes.ts'
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
@@ -24,7 +24,10 @@ export const PostPage = <M>(h: Html.H<M>, post: Post) => {
     h.article(
       sx(h.header, sheet.hero, post.hero !== undefined && styles.withHero).children(
         h.div(
-          sx(h.time, styles.when).attr('datetime', post.date).children(formatDate(post.date)),
+          sx(h.p, styles.when).children(
+            h.time.attr('datetime', post.date).children(formatDate(post.date)),
+            ` · ${BLOG.read(minutesOf(post))}`,
+          ),
           sx(h.h1, styles.title).children(post.title),
           sx(h.p, styles.dek).children(post.summary),
         ),

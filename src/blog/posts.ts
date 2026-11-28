@@ -1,7 +1,9 @@
-import { Array as Arr, Option } from 'effect'
+import { Array as Arr, Option, String as Str } from 'effect'
 
 import { DRAFTS, PUBLISHED } from '#content/blog'
 import { type Post, sheetNo, sortPosts } from '#domain/Post'
+
+import { postText } from './search/text.ts'
 
 export const POSTS: ReadonlyArray<Post> = sortPosts([...PUBLISHED, ...DRAFTS])
 
@@ -24,3 +26,14 @@ export const neighboursOf = (
   const i = Arr.findFirstIndex(POSTS, p => p.slug === post.slug).pipe(Option.getOrElse(() => -1))
   return { newer: Arr.get(POSTS, i - 1), older: Arr.get(POSTS, i + 1) }
 }
+
+// An adult reads about 230 words a minute.
+const WORDS_PER_MINUTE = 230
+
+// The minutes a body of text takes to read, rounded up, and never less
+// than one.
+export const readingMinutes = (text: string): number =>
+  Math.max(1, Math.ceil(Arr.filter(Str.split(text, /\s+/), Str.isNonEmpty).length / WORDS_PER_MINUTE))
+
+// How long the post takes to read.
+export const minutesOf = (post: Post): number => readingMinutes(postText(post))
