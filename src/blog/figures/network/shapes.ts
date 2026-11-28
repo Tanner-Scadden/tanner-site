@@ -1,4 +1,4 @@
-import { Array as Arr, Option } from 'effect'
+import { Array as Arr, Match, Option } from 'effect'
 
 import { GOLD, LINE, type Projection, RED, WARM, mix, rgba } from '../../animation/kit.ts'
 import type { Dot, Line, Point, Rgba, Shapes } from '../../animation/scene.ts'
@@ -23,36 +23,31 @@ const CUT = 0.28
 const cutKeep = (cut: number) => 1 - (1 - CUT) * cut
 const kept = ([r, g, b, a]: Rgba, cut: number): Rgba => [r, g, b, a * cutKeep(cut)]
 
-const edgeStyle = (edge: FrameEdge): { readonly width: number; readonly color: Rgba } => {
-  switch (edge.kind) {
-    case 'yours':
-      return { width: 1.5, color: rgba(GOLD, 0.55 + 0.35 * edge.lit) }
-    case 'circle':
-      return {
-        width: 1 + edge.lit,
-        color: rgba(mix(WARM, GOLD, edge.lit), 0.32 + 0.5 * edge.lit),
-      }
-    case 'remote':
-      return { width: 1, color: rgba(LINE, 0.22 + 0.4 * edge.lit) }
-  }
-}
+const edgeStyle = (edge: FrameEdge): { readonly width: number; readonly color: Rgba } =>
+  Match.value(edge).pipe(
+    Match.discriminatorsExhaustive('kind')({
+      yours: ({ lit }) => ({ width: 1.5, color: rgba(GOLD, 0.55 + 0.35 * lit) }),
+      circle: ({ lit }) => ({
+        width: 1 + lit,
+        color: rgba(mix(WARM, GOLD, lit), 0.32 + 0.5 * lit),
+      }),
+      remote: ({ lit }) => ({ width: 1, color: rgba(LINE, 0.22 + 0.4 * lit) }),
+    }),
+  )
 
-const dotStyle = (dot: FrameDot): { readonly radius: number; readonly glow: number; readonly color: Rgba } => {
-  switch (dot.kind) {
-    case 'you':
-      return { radius: 7, glow: 14, color: rgba(GOLD, 1) }
-    case 'met':
-      return { radius: 4.5, glow: 10 * dot.lit, color: rgba(GOLD, 0.95) }
-    case 'circle':
-      return {
-        radius: 3.2 + dot.lit,
-        glow: 8 * dot.lit,
-        color: rgba(mix(WARM, GOLD, dot.lit), 0.85),
-      }
-    case 'stranger':
-      return { radius: 3, glow: 0, color: rgba(mix(LINE, WARM, dot.lit), 0.55 + 0.3 * dot.lit) }
-  }
-}
+const dotStyle = (dot: FrameDot): { readonly radius: number; readonly glow: number; readonly color: Rgba } =>
+  Match.value(dot).pipe(
+    Match.discriminatorsExhaustive('kind')({
+      you: () => ({ radius: 7, glow: 14, color: rgba(GOLD, 1) }),
+      met: ({ lit }) => ({ radius: 4.5, glow: 10 * lit, color: rgba(GOLD, 0.95) }),
+      circle: ({ lit }) => ({
+        radius: 3.2 + lit,
+        glow: 8 * lit,
+        color: rgba(mix(WARM, GOLD, lit), 0.85),
+      }),
+      stranger: ({ lit }) => ({ radius: 3, glow: 0, color: rgba(mix(LINE, WARM, lit), 0.55 + 0.3 * lit) }),
+    }),
+  )
 
 // Scale and centre the world box into a canvas this big.
 export const projection: Projection = (width, height) => {

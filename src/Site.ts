@@ -1,6 +1,6 @@
 import { Command, Component, Head, Router, Subscription, UiSchema } from '@effect/ui'
 import { Html, HtmlHead, HtmlSubscription } from '@effect/ui/html'
-import { Effect, Layer, Option, Schema, Stream, String as Str } from 'effect'
+import { Effect, Layer, Match, Option, Schema, Stream, String as Str } from 'effect'
 
 import { EggId } from '#domain/Egg'
 
@@ -23,7 +23,7 @@ import { SiteRoute } from './routes.ts'
 import { documentStyles } from './site/document.ts'
 import { SiteSnapshot, initialSnapshot, siteActors, siteSnapshots } from './site/actors.ts'
 import { Keys, KeysEvent } from './site/machines/Keys.ts'
-import { Page, PageEvent, PageState } from './site/machines/Page.ts'
+import { Page, PageEvent, PageState, pageOf } from './site/machines/Page.ts'
 import { classOf } from './styles/sx.ts'
 import { paper } from './styles/tokens.stylex.ts'
 import { Thesis, ThesisEvent, thesisText } from './thesis/machines/Thesis.ts'
@@ -133,43 +133,50 @@ const titleOf = (page: PageState): string =>
     NotFound: () => 'Not found · Tanner Scadden',
   })
 
-const page = SiteDef.fragment((h, model: SiteSnapshot) => {
-  switch (model.page._tag) {
-    case 'Home':
-      return HomePage(h, {
+const page = SiteDef.fragment((h, model: SiteSnapshot) =>
+  Match.valueTags(model.page, {
+    Home: () =>
+      HomePage(h, {
         eggs: model.eggs,
         thesis: thesisText(model.thesis),
         clickedThesis: SiteMessage.ClickedThesis(),
         clickedWebGpu: SiteMessage.ClickedWebGpu(),
         playedWithTeddy: SiteMessage.PlayedWithTeddy(),
         still: h.props.reducedMotion,
-      })
-    case 'Manor':
-      return ManorPage(h, {
-        room: model.page.room,
+      }),
+    Manor: ({ room }) =>
+      ManorPage(h, {
+        room,
         rattles: model.rattles,
         reducedMotion: h.props.reducedMotion,
-      })
-    case 'Rest':
-      return RestPage(h)
-    case 'Blog':
-      return BlogPage(h)
-    case 'Post':
-      return Option.match(findPost(model.page.slug), {
+      }),
+    Rest: () => RestPage(h),
+    Blog: () => BlogPage(h),
+    Post: ({ slug }) =>
+      Option.match(findPost(slug), {
         onNone: () => NotFoundPage(h),
         onSome: post => PostPage(h, post),
-      })
-    case 'NotFound':
-      return NotFoundPage(h)
-  }
-})
+      }),
+    NotFound: () => NotFoundPage(h),
+  }),
+)
 
 export const SiteNoDeps = SiteDef.make({
   init: $ => initialSnapshot($.props),
   update: ($, message) =>
-    message._tag === 'ChangedActors'
-      ? message.snapshot
-      : $.run(Dispatch.make({ input: message })),
+    SiteMessage.matchOrElse(
+      message,
+      {
+        // The page shown follows the route the root holds, not the Page
+        // actor's copy, which hears of a new route a step later.
+        ChangedActors: ({ snapshot }) => ({ ...snapshot, page: $.model.page }),
+        // The new page goes in with this update, so it's in when the Router
+        // scrolls to the top.
+        Navigated: input =>
+          $.evolve({ page: pageOf(input.route) }).run(Dispatch.make({ input })),
+      },
+      input => $.run(Dispatch.make({ input })),
+    ),
   subscriptions: $ => [
     Router.subscription(SiteRoute, $.props.route, route =>
       SiteMessage.Navigated({ route }),
