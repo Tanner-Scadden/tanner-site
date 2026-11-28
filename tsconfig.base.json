@@ -202,6 +202,7 @@
           },
           {
             "include": [
+              "src/gpu/*.ts",
               "src/blueprint/webgpu/renderer.ts",
               "src/blueprint/webgpu/shaders.ts",
               "src/work/webgpu/renderer.ts",

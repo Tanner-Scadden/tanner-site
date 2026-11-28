@@ -1,13 +1,10 @@
-import { Data, Effect, Queue, Ref, type Scope, Stream } from 'effect'
+import { Data, Effect, Ref, type Scope, Stream } from 'effect'
 
-import {
-  type GpuUnavailable,
-  acquireBuffer,
-  acquireContext,
-  acquireDevice,
-  nextFrame,
-  requestAdapter,
-} from '../../blueprint/webgpu/renderer.ts'
+import { fitCanvas } from '../../gpu/canvas.ts'
+import { type GpuUnavailable, acquireBuffer, acquireGpu, markDrawing } from '../../gpu/device.ts'
+import { nextFrame, stepBetween, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
+import { fontsReady, resizes, visibility } from '../../gpu/observe.ts'
+import { bound, renderPipeline, whole } from '../../gpu/pipeline.ts'
 import {
   type Draft,
   MAX_WALLS,
@@ -74,19 +71,12 @@ export interface HouseSettings {
 }
 
 const VIEW_FLOATS = 32
-const MAX_PIXEL_RATIO = 2
 const MAX_ROOMS = ROOM_ORDER.length
 // Five dots a paw print.
 const MAX_DOTS = PRINTS * 2 * 5
 const MAX_SPRITES = 2
 const MAX_BARKS = 3
-const LONGEST_STEP_S = 0.05
 const DEPTH_FORMAT: GPUTextureFormat = 'depth24plus'
-
-const BLEND: GPUBlendState = {
-  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-}
 
 const rectOf = (el: Element | null, origin: DOMRect) => {
   if (el === null) return { x: 0, y: 0, w: 0, h: 0 }
@@ -117,9 +107,7 @@ interface Depth {
 
 const makeGpu = (canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
-    const adapter = yield* requestAdapter
-    const device = yield* acquireDevice(adapter)
-    const { context, format } = yield* acquireContext(canvas, device, 'premultiplied')
+    const { device, context, format } = yield* acquireGpu(canvas, 'premultiplied')
 
     const storage = (size: number) =>
       acquireBuffer(device, { size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST })
@@ -183,29 +171,19 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
         depthCompare?: GPUCompareFunction
         writeMask?: number
       } = {},
-    ) => {
-      const module = device.createShaderModule({ code })
-      return device.createRenderPipeline({
-        layout: 'auto',
-        vertex: { module, entryPoint: 'vs' },
-        fragment: { module, entryPoint: fragment, targets: [{ format, blend: BLEND, writeMask }] },
-        primitive: { topology: 'triangle-list' },
-        depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: depthWrite, depthCompare },
+    ) =>
+      renderPipeline({
+        device,
+        format,
+        code,
+        fragment,
+        writeMask,
+        depth: { format: DEPTH_FORMAT, depthWriteEnabled: depthWrite, depthCompare },
       })
-    }
-    const bind = (
-      pipeline: GPURenderPipeline,
-      resources: ReadonlyArray<GPUBindingResource>,
-    ) => ({
-      pipeline,
-      group: device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: resources.map((resource, binding) => ({ binding, resource })),
-      }),
-    })
-    const buffer = (b: GPUBuffer): GPUBindingResource => ({ buffer: b })
+    const bind = (pipeline: GPURenderPipeline, resources: ReadonlyArray<GPUBindingResource>) =>
+      bound({ device, pipeline, resources })
     const spriteCode = spritesShader(COLS, ROWS)
-    const spriteResources = [buffer(viewBuffer), buffer(spriteBuffer), sheet.createView(), sampler]
+    const spriteResources = [whole(viewBuffer), whole(spriteBuffer), sheet.createView(), sampler]
 
     return {
       device,
@@ -223,16 +201,16 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       dotData: new Float32Array(MAX_DOTS * DOT_FLOATS),
       spriteBuffer,
       spriteData: new Float32Array(MAX_SPRITES * SPRITE_FLOATS),
-      floor: bind(pipeline(FLOOR), [buffer(viewBuffer)]),
-      rooms: bind(pipeline(ROOMS), [buffer(viewBuffer), buffer(roomBuffer)]),
-      strokes: bind(pipeline(STROKES), [buffer(viewBuffer), buffer(wallBuffer)]),
+      floor: bind(pipeline(FLOOR), [whole(viewBuffer)]),
+      rooms: bind(pipeline(ROOMS), [whole(viewBuffer), whole(roomBuffer)]),
+      strokes: bind(pipeline(STROKES), [whole(viewBuffer), whole(wallBuffer)]),
       // The walls give way to whatever pet stands in front of them.
       panels: bind(pipeline(PANELS, { depthCompare: 'less' }), [
-        buffer(viewBuffer),
-        buffer(wallBuffer),
+        whole(viewBuffer),
+        whole(wallBuffer),
       ]),
-      barks: bind(pipeline(LINES), [buffer(viewBuffer), buffer(barkBuffer)]),
-      dots: bind(pipeline(DOTS), [buffer(viewBuffer), buffer(dotBuffer)]),
+      barks: bind(pipeline(LINES), [whole(viewBuffer), whole(barkBuffer)]),
+      dots: bind(pipeline(DOTS), [whole(viewBuffer), whole(dotBuffer)]),
       solids: bind(
         pipeline(spriteCode, {
           fragment: 'solid',
@@ -247,22 +225,6 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
   })
 
 type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
-
-const fitCanvas = (canvas: HTMLCanvasElement, maxSize: number): number => {
-  const width = Math.max(1, canvas.clientWidth)
-  const height = Math.max(1, canvas.clientHeight)
-  const dpr = Math.min(
-    window.devicePixelRatio || 1,
-    MAX_PIXEL_RATIO,
-    maxSize / width,
-    maxSize / height,
-  )
-  const w = Math.max(1, Math.floor(width * dpr))
-  const h = Math.max(1, Math.floor(height * dpr))
-  if (canvas.width !== w) canvas.width = w
-  if (canvas.height !== h) canvas.height = h
-  return w / width
-}
 
 const depthView = (gpu: Gpu, canvas: HTMLCanvasElement): GPUTextureView => {
   const current = gpu.depth.texture
@@ -374,7 +336,7 @@ interface Scene {
 
 const render = (gpu: Gpu, canvas: HTMLCanvasElement, { plan, draft, pets, view, lift, now }: Scene) =>
   Effect.sync(() => {
-    const dpr = fitCanvas(canvas, gpu.device.limits.maxTextureDimension2D)
+    const dpr = fitCanvas(canvas, { round: Math.floor, maxSize: gpu.device.limits.maxTextureDimension2D }).ratio
     const { house } = plan.rooms
     gpu.viewData.set([canvas.clientWidth, canvas.clientHeight, dpr, now / 1000])
     gpu.viewData.set(columns(view.gpu), 4)
@@ -509,34 +471,6 @@ type Input = Data.TaggedEnum<{
 }>
 const Input = Data.taggedEnum<Input>()
 
-const shown = (el: Element): Stream.Stream<Input> =>
-  Stream.callback<Input>(queue =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const observer = new IntersectionObserver(entries => {
-          for (const entry of entries) {
-            Queue.offerUnsafe(queue, Input.Shown({ visible: entry.isIntersecting }))
-          }
-        })
-        observer.observe(el)
-        return observer
-      }),
-      observer => Effect.sync(() => observer.disconnect()),
-    ),
-  )
-
-const resized = (elements: ReadonlyArray<Element>): Stream.Stream<Input> =>
-  Stream.callback<Input>(queue =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const observer = new ResizeObserver(() => Queue.offerUnsafe(queue, Input.Moved()))
-        for (const el of elements) observer.observe(el)
-        return observer
-      }),
-      observer => Effect.sync(() => observer.disconnect()),
-    ),
-  )
-
 // A mouse over the house, or a finger on it, calls Teddy over.
 const pointed = (canvas: HTMLCanvasElement, house: HTMLElement): Stream.Stream<Input> => {
   const at = (event: PointerEvent): Input => {
@@ -567,20 +501,25 @@ const pointed = (canvas: HTMLCanvasElement, house: HTMLElement): Stream.Stream<I
 
 // Marks the house while the GPU draws it, so the CSS walls step aside and
 // the labels wait for the walls. Closing the scope hands both back to CSS,
-// and lays the plan flat again.
-const markHouse = (house: HTMLElement, plan: HTMLElement) =>
-  Effect.acquireRelease(
-    Effect.sync(() => {
-      house.dataset['gpu'] = 'on'
+// and lays the plan flat again. A lost device hands the walls back too,
+// flat, so the plan still reads.
+const markHouse = (house: HTMLElement, plan: HTMLElement, device: GPUDevice) =>
+  Effect.gen(function* () {
+    yield* Effect.sync(() => {
       house.dataset['drafting'] = ''
-    }),
-    () =>
-      Effect.sync(() => {
-        delete house.dataset['gpu']
+    })
+    yield* markDrawing({
+      element: house,
+      device,
+      lost: Effect.sync(() => {
+        plan.style.transform = ''
+      }),
+      released: Effect.sync(() => {
         delete house.dataset['drafting']
         plan.style.transform = ''
       }),
-  )
+    })
+  })
 
 // Starts the drawing on `canvas`, which sits inside the house figure, and
 // returns once it's running. It follows `changes` and the page for as long
@@ -612,8 +551,6 @@ export const runHouseDrawing = (
     const last = yield* Ref.make<number | null>(null)
     // The plan's CSS transform, as last set.
     const transform = yield* Ref.make('')
-    const wakes = yield* Queue.sliding<void>(1)
-    const poke = Queue.offer(wakes, undefined)
 
     // Draws frames while anything moves, then returns.
     const animate = Effect.gen(function* () {
@@ -629,7 +566,7 @@ export const runHouseDrawing = (
         const done = drafted({ since, still })
         const lift = liftOf({ since, still })
         const before = yield* Ref.getAndSet(last, now)
-        const dt = before === null ? 0 : Math.min((now - before) / 1000, LONGEST_STEP_S)
+        const dt = stepBetween({ before, now })
 
         // The house leans toward the pointer once it's up.
         const at = yield* Ref.get(pointer)
@@ -698,38 +635,20 @@ export const runHouseDrawing = (
 
     const inputs = Stream.mergeAll(
       [
-        shown(house),
+        visibility(house).pipe(Stream.map(next => Input.Shown({ visible: next }))),
         pointed(canvas, house),
-        resized([house, planEl]),
+        resizes([house, planEl]).pipe(Stream.as(Input.Moved())),
         Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Moved())),
         // Web fonts landing can reflow every room.
-        Stream.fromEffect(
-          Effect.promise(() => document.fonts.ready).pipe(Effect.as(Input.Moved())),
-        ),
+        fontsReady.pipe(Stream.as(Input.Moved())),
       ],
       { concurrency: 'unbounded' },
     )
 
-    yield* Effect.forkScoped(Effect.forever(Effect.andThen(Queue.take(wakes), animate)))
-    yield* Effect.forkScoped(
-      Stream.runForEach(inputs, input => Effect.andThen(handle(input), poke)),
-    )
-    yield* Effect.forkScoped(
-      Stream.runForEach(changes, next => Effect.andThen(Ref.set(settings, next), poke)),
-    )
+    const { wake } = yield* wakeToDraw(animate)
+    yield* wakeOn({ stream: inputs, wake, handle })
+    yield* wakeOn({ stream: changes, wake, handle: next => Ref.set(settings, next) })
 
-    // A lost device hands the walls back to CSS, flat, so the plan still
-    // reads.
-    yield* Effect.forkScoped(
-      Effect.andThen(
-        Effect.promise(() => gpu.device.lost),
-        Effect.sync(() => {
-          house.dataset['gpu'] = 'lost'
-          planEl.style.transform = ''
-        }),
-      ),
-    )
-
-    yield* markHouse(house, planEl)
-    yield* poke
+    yield* markHouse(house, planEl, gpu.device)
+    yield* wake
   })

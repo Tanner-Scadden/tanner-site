@@ -2,14 +2,25 @@ import {
   Data,
   Duration,
   Effect,
-  Queue,
   Random,
   Ref,
-  Schema,
   type Scope,
   Stream,
 } from 'effect'
 
+import { fitCanvas } from '../../gpu/canvas.ts'
+import {
+  type GpuUnavailable,
+  acquireBuffer,
+  acquireContext,
+  acquireDevice,
+  markDrawing,
+  requestAdapter,
+  unavailable,
+} from '../../gpu/device.ts'
+import { nextFrame, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
+import { resizes } from '../../gpu/observe.ts'
+import { bound, renderPipeline, whole } from '../../gpu/pipeline.ts'
 import {
   type Frame,
   MINOR,
@@ -37,66 +48,12 @@ import {
   WORKGROUP,
 } from './shaders.ts'
 
-export class GpuUnavailable extends Schema.TaggedError<
-  GpuUnavailable,
-  { readonly brand: unique symbol }
->()('GpuUnavailable', {
-  reason: Schema.Literals(['no-webgpu', 'no-adapter', 'no-device', 'no-context']),
-}) {}
-
-const unavailable = (reason: typeof GpuUnavailable.fields.reason.Type) =>
-  GpuUnavailable.make({ reason })
-
 const FRAME_FLOATS = 16
 // How fast a pen draws, in CSS px per second.
 const PEN_SPEED = { min: 15, max: 125 }
-const MAX_PIXEL_RATIO = 2
 const PENS_BYTES = PARTICLE_COUNT * PARTICLE_FLOATS * 4
 // How often the page counts the zombies, for the INFECTED counter.
 const COUNT_EVERY = Duration.millis(250)
-
-// ---------------------------------------------------------------------------
-// Acquiring the GPU
-// ---------------------------------------------------------------------------
-
-export const requestAdapter = Effect.gen(function* () {
-  if (!('gpu' in navigator)) return yield* unavailable('no-webgpu')
-  const adapter = yield* Effect.promise(() =>
-    navigator.gpu.requestAdapter({ powerPreference: 'low-power' }),
-  )
-  return adapter ?? (yield* unavailable('no-adapter'))
-})
-
-export const acquireDevice = (adapter: GPUAdapter) =>
-  Effect.acquireRelease(
-    Effect.tryPromise({
-      try: () => adapter.requestDevice(),
-      catch: () => unavailable('no-device'),
-    }),
-    device => Effect.sync(() => device.destroy()),
-  )
-
-export const acquireContext = (
-  canvas: HTMLCanvasElement,
-  device: GPUDevice,
-  alphaMode: GPUCanvasAlphaMode = 'opaque',
-) =>
-  Effect.acquireRelease(
-    Effect.gen(function* () {
-      const context = canvas.getContext('webgpu')
-      if (context === null) return yield* unavailable('no-context')
-      const format = navigator.gpu.getPreferredCanvasFormat()
-      context.configure({ device, format, alphaMode })
-      return { context, format }
-    }),
-    ({ context }) => Effect.sync(() => context.unconfigure()),
-  )
-
-export const acquireBuffer = (device: GPUDevice, descriptor: GPUBufferDescriptor) =>
-  Effect.acquireRelease(
-    Effect.sync(() => device.createBuffer(descriptor)),
-    buffer => Effect.sync(() => buffer.destroy()),
-  )
 
 // The pens start somewhere on a large field, so they never need reseeding
 // when the window grows.
@@ -162,11 +119,6 @@ const cureEveryone = (gpu: Gpu) =>
     }
   })
 
-const PEN_BLEND: GPUBlendState = {
-  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-}
-
 // Everything a frame needs, built once per canvas.
 const makeGpu = (canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
@@ -187,43 +139,22 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       size: PENS_BYTES,
       usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
     })
-    const module = (code: string) => device.createShaderModule({ code })
-    const backgroundModule = module(BACKGROUND)
-    const simulateModule = module(SIMULATE)
-    const pensModule = module(PENS)
-
+    // The grid paints every pixel, so it skips blending, which
+    // `renderPipeline` always turns on.
+    const backgroundModule = device.createShaderModule({ code: BACKGROUND })
     const background = device.createRenderPipeline({
       layout: 'auto',
       vertex: { module: backgroundModule, entryPoint: 'vs' },
       fragment: { module: backgroundModule, entryPoint: 'fs', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
     })
+    const simulateModule = device.createShaderModule({ code: SIMULATE })
     const compute = (entryPoint: string) =>
       device.createComputePipeline({
         layout: 'auto',
         compute: { module: simulateModule, entryPoint },
       })
-    const simulate = compute('step')
-    const infect = compute('infect')
-    const draw = device.createRenderPipeline({
-      layout: 'auto',
-      vertex: { module: pensModule, entryPoint: 'vs' },
-      fragment: {
-        module: pensModule,
-        entryPoint: 'fs',
-        targets: [{ format, blend: PEN_BLEND }],
-      },
-      primitive: { topology: 'triangle-list' },
-    })
-
-    const bind = (
-      pipeline: GPURenderPipeline | GPUComputePipeline,
-      buffers: ReadonlyArray<GPUBuffer>,
-    ) =>
-      device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })),
-      })
+    const pens = [whole(frameBuffer), whole(particleBuffer)]
 
     return {
       device,
@@ -232,18 +163,16 @@ const makeGpu = (canvas: HTMLCanvasElement) =>
       particleBuffer,
       readback,
       frameData: new Float32Array(FRAME_FLOATS),
-      background: { pipeline: background, group: bind(background, [frameBuffer]) },
+      background: bound({ device, pipeline: background, resources: [whole(frameBuffer)] }),
       // Moving first, then biting, as two dispatches: the second sees
       // every pen where the first left it.
-      infect: {
-        pipeline: infect,
-        group: bind(infect, [frameBuffer, particleBuffer]),
-      },
-      simulate: {
-        pipeline: simulate,
-        group: bind(simulate, [frameBuffer, particleBuffer]),
-      },
-      pens: { pipeline: draw, group: bind(draw, [frameBuffer, particleBuffer]) },
+      infect: bound({ device, pipeline: compute('infect'), resources: pens }),
+      simulate: bound({ device, pipeline: compute('step'), resources: pens }),
+      pens: bound({
+        device,
+        pipeline: renderPipeline({ device, format, code: PENS }),
+        resources: pens,
+      }),
     }
   })
 
@@ -274,20 +203,9 @@ const countInfected = (gpu: Gpu) =>
 // Drawing a frame
 // ---------------------------------------------------------------------------
 
-// The canvas backing store follows its CSS size times the pixel ratio.
-const fitCanvas = (canvas: HTMLCanvasElement) => {
-  const dpr = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
-  const width = Math.max(1, Math.round(canvas.clientWidth * dpr))
-  const height = Math.max(1, Math.round(canvas.clientHeight * dpr))
-  if (canvas.width !== width) canvas.width = width
-  if (canvas.height !== height) canvas.height = height
-}
-
 const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number) =>
   Effect.sync(() => {
-    fitCanvas(canvas)
-    const width = canvas.clientWidth
-    const height = canvas.clientHeight
+    const { width, height, ratio } = fitCanvas(canvas)
     const { state } = frame
     gpu.frameData.set([
       width,
@@ -300,7 +218,7 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
       extentFor(height),
       state.warp,
       state.flow,
-      canvas.width / Math.max(width, 1),
+      ratio,
       frame.dt,
       time / 1000,
       state.seed,
@@ -342,12 +260,6 @@ const render = (gpu: Gpu, canvas: HTMLCanvasElement, frame: Frame, time: number)
     gpu.device.queue.submit([encoder.finish()])
   })
 
-// The next animation frame's time, cancelled if the fiber is interrupted.
-export const nextFrame = Effect.callback<number>(resume => {
-  const id = requestAnimationFrame(now => resume(Effect.succeed(now)))
-  return Effect.sync(() => cancelAnimationFrame(id))
-})
-
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
@@ -361,18 +273,6 @@ type Input = Data.TaggedEnum<{
   Changed: {}
 }>
 const Input = Data.taggedEnum<Input>()
-
-const resized = (canvas: HTMLCanvasElement): Stream.Stream<Input> =>
-  Stream.callback<Input>(queue =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const observer = new ResizeObserver(() => Queue.offerUnsafe(queue, Input.Changed()))
-        observer.observe(canvas)
-        return observer
-      }),
-      observer => Effect.sync(() => observer.disconnect()),
-    ),
-  )
 
 const sources = (canvas: HTMLCanvasElement): ReadonlyArray<Stream.Stream<Input>> => [
   Stream.fromEventListener<PointerEvent>(window, 'pointermove', { passive: true }).pipe(
@@ -392,7 +292,7 @@ const sources = (canvas: HTMLCanvasElement): ReadonlyArray<Stream.Stream<Input>>
     Stream.as(Input.Changed()),
   ),
   Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Changed())),
-  resized(canvas),
+  resizes([canvas]).pipe(Stream.as(Input.Changed())),
 ]
 
 const inputs = (canvas: HTMLCanvasElement) =>
@@ -404,18 +304,6 @@ const pointerAfter = (pointer: Pointer) =>
     Left: () => ({ ...pointer, inside: false }),
     Changed: () => pointer,
   })
-
-// Marks the canvas while the GPU draws it, so CSS and tests can tell.
-const markCanvas = (canvas: HTMLCanvasElement) =>
-  Effect.acquireRelease(
-    Effect.sync(() => {
-      canvas.dataset['gpu'] = 'on'
-    }),
-    () =>
-      Effect.sync(() => {
-        delete canvas.dataset['gpu']
-      }),
-  )
 
 // ---------------------------------------------------------------------------
 // The blueprint
@@ -438,11 +326,7 @@ export const runBlueprint = (
     const settings = yield* Ref.make(initial)
     const pointer = yield* Ref.make(NO_POINTER)
     const state = yield* Ref.make(initialFrame(initial))
-    // One pending wake is enough: the loop reads the latest values anyway.
-    const wakes = yield* Queue.sliding<void>(1)
     const started = performance.now()
-
-    const poke = Queue.offer(wakes, undefined)
     // The last count told, so the page only hears when it changes.
     const told = yield* Ref.make(FIRST_INFECTED)
 
@@ -464,21 +348,20 @@ export const runBlueprint = (
       }
     })
 
-    yield* Effect.forkScoped(Effect.forever(Effect.andThen(Queue.take(wakes), animate)))
+    const { wake: poke } = yield* wakeToDraw(animate)
 
-    yield* Effect.forkScoped(
-      Stream.runForEach(inputs(canvas), input =>
-        Effect.andThen(
-          Ref.update(pointer, at => pointerAfter(at)(input)),
-          poke,
-        ),
-      ),
-    )
+    yield* wakeOn({
+      stream: inputs(canvas),
+      wake: poke,
+      handle: input => Ref.update(pointer, at => pointerAfter(at)(input)),
+    })
 
     // Turning the pens on starts a new outbreak by the toggle; turning them
     // off cures everyone, so they fade out yellow.
-    yield* Effect.forkScoped(
-      Stream.runForEach(changes, next =>
+    yield* wakeOn({
+      stream: changes,
+      wake: poke,
+      handle: next =>
         Effect.gen(function* () {
           const before = yield* Ref.get(settings)
           if (next.flow && !before.flow) {
@@ -487,10 +370,8 @@ export const runBlueprint = (
           }
           if (!next.flow && before.flow) yield* cureEveryone(gpu)
           yield* Ref.set(settings, next)
-          yield* poke
         }),
-      ),
-    )
+    })
 
     // Counts the zombies a few times a second while the pens run.
     yield* Effect.forkScoped(
@@ -507,15 +388,6 @@ export const runBlueprint = (
     )
 
     // A lost device leaves the CSS grid showing, so the page still looks right.
-    yield* Effect.forkScoped(
-      Effect.andThen(
-        Effect.promise(() => gpu.device.lost),
-        Effect.sync(() => {
-          canvas.dataset['gpu'] = 'lost'
-        }),
-      ),
-    )
-
-    yield* markCanvas(canvas)
+    yield* markDrawing({ element: canvas, device: gpu.device })
     yield* poke
   })

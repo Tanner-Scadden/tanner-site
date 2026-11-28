@@ -1,20 +1,9 @@
-import { Number as Num } from 'effect'
-
+import { clamp01 } from '../../gpu/math.ts'
 import type { Point, Rgba } from './scene.ts'
 
-// Mulberry32: a small seeded generator, so a run replays from its seed.
-export const random = (seed: number) => {
-  let state = seed >>> 0
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-export const clamp01 = (t: number): number => Num.clamp(t, { minimum: 0, maximum: 1 })
+// The figures take these from here, but every drawing on the site shares
+// them.
+export { clamp01, random } from '../../gpu/math.ts'
 
 // Smoothstep, so ramps start and end gently.
 export const smooth = (t: number): number => {

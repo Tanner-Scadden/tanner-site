@@ -1,13 +1,13 @@
 import { Effect, Latch, Option, Ref, Schema, Stream, String as Str } from 'effect'
 
-import { nextFrame } from '../../blueprint/webgpu/renderer.ts'
+import { fitCanvas } from '../../gpu/canvas.ts'
+import { nextFrame, stepBetween, wakeOn } from '../../gpu/loop.ts'
+import { prefersStill, resizes, visibility } from '../../gpu/observe.ts'
 import { type Clock, follow, interact, opacityAt, startClock, tick } from './clock.ts'
 import { type Controls, type Report, SLIDER_STEPS } from './controls.ts'
 import { clamp01 } from './kit.ts'
 import type { Point, Scene } from './scene.ts'
 import { painterFor } from './webgpu/painters.ts'
-
-const MAX_PIXEL_RATIO = 2
 
 // Seconds as m:ss.
 const clockOf = (seconds: number): string => {
@@ -15,47 +15,16 @@ const clockOf = (seconds: number): string => {
   return `${Math.floor(whole / 60)}:${Str.padStart(2, '0')(String(whole % 60))}`
 }
 
-// The canvas's CSS size, with its backing store matched to the screen.
-const fit = (canvas: HTMLCanvasElement) => {
-  const rect = canvas.getBoundingClientRect()
-  const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO)
-  const width = Math.max(1, Math.round(rect.width * ratio))
-  const height = Math.max(1, Math.round(rect.height * ratio))
-  if (canvas.width !== width) canvas.width = width
-  if (canvas.height !== height) canvas.height = height
-  return { width: rect.width, height: rect.height }
-}
-
-// A latch that's open while the canvas is on screen.
+// A latch that's open while the canvas is on screen. The observer starts
+// watching straight away, before the loop first waits on it.
 const onScreen = (canvas: HTMLCanvasElement) =>
   Effect.gen(function* () {
     const latch = yield* Latch.make(false)
-    yield* Effect.acquireRelease(
-      Effect.sync(() => {
-        const observer = new IntersectionObserver(entries => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) Latch.openUnsafe(latch)
-            else Latch.closeUnsafe(latch)
-          }
-        })
-        observer.observe(canvas)
-        return observer
-      }),
-      observer => Effect.sync(() => observer.disconnect()),
+    yield* Stream.runForEach(visibility(canvas), seen => (seen ? Latch.open(latch) : Latch.close(latch))).pipe(
+      Effect.forkScoped({ startImmediately: true }),
     )
     return latch
   })
-
-// Opens `wake` every time the canvas changes size.
-const wakeOnResize = (canvas: HTMLCanvasElement, wake: Latch.Latch) =>
-  Effect.acquireRelease(
-    Effect.sync(() => {
-      const observer = new ResizeObserver(() => Latch.openUnsafe(wake))
-      observer.observe(canvas)
-      return observer
-    }),
-    observer => Effect.sync(() => observer.disconnect()),
-  )
 
 // Clicking the drawing interacts, aimed where it was clicked, and tells the
 // figure so it plays on. A click on a full run changes nothing.
@@ -175,7 +144,7 @@ export const playScene = (
   report: (report: Report) => Effect.Effect<unknown>,
 ) =>
   Effect.gen(function* () {
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const still = prefersStill()
     const painter = yield* painterFor(canvas, scene.maxLines, scene.maxDots)
     yield* report({ _tag: 'Started', drawable: true, still })
 
@@ -187,7 +156,7 @@ export const playScene = (
     const held = yield* Ref.make(Option.none<Point>())
 
     const draw = (now: Clock, at: Option.Option<Point>, holding: Option.Option<Point>) => {
-      const size = fit(canvas)
+      const size = fitCanvas(canvas, { measure: 'rect' })
       const shapes = now.run.shapesAt(now.time, size.width, size.height, at, now.interactions, holding)
       painter.paint(shapes, size.width, size.height, opacityAt(scene, now))
       Option.map(slider, input => {
@@ -203,7 +172,7 @@ export const playScene = (
 
     // Anything that changes what's on the canvas wakes a paused drawing.
     const wake = yield* Latch.make(true)
-    yield* wakeOnResize(canvas, wake)
+    yield* wakeOn({ stream: resizes([canvas]), wake: Effect.asVoid(Latch.open(wake)) })
     yield* followPointer(canvas, pointer, wake)
     if (scene.interact !== undefined) {
       if (scene.drag === true) yield* dragOnPointer(scene, canvas, clock, held, wake, report)
@@ -221,7 +190,8 @@ export const playScene = (
       yield* Latch.close(wake)
       const frame = yield* nextFrame
       // Seconds since the last frame, capped so a hidden tab doesn't jump.
-      const seconds = Math.min(Math.max((frame - last) / 1000, 0), 0.1)
+      // Scenes are timed to a looser cap than the core's.
+      const seconds = stepBetween({ before: last, now: frame, longest: 0.1 })
       last = frame
       const [ended, now] = yield* Ref.modify(clock, c => {
         const next = c.playing ? tick(scene, c, seconds) : c

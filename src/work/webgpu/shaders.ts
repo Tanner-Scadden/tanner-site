@@ -1,3 +1,5 @@
+import { HIGHLIGHT, INK, LINE, OUT, OVER, PAINT, QUAD, SEGMENT, TO_CLIP } from '../../gpu/wgsl.ts'
+
 const COMMON = /* wgsl */ `
 struct View {
   size: vec2f,
@@ -7,36 +9,15 @@ struct View {
 
 @group(0) @binding(0) var<uniform> view: View;
 
-const INK = vec3f(220.0, 235.0, 255.0) / 255.0;
-const HIGHLIGHT = vec3f(255.0, 209.0, 102.0) / 255.0;
-
-// Coverage of a line of the given width, d px from its middle.
-fn line(d: f32, width: f32) -> f32 {
-  return clamp((width * 0.5 - d) * view.dpr + 0.5, 0.0, 1.0);
-}
-
-// Distance from p to the segment a-b, and how far along it p falls.
-fn segment(p: vec2f, a: vec2f, b: vec2f) -> vec2f {
-  let ab = b - a;
-  let len = max(length(ab), 1e-4);
-  let t = clamp(dot(p - a, ab) / (len * len), 0.0, 1.0);
-  return vec2f(length(p - (a + ab * t)), t * len);
-}
-
-fn toClip(p: vec2f) -> vec4f {
-  return vec4f(p / view.size * vec2f(2.0, -2.0) + vec2f(-1.0, 1.0), 0.0, 1.0);
-}
-
-// Premultiplied "over".
-fn over(top: vec4f, under: vec4f) -> vec4f {
-  return top + under * (1.0 - top.a);
-}
-
-fn paint(color: vec3f, alpha: f32) -> vec4f {
-  let a = clamp(alpha, 0.0, 1.0);
-  return vec4f(color * a, a);
-}
-
+${INK}
+${HIGHLIGHT}
+${LINE}
+${SEGMENT}
+${TO_CLIP}
+${OVER}
+${PAINT}
+${QUAD}
+${OUT}
 // The wave: a crest of light with a ripple in it, rising over its first
 // RISE px and dying away over the rest of its length.
 const RISE = 14.0;
@@ -58,11 +39,6 @@ fn crest(color: vec3f) -> vec3f {
 fn ripple(behind: f32, strength: f32) -> f32 {
   return SWELL * strength * sin(behind * 6.2831853 / RIPPLE);
 }
-
-const QUAD = array<vec2f, 6>(
-  vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0),
-  vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0),
-);
 `
 
 export const BOX_FLOATS = 16
@@ -88,12 +64,6 @@ const MARGIN = 14.0;
 const TICK_GAP = 5.0;
 const TICK_LEN = 8.0;
 const HATCH = 7.0;
-
-struct Out {
-  @builtin(position) position: vec4f,
-  @location(0) p: vec2f,
-  @location(1) @interpolate(flat) i: u32,
-}
 
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {
@@ -201,12 +171,6 @@ struct Gap {
 @group(0) @binding(1) var<storage, read> gaps: array<Gap>;
 
 const MARGIN = 10.0;
-
-struct Out {
-  @builtin(position) position: vec4f,
-  @location(0) p: vec2f,
-  @location(1) @interpolate(flat) i: u32,
-}
 
 @vertex
 fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> Out {

@@ -1,5 +1,7 @@
 import { dual } from 'effect/Function'
 
+import { LONGEST_STEP_S } from '../../gpu/loop.ts'
+
 export interface Settings {
   readonly flow: boolean
   readonly still: boolean
@@ -41,7 +43,6 @@ export interface Frame {
 
 export const MINOR = 24
 export const MAJOR = 120
-const LONGEST_STEP_S = 0.05
 const EASE_PER_S = 3
 const LENS_FOLLOW_PER_S = 14
 const SNAP = 0.002
