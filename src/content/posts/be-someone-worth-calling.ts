@@ -97,7 +97,7 @@ export const beSomeoneWorthCalling: Post = {
       'It paid off that same week. An engineer from Solo, who’d left a year before me, heard I was going out on my own and gave me a call. That call became my first contract, Webaholics.',
     ),
     h.p(
-      'More calls followed. Some of my contacts wanted to build projects together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
+      'More calls followed. Some of my contacts wanted to build projects together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some led to partnerships that turned into new startups.',
     ),
     h.p('Other people did the vouching. They got me into rooms I’d never have reached alone.'),
     h.p(
