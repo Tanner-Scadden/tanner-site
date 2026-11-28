@@ -52,7 +52,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Believe in yourself.'),
-      ' Your ceiling is one you put there yourself. When you’re stuck, ask what the version of you with ten times the agency would do. If you haven’t read George Mack’s ',
+      ' Some of our ceilings are ones we put there ourselves. When you’re stuck, ask what the version of you with ten times the agency would do. If you haven’t read George Mack’s ',
       h.a.attr('href', 'https://www.highagency.com/').children(h.em('High Agency')),
       ', do.',
     ),
@@ -78,7 +78,7 @@ export const beSomeoneWorthCalling: Post = {
       'I’ve made the mistake of breaking team harmony more times than I can count. After a heated game, or in the middle of an incident, it’s easy to take your frustration out on the people around you. It might feel righteous in the moment, but they’ll remember it long after.',
     ),
     h.p(
-      'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them. Everyone slows down. Don’t be that person.',
+      'One person can set the tone for a whole team, for better or worse. Bring in the wrong person, and people start working around them instead of with them. Everyone slows down. Don’t be that person.',
     ),
     h.p('People forget who was right. They remember how you made them feel.'),
     TeamFigure(h, { key: 'team' }),
