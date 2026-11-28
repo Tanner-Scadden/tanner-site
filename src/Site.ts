@@ -166,22 +166,20 @@ const page = SiteDef.fragment((h, model: SiteSnapshot) => {
 
 export const SiteNoDeps = SiteDef.make({
   init: $ => initialSnapshot($.props),
-  update: ($, message) => {
-    switch (message._tag) {
-      // The page shown follows the route the root holds, not the Page actor's
-      // copy, which hears of a new route a step later.
-      case 'ChangedActors':
-        return { ...message.snapshot, page: $.model.page }
-      // The new page goes in with this update, so it's in when the Router
-      // scrolls to the top.
-      case 'Navigated':
-        return $.evolve({ page: pageOf(message.route) }).run(
-          Dispatch.make({ input: message }),
-        )
-      default:
-        return $.run(Dispatch.make({ input: message }))
-    }
-  },
+  update: ($, message) =>
+    SiteMessage.matchOrElse(
+      message,
+      {
+        // The page shown follows the route the root holds, not the Page
+        // actor's copy, which hears of a new route a step later.
+        ChangedActors: ({ snapshot }) => ({ ...snapshot, page: $.model.page }),
+        // The new page goes in with this update, so it's in when the Router
+        // scrolls to the top.
+        Navigated: input =>
+          $.evolve({ page: pageOf(input.route) }).run(Dispatch.make({ input })),
+      },
+      input => $.run(Dispatch.make({ input })),
+    ),
   subscriptions: $ => [
     Router.subscription(SiteRoute, $.props.route, route =>
       SiteMessage.Navigated({ route }),
