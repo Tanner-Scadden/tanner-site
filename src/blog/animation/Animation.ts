@@ -12,8 +12,8 @@ import type { Scene, Variant } from './scene.ts'
 
 // How a scene sits on the page. A figure is framed in the text column, with
 // its controls and caption. A hero sits bare beside a post's title and just
-// plays: no frame, no controls, no caption, and only the versions to switch
-// between when it has more than one.
+// plays: no frame and no controls, only its caption, if it has one, and the
+// versions to switch between when it has more than one.
 export interface Look {
   readonly hero?: boolean
 }
@@ -213,7 +213,8 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                     ),
                   ),
             ),
-          !hero && shown.caption !== '' && sx(h.figcaption, styles.caption).children(shown.caption),
+          shown.caption !== '' &&
+            sx(h.figcaption, styles.caption, hero && styles.heroCaption).children(shown.caption),
         )
     },
   })
@@ -346,6 +347,7 @@ const styles = stylex.create({
     lineHeight: 1.6,
     color: blueprint.dim,
   },
+  heroCaption: { paddingInline: 0, borderTopWidth: 0 },
 })
 
 // Each glyph's path is written out in full: StyleX only takes literals.
