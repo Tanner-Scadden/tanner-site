@@ -18,9 +18,9 @@ export const beSomeoneWorthCalling: Post = {
     h.p(
       'A few years earlier, I got really into Arena of Valor. I played constantly, and the people I played with became friends. When we lost, I looked at what I could have done better. When we won, I tried to give my teammates the credit.',
     ),
-    h.p('We got signed and made it to worlds twice. Then I went to be a software engineer full time.'),
+    h.p('We got signed and made it to worlds twice. After the 2nd tournament, I went to be a software engineer full time, thinking I was done.'),
     h.p(
-      'About two years later, a teammate from those days reached out. Sentinels was putting together a Wild Rift team, they needed another player, and would I want to play again? Saying yes was easy.',
+      'About two years later, a teammate from those days reached out. Sentinels was putting together a Wild Rift team and they needed another player.',
     ),
     h.p(
       'I didn’t have to pitch myself. That same teammate vouched for me, and the rest of the team already knew how I’d shown up in Arena of Valor.',
