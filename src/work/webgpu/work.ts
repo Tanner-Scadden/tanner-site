@@ -1,6 +1,9 @@
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
 
+import { stepBetween } from '../../gpu/loop.ts'
+import { approach } from '../../gpu/math.ts'
+
 export const STEPS = 3
 // A beat after the job lands on screen, so the eye gets there first.
 export const WAVE_DELAY_MS = 220
@@ -14,7 +17,6 @@ export const WAVE_TAIL = 0.15
 export const PING_MS = 600
 const WAVE_END_MS = WAVE_MS * (1 + WAVE_TAIL)
 const HOVER_PER_S = 12
-const LONGEST_STEP_S = 0.05
 const SNAP = 0.002
 
 export interface JobState {
@@ -110,24 +112,18 @@ export const replayed: {
 const hoverTarget = (hovered: Hovered | null, job: number, box: number): number =>
   hovered !== null && hovered.job === job && hovered.step === box ? 1 : 0
 
-const ease = (from: number, to: number, dt: number): number => {
-  const next = from + (to - from) * (1 - Math.exp(-HOVER_PER_S * dt))
-  return Math.abs(next - to) < SNAP ? to : next
-}
-
 export const step: {
   (tick: Tick): (state: WorkState) => WorkState
   (state: WorkState, tick: Tick): WorkState
 } = dual(2, (state: WorkState, { now, hovered, still }: Tick): WorkState => {
-  const dt =
-    state.last === null ? 0 : Math.min((now - state.last) / 1000, LONGEST_STEP_S)
+  const dt = stepBetween({ before: state.last, now })
   return {
     last: now,
     jobs: Arr.map(state.jobs, (job, j) => ({
       ...job,
       hover: Arr.map(job.hover, (h, b) => {
         const to = hoverTarget(hovered, j, b)
-        return still ? to : ease(h, to, dt)
+        return still ? to : approach({ from: h, to, dt, rate: HOVER_PER_S, snap: SNAP })
       }),
     })),
   }

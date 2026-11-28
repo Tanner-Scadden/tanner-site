@@ -1,6 +1,9 @@
 import { Array as Arr, Option } from 'effect'
 import { dual } from 'effect/Function'
 
+import { stepBetween } from '../../gpu/loop.ts'
+import { clamp01, nextRandom } from '../../gpu/math.ts'
+
 export interface Point {
   readonly x: number
   readonly y: number
@@ -370,8 +373,6 @@ export const planFor = (rooms: Rooms): Plan => {
   }
 }
 
-const clamp01 = (x: number): number => Math.min(1, Math.max(0, x))
-
 // ---------------------------------------------------------------------------
 // Getting around
 // ---------------------------------------------------------------------------
@@ -619,24 +620,15 @@ const PLAY_SLACK = 8
 // With motion reduced, how close the pointer has to come to Teddy.
 const STILL_REACH = 30
 const ARRIVED = 0.5
-const LONGEST_STEP_S = 0.05
-
-// A small, pure random source: the next seed and a number from 0 to 1.
-const next = (seed: number): readonly [number, number] => {
-  const s = (seed + 0x6d2b79f5) | 0
-  let t = Math.imul(s ^ (s >>> 15), 1 | s)
-  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-  return [s, ((t ^ (t >>> 14)) >>> 0) / 4294967296]
-}
 
 const randomIn = (seed: number, r: Rect): readonly [number, Point] => {
-  const [s1, u] = next(seed)
-  const [s2, v] = next(s1)
+  const [s1, u] = nextRandom(seed)
+  const [s2, v] = nextRandom(s1)
   return [s2, pt(r.x + u * r.w, r.y + v * r.h)]
 }
 
 const randomBetween = (seed: number, lo: number, hi: number): readonly [number, number] => {
-  const [s, u] = next(seed)
+  const [s, u] = nextRandom(seed)
   return [s, lo + u * (hi - lo)]
 }
 
@@ -791,7 +783,7 @@ const rainPlans = (
   if (!arrived(p)) return [seed, p.alert ? { ...p, alert: false } : p]
   if (p.restUntil === 0) {
     const [s1, nap] = randomBetween(seed, 2500, 7000)
-    const [s2, roll] = next(s1)
+    const [s2, roll] = nextRandom(s1)
     return [s2, { ...p, fleeing: false, speed: RAIN_WALK, restUntil: tick.now + nap, curious: roll < CURIOUS }]
   }
   if (tick.now < p.restUntil) {
@@ -823,7 +815,7 @@ export const stepPets: {
   (pets: Pets, tick: PetTick): Pets
 } = dual(2, (pets: Pets, tick: PetTick): Pets => {
   if (tick.still) return { ...pets, teddy: playInPlace(pets.teddy, tick), last: tick.now }
-  const dt = pets.last === null ? 0 : Math.min((tick.now - pets.last) / 1000, LONGEST_STEP_S)
+  const dt = stepBetween({ before: pets.last, now: tick.now })
   const [s1, teddyPlan] = teddyPlans(pets.seed, pets.teddy, tick)
   const teddy = walk(teddyPlan, tick.plan, dt, tick.now)
   const [s2, rainPlan] = rainPlans(s1, pets.rain, teddy, tick)

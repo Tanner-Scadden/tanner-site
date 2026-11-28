@@ -1,6 +1,7 @@
 import { Array as Arr } from 'effect'
 import { dual } from 'effect/Function'
 
+import { approach, clamp01 } from '../../gpu/math.ts'
 import { DRAFT_MS, type Drafting, type Point, type Rect } from './house.ts'
 
 export type Mat = ReadonlyArray<number>
@@ -36,7 +37,6 @@ const FIT_MARGIN = 10
 const OVERSHOOT = 1.12
 
 const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x))
-const clamp01 = (x: number): number => clamp(x, 0, 1)
 
 const easeOut = (t: number): number => 1 - (1 - t) ** 3
 // Rises past 1 a little, then settles back, like a wall going up on a spring.
@@ -308,13 +308,13 @@ export interface Follow {
 }
 
 // Eases toward `to` at the same speed at any frame rate, landing on it once
-// it's close.
+// it's close. Both axes land together, so neither snaps while the other
+// still moves.
 export const followTilt: {
   (follow: Follow): (from: Tilt) => Tilt
   (from: Tilt, follow: Follow): Tilt
 } = dual(2, (from: Tilt, { to, dt }: Follow): Tilt => {
-  const t = 1 - Math.exp(-TILT_PER_S * dt)
-  const x = from.x + (to.x - from.x) * t
-  const y = from.y + (to.y - from.y) * t
+  const x = approach({ from: from.x, to: to.x, dt, rate: TILT_PER_S })
+  const y = approach({ from: from.y, to: to.y, dt, rate: TILT_PER_S })
   return Math.abs(x - to.x) < SNAP && Math.abs(y - to.y) < SNAP ? to : { x, y }
 })

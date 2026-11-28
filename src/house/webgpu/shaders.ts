@@ -1,3 +1,5 @@
+import { HIDDEN, HIGHLIGHT, INK, LINE, OUT, OVER, PAINT, QUAD, SEGMENT, TO_CLIP } from '../../gpu/wgsl.ts'
+
 const COMMON = /* wgsl */ `
 struct View {
   size: vec2f,
@@ -18,15 +20,10 @@ struct View {
 
 @group(0) @binding(0) var<uniform> view: View;
 
-const INK = vec3f(220.0, 235.0, 255.0) / 255.0;
-const HIGHLIGHT = vec3f(255.0, 209.0, 102.0) / 255.0;
+${INK}
+${HIGHLIGHT}
 const SHADOW = vec3f(3.0, 18.0, 46.0) / 255.0;
-
-// Coverage of a line of the given width, d px from its middle, on the screen.
-fn line(d: f32, width: f32) -> f32 {
-  return clamp((width * 0.5 - d) * view.dpr + 0.5, 0.0, 1.0);
-}
-
+${LINE}
 // The same in plan space, where one device pixel spans fw plan px.
 fn cover(d: f32, width: f32, fw: f32) -> f32 {
   return clamp((width * 0.5 - d) / max(fw, 1e-4) + 0.5, 0.0, 1.0);
@@ -36,55 +33,18 @@ fn cover(d: f32, width: f32, fw: f32) -> f32 {
 fn edge(d: f32, px: f32, fw: f32) -> f32 {
   return clamp(px * 0.5 - abs(d) / max(fw, 1e-4) + 0.5, 0.0, 1.0);
 }
-
-// Distance from p to the segment a-b, and how far along it p falls.
-fn segment(p: vec2f, a: vec2f, b: vec2f) -> vec2f {
-  let ab = b - a;
-  let len = max(length(ab), 1e-4);
-  let t = clamp(dot(p - a, ab) / (len * len), 0.0, 1.0);
-  return vec2f(length(p - (a + ab * t)), t * len);
-}
-
-// A point on the screen, in canvas px.
-fn toClip(p: vec2f) -> vec4f {
-  return vec4f(p / view.size * vec2f(2.0, -2.0) + vec2f(-1.0, 1.0), 0.0, 1.0);
-}
-
+${SEGMENT}
+${TO_CLIP}
 // A point in the house, in plan px.
 fn project(p: vec3f) -> vec4f {
   let q = view.m * vec4f(p, 1.0);
   return vec4f(q.x * 2.0 / view.size.x - q.w, q.w - q.y * 2.0 / view.size.y, q.z, q.w);
 }
-
-// Premultiplied "over".
-fn over(top: vec4f, under: vec4f) -> vec4f {
-  return top + under * (1.0 - top.a);
-}
-
-fn paint(color: vec3f, alpha: f32) -> vec4f {
-  let a = clamp(alpha, 0.0, 1.0);
-  return vec4f(color * a, a);
-}
-
-const QUAD = array<vec2f, 6>(
-  vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0),
-  vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0),
-);
-
-struct Out {
-  @builtin(position) position: vec4f,
-  @location(0) p: vec2f,
-  @location(1) @interpolate(flat) i: u32,
-}
-
-fn hidden(i: u32) -> Out {
-  var out: Out;
-  out.i = i;
-  out.position = vec4f(2.0, 2.0, 0.0, 1.0);
-  out.p = vec2f(0.0);
-  return out;
-}
-`
+${OVER}
+${PAINT}
+${QUAD}
+${OUT}
+${HIDDEN}`
 
 export const FLOOR = /* wgsl */ `
 ${COMMON}

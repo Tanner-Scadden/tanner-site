@@ -1,7 +1,11 @@
 import { Data, Effect, Option, Queue, Ref, type Scope, Stream } from 'effect'
 
-import { type GpuUnavailable, acquireBuffer, acquireContext, acquireDevice, requestAdapter } from '../../gpu/device.ts'
-import { nextFrame } from '../../gpu/loop.ts'
+import { fitCanvas } from '../../gpu/canvas.ts'
+import { type GpuUnavailable, acquireBuffer, acquireGpu, markDrawing } from '../../gpu/device.ts'
+import { nextFrame, wakeOn, wakeToDraw } from '../../gpu/loop.ts'
+import { fontsReady, resizes } from '../../gpu/observe.ts'
+import { GOLD as GOLD_RGB, type Rgb, float } from '../../gpu/palette.ts'
+import { bound, renderPipeline, whole } from '../../gpu/pipeline.ts'
 import {
   type Hovered,
   STEPS,
@@ -23,14 +27,11 @@ export interface WorkSettings {
 }
 
 const VIEW_FLOATS = 4
-const MAX_PIXEL_RATIO = 2
 const GAPS = STEPS - 1
 // The wave's length along the path, in px, at most.
 const WAVE_PX = 120
 // The site's gold, for a job without its own wave colour.
-const GOLD: Rgb = [1, 209 / 255, 102 / 255]
-
-type Rgb = readonly [number, number, number]
+const GOLD = float(GOLD_RGB)
 
 // A `#rrggbb` colour as 0 to 1 channels, if it is one.
 const parseHex = (hex: string): Option.Option<Rgb> => {
@@ -126,16 +127,9 @@ const measure = (
   )
 }
 
-const BLEND: GPUBlendState = {
-  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-}
-
 const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
   Effect.gen(function* () {
-    const adapter = yield* requestAdapter
-    const device = yield* acquireDevice(adapter)
-    const { context, format } = yield* acquireContext(canvas, device, 'premultiplied')
+    const { device, context, format } = yield* acquireGpu(canvas, 'premultiplied')
 
     const boxCount = jobs * STEPS
     const gapCount = jobs * GAPS
@@ -152,22 +146,7 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     })
 
-    const pipeline = (code: string) => {
-      const module = device.createShaderModule({ code })
-      return device.createRenderPipeline({
-        layout: 'auto',
-        vertex: { module, entryPoint: 'vs' },
-        fragment: { module, entryPoint: 'fs', targets: [{ format, blend: BLEND }] },
-        primitive: { topology: 'triangle-list' },
-      })
-    }
-    const bind = (pipeline: GPURenderPipeline, buffers: ReadonlyArray<GPUBuffer>) =>
-      device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })),
-      })
-    const boxes = pipeline(BOXES)
-    const gaps = pipeline(GAP_SHADER)
+    const pipeline = (code: string) => renderPipeline({ device, format, code })
 
     return {
       device,
@@ -180,30 +159,12 @@ const makeGpu = (canvas: HTMLCanvasElement, jobs: number) =>
       gapBuffer,
       gapData: new Float32Array(Math.max(1, gapCount) * GAP_FLOATS),
       gapCount,
-      boxes: { pipeline: boxes, group: bind(boxes, [viewBuffer, boxBuffer]) },
-      gaps: { pipeline: gaps, group: bind(gaps, [viewBuffer, gapBuffer]) },
+      boxes: bound({ device, pipeline: pipeline(BOXES), resources: [whole(viewBuffer), whole(boxBuffer)] }),
+      gaps: bound({ device, pipeline: pipeline(GAP_SHADER), resources: [whole(viewBuffer), whole(gapBuffer)] }),
     }
   })
 
 type Gpu = Effect.Success<ReturnType<typeof makeGpu>>
-
-// The backing store follows the CSS size, at a pixel ratio the GPU can hold
-// even for a long list on a phone.
-const fitCanvas = (canvas: HTMLCanvasElement, maxSize: number): number => {
-  const width = Math.max(1, canvas.clientWidth)
-  const height = Math.max(1, canvas.clientHeight)
-  const dpr = Math.min(
-    window.devicePixelRatio || 1,
-    MAX_PIXEL_RATIO,
-    maxSize / width,
-    maxSize / height,
-  )
-  const w = Math.max(1, Math.floor(width * dpr))
-  const h = Math.max(1, Math.floor(height * dpr))
-  if (canvas.width !== w) canvas.width = w
-  if (canvas.height !== h) canvas.height = h
-  return w / width
-}
 
 const render = (
   gpu: Gpu,
@@ -214,7 +175,9 @@ const render = (
   still: boolean,
 ) =>
   Effect.sync(() => {
-    const dpr = fitCanvas(canvas, gpu.device.limits.maxTextureDimension2D)
+    // The backing store follows the CSS size, at a pixel ratio the GPU can
+    // hold even for a long list on a phone.
+    const dpr = fitCanvas(canvas, { round: Math.floor, maxSize: gpu.device.limits.maxTextureDimension2D }).ratio
     gpu.viewData.set([canvas.clientWidth, canvas.clientHeight, dpr, 0])
     gpu.device.queue.writeBuffer(gpu.viewBuffer, 0, gpu.viewData)
 
@@ -325,18 +288,6 @@ const seenJobs = (jobs: ReadonlyArray<HTMLElement>): Stream.Stream<Input> =>
     ),
   )
 
-const resized = (elements: ReadonlyArray<Element>): Stream.Stream<Input> =>
-  Stream.callback<Input>(queue =>
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const observer = new ResizeObserver(() => Queue.offerUnsafe(queue, Input.Moved()))
-        for (const el of elements) observer.observe(el)
-        return observer
-      }),
-      observer => Effect.sync(() => observer.disconnect()),
-    ),
-  )
-
 const hoveredAt = (
   jobs: ReadonlyArray<HTMLElement>,
   target: EventTarget | null,
@@ -381,19 +332,6 @@ const taps = (
 // The drawing
 // ---------------------------------------------------------------------------
 
-// Marks the list while the GPU draws it, so the CSS borders step aside.
-// Closing the scope hands them back.
-const markList = (container: HTMLElement) =>
-  Effect.acquireRelease(
-    Effect.sync(() => {
-      container.dataset['gpu'] = 'on'
-    }),
-    () =>
-      Effect.sync(() => {
-        delete container.dataset['gpu']
-      }),
-  )
-
 // Starts the drawing on `canvas`, which sits inside the job list, and
 // returns once it's running. It follows `changes` and the list for as long
 // as `Scope` stays open, and fails with GpuUnavailable when this browser
@@ -413,8 +351,6 @@ export const runWorkDrawing = (
     const hovered = yield* Ref.make<Hovered | null>(null)
     const state = yield* Ref.make(initialWork(jobs.length))
     const layout = yield* Ref.make(measure(canvas, jobs))
-    const wakes = yield* Queue.sliding<void>(1)
-    const poke = Queue.offer(wakes, undefined)
 
     // Draws frames until nothing moves, then returns.
     const animate = Effect.gen(function* () {
@@ -449,34 +385,21 @@ export const runWorkDrawing = (
         seenJobs(jobs),
         pointed(container, jobs),
         taps(container, jobs),
-        resized([container, ...container.querySelectorAll('[data-step]')]),
+        resizes([container, ...container.querySelectorAll('[data-step]')]).pipe(Stream.as(Input.Moved())),
         Stream.fromEventListener(window, 'resize').pipe(Stream.as(Input.Moved())),
         // Web fonts landing can reflow every box.
-        Stream.fromEffect(
-          Effect.promise(() => document.fonts.ready).pipe(Effect.as(Input.Moved())),
-        ),
+        fontsReady.pipe(Stream.as(Input.Moved())),
       ],
       { concurrency: 'unbounded' },
     )
 
-    yield* Effect.forkScoped(Effect.forever(Effect.andThen(Queue.take(wakes), animate)))
-    yield* Effect.forkScoped(
-      Stream.runForEach(inputs, input => Effect.andThen(handle(input), poke)),
-    )
-    yield* Effect.forkScoped(
-      Stream.runForEach(changes, next => Effect.andThen(Ref.set(settings, next), poke)),
-    )
+    const drawing = yield* wakeToDraw(animate)
+    yield* wakeOn({ stream: inputs, wake: drawing.wake, handle })
+    yield* wakeOn({ stream: changes, wake: drawing.wake, handle: next => Ref.set(settings, next) })
 
-    // A lost device hands the outlines back to CSS, so the list still reads.
-    yield* Effect.forkScoped(
-      Effect.andThen(
-        Effect.promise(() => gpu.device.lost),
-        Effect.sync(() => {
-          container.dataset['gpu'] = 'lost'
-        }),
-      ),
-    )
-
-    yield* markList(container)
-    yield* poke
+    // Marks the list while the GPU draws it, so the CSS borders step aside.
+    // Closing the scope, or losing the device, hands the outlines back to
+    // CSS, so the list still reads.
+    yield* markDrawing({ element: container, device: gpu.device })
+    yield* drawing.wake
   })
