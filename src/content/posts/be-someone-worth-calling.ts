@@ -1,5 +1,6 @@
 import type { Post } from '#domain/Post'
 
+import { CallingHero } from '../../blog/figures/calling/scene.ts'
 import { ForestFigure } from '../../blog/figures/forest/scene.ts'
 import { NetworkFigure } from '../../blog/figures/network/scene.ts'
 import { TeamFigure } from '../../blog/figures/team/scene.ts'
@@ -13,6 +14,7 @@ export const beSomeoneWorthCalling: Post = {
     path: '/og/be-someone-worth-calling.png',
     alt: 'Be Someone Worth Calling: a network of people around you, with one branch torn away after a bad interaction.',
   },
+  hero: h => [CallingHero(h, { key: 'calling' })],
   body: h => [
     h.p('The call to join Sentinels came after I thought I was done playing.'),
     h.p(

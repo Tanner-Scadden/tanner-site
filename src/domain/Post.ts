@@ -11,6 +11,9 @@ export interface Post {
   // One or two sentences for the index.
   readonly summary: string
   readonly body: <M>(h: Html.H<M>) => View.Children<M, never>
+  // A drawing that plays beside the title, the post's idea at a glance.
+  // Without one the title has the header to itself.
+  readonly hero?: <M>(h: Html.H<M>) => View.Children<M, never>
   // Where the post's file lives in the repo, if it isn't the usual
   // src/content/posts/<slug>.ts. The post links to it, so readers can see
   // how it's built.

@@ -10,7 +10,16 @@ import { isFull } from './clock.ts'
 import { Controls, PlayerUnavailable, type Report, SLIDER_STEPS, Started } from './controls.ts'
 import type { Scene, Variant } from './scene.ts'
 
-export const makeAnimation = <const Name extends string>(name: Name, scene: Scene) => {
+// How a scene sits on the page. A figure is framed in the text column, with
+// its controls and caption. A hero sits bare beside a post's title and just
+// plays: no frame, no controls, no caption, and only the versions to switch
+// between when it has more than one.
+export interface Look {
+  readonly hero?: boolean
+}
+
+export const makeAnimation = <const Name extends string>(name: Name, scene: Scene, look: Look = {}) => {
+  const hero = look.hero === true
   const Drawing = Mount.makeStream(
     `${name}Drawing`,
     { args: Controls },
@@ -110,7 +119,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
     view: (h, model) => {
       const shown = variantOf(model.variant)
       const alarm = shown.tone === 'alarm'
-      return sx(h.figure, styles.figure)
+      return sx(h.figure, hero ? styles.hero : styles.figure)
         .attr('data-blueprint-quiet', '')
         .children(
           sx(h.canvas, styles.canvas)
@@ -135,7 +144,20 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                 ),
               ),
             ),
-          model.drawable &&
+          hero &&
+            scene.variants.length > 1 &&
+            sx(h.div, styles.variants, styles.heroVariants)
+              .attrs({ role: 'group', 'aria-label': 'Version' })
+              .children(
+                ...Arr.map(scene.variants, variant =>
+                  sx(h.button, base.button, styles.button, variant.id === model.variant && styles.on)
+                    .attrs({ type: 'button', 'aria-pressed': String(variant.id === model.variant) })
+                    .on('click', Message.ChoseVariant({ variant: variant.id }))
+                    .children(variant.label),
+                ),
+              ),
+          !hero &&
+            model.drawable &&
             sx(h.div, styles.controls).children(
               sx(h.button, base.button, styles.icon, styles.lead, alarm && styles.alarmLead)
                 .attrs({
@@ -191,7 +213,7 @@ export const makeAnimation = <const Name extends string>(name: Name, scene: Scen
                     ),
                   ),
             ),
-          shown.caption !== '' && sx(h.figcaption, styles.caption).children(shown.caption),
+          !hero && shown.caption !== '' && sx(h.figcaption, styles.caption).children(shown.caption),
         )
     },
   })
@@ -216,6 +238,8 @@ const styles = stylex.create({
     outlineColor: blueprint.faint,
     outlineOffset: 4,
   },
+  // Bare beside the title, and gone on paper.
+  hero: { display: { default: 'block', [media.print]: 'none' }, margin: 0 },
   canvas: { display: 'block', width: '100%', aspectRatio: '16 / 9', touchAction: 'pan-y' },
   controls: {
     display: { default: 'flex', [media.print]: 'none' },
@@ -303,6 +327,7 @@ const styles = stylex.create({
   },
   alarmSlider: { accentColor: post.alarm },
   variants: { display: 'flex', gap: 6 },
+  heroVariants: { justifyContent: 'flex-end', marginTop: 8 },
   caption: {
     paddingBlock: 10,
     paddingInline: 14,
