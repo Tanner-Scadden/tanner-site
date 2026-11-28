@@ -12,7 +12,7 @@ export const beSomeoneWorthCalling: Post = {
   summary: 'The best opportunities come from people who vouch for you. Be someone they’d call.',
   image: {
     path: '/og/be-someone-worth-calling.png',
-    alt: 'Be Someone Worth Calling: a network of people around you, with one branch torn away after a bad interaction.',
+    alt: 'Be Someone Worth Calling: an old telephone switchboard with gold cords running up to its jacks and their lamps lit.',
   },
   hero: h => [CallingHero(h, { key: 'calling' })],
   body: h => [

@@ -68,7 +68,7 @@ const GRAVITY = 7
 const BOUNCE = 0.22
 const RING = 10.8
 const ANSWER = 12.6
-const END = 15
+const END = 15.4
 
 // How close, in world units, a press has to be to a cord's end to grab it,
 // and a release to a jack to plug into it.

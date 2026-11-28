@@ -134,6 +134,11 @@ describe('the switchboard hero', () => {
     )
   })
 
+  it('rests once the answer has finished ringing out', () => {
+    const rings = (frame: Shapes) => Arr.filter(frame.dots, dot => dot.ring > 0 && dot.color[3] > 0 && dot.radius > 6)
+    assert.deepStrictEqual(rings(shapes(1, end)), [])
+  })
+
   it('ends with the call answered: more gold on screen than before it', () => {
     const gold = (frame: Shapes) => Arr.filter(frame.dots, dot => dot.glow > 0 && dot.color[3] > 0.5).length
     assert.isAbove(gold(shapes(1, end)), gold(shapes(1, 2)))
