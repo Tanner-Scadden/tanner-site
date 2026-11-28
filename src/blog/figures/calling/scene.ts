@@ -17,9 +17,18 @@ import { projection } from './world.ts'
 const worldOf = worldOfAim(projection)
 
 // Be Someone Worth Calling's hero: the call coming in on a switchboard. It
-// plays once and rests on the lit board.
+// plays once and rests on the lit board, with a caption that says what the
+// cords are.
 export const callingScene: Scene = {
-  variants: [{ id: 'switchboard', label: 'SWITCHBOARD', caption: '', tone: 'hi' }],
+  variants: [
+    {
+      id: 'switchboard',
+      label: 'SWITCHBOARD',
+      caption:
+        'Every cord is someone who knows your work. Enough of them, and a call you never wired for comes in. Drag a cord to unplug it.',
+      tone: 'hi',
+    },
+  ],
   run: (_variant, seed) => {
     const board = buildSwitchboard(seed)
     const cords = rememberLast((interactions: ReadonlyArray<Interaction>) => withReader(board, interactions, worldOf))

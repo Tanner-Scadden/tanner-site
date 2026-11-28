@@ -52,7 +52,7 @@ export const beSomeoneWorthCalling: Post = {
     ),
     h.p(
       h.strong('Believe in yourself.'),
-      ' Your ceiling is one you put there yourself. When you’re stuck, ask what the version of you with ten times the agency would do. If you haven’t read George Mack’s ',
+      ' Some of our ceilings are ones we put there ourselves. When you’re stuck, ask what the version of you with ten times the agency would do. If you haven’t read George Mack’s ',
       h.a.attr('href', 'https://www.highagency.com/').children(h.em('High Agency')),
       ', do.',
     ),
@@ -78,26 +78,26 @@ export const beSomeoneWorthCalling: Post = {
       'I’ve made the mistake of breaking team harmony more times than I can count. After a heated game, or in the middle of an incident, it’s easy to take your frustration out on the people around you. It might feel righteous in the moment, but they’ll remember it long after.',
     ),
     h.p(
-      'One person can set the tone for a whole team, for better or worse. Bring in the wrong one, and people start working around them instead of with them. Everyone slows down. Don’t be that person.',
+      'One person can set the tone for a whole team, for better or worse. Bring in the wrong person, and people start working around them instead of with them. Everyone slows down. Don’t be that person.',
     ),
     h.p('People forget who was right. They remember how you made them feel.'),
     TeamFigure(h, { key: 'team' }),
 
     h.h2('It takes time'),
     h.p(
-      'My first real job was in customer success at a solar company. My accounts went from sale to install faster than anyone else’s. I wasn’t a developer yet, and I didn’t think any of it would matter later.',
+      'My first real job was in customer success at a solar company, getting customers from a signed contract to panels on their roof. My accounts got there faster than anyone else’s. I wasn’t in tech yet, and I wasn’t thinking long term. I was just excited to not work in fast food.',
     ),
     h.p(
-      'Years later, after a dev bootcamp, I posted that I was looking for work. One of that company’s founders had started something new, remembered my work, and reached out. That became my first engineering job, Solo.',
+      'Years later, after a dev bootcamp, I posted that I was looking for work. One of that company’s founders had started something new, remembered my work, and reached out. That became my first engineering job: Solo.',
     ),
     h.p(
-      'A few years in, I took a leap of faith and started my own thing with no clients lined up. I was betting that the people I’d worked with would remember how I showed up.',
+      'A few years in, I took a leap of faith and started my own company with no clients lined up. I was betting that the people I’d worked with would remember how I showed up.',
     ),
     h.p(
       'It paid off that same week. An engineer from Solo, who’d left a year before me, heard I was going out on my own and gave me a call. That call became my first contract, Webaholics.',
     ),
     h.p(
-      'More calls followed. Some of my contacts wanted to build projects together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some even led to founding a company.',
+      'More calls followed. Some of my contacts wanted to build projects together, and others wanted to introduce me to their network. All of my work came from people who’d worked with me before. Some led to partnerships that turned into new startups.',
     ),
     h.p('Other people did the vouching. They got me into rooms I’d never have reached alone.'),
     h.p(
