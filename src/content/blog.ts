@@ -23,6 +23,8 @@ export const BLOG = {
   back: '← ALL POSTS',
   // Under each post, linking to its file on GitHub.
   source: 'See how this post is built ↗',
+  // Beside each post's date.
+  read: (minutes: number) => `${minutes} MIN READ`,
   newer: 'NEWER',
   older: 'OLDER',
 } as const

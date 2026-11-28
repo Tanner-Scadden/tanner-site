@@ -10,7 +10,7 @@ import { href, postRoute } from '../../routes.ts'
 import { base } from '../../styles/base.ts'
 import { sx } from '../../styles/sx.ts'
 import { blueprint, fonts, media, widths } from '../../styles/tokens.stylex.ts'
-import { POSTS, isDraft, sheetOf } from '../posts.ts'
+import { POSTS, isDraft, minutesOf, sheetOf } from '../posts.ts'
 import type { Part, Snippet } from '../search/snippet.ts'
 
 export interface Row {
@@ -32,7 +32,10 @@ export const Register = <M>(h: Html.H<M>, rows: ReadonlyArray<Row>) =>
           .children(
             sx(h.span, styles.no).children(sheetOf(post)),
             sx(h.span, styles.text).children(
-              sx(h.time, styles.date).attr('datetime', post.date).children(formatDate(post.date)),
+              sx(h.span, styles.date).children(
+                h.time.attr('datetime', post.date).children(formatDate(post.date)),
+                ` · ${BLOG.read(minutesOf(post))}`,
+              ),
               sx(h.strong, styles.title).children(
                 post.title,
                 isDraft(post) && sx(h.em, styles.draft).children(' · DRAFT'),
